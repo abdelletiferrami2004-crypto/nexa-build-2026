@@ -30,7 +30,7 @@ android {
 }
 
 dependencies {
-    // Biometric Library (إضافة مكتبة البصمة لحل مشكلة BIOMETRIC_STRONG)
+    // Biometric Library (هذه هي المكتبة المفقودة التي ستصلح خطأ BIOMETRIC_STRONG)
     implementation("androidx.biometric:biometric:1.1.0")
 
     // Firebase Libraries
