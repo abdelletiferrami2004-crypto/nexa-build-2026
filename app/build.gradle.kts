@@ -30,7 +30,10 @@ android {
 }
 
 dependencies {
-    // Firebase Libraries (BoM)
+    // Biometric Library (إضافة مكتبة البصمة لحل مشكلة BIOMETRIC_STRONG)
+    implementation("androidx.biometric:biometric:1.1.0")
+
+    // Firebase Libraries
     implementation(platform("com.google.firebase:firebase-bom:33.1.2"))
     implementation("com.google.firebase:firebase-analytics-ktx")
     implementation("com.google.firebase:firebase-auth-ktx")
