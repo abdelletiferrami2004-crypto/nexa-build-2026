@@ -22,10 +22,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.mutableStateOf
-
 class MajarrahViewModel(application: Application) : AndroidViewModel(application) {
 
     private val db = MajarrahDatabase.getDatabase(application)
@@ -60,6 +56,10 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
 
     private val _reportedContentIds = MutableStateFlow<Set<String>>(emptySet())
     val reportedContentIds: StateFlow<Set<String>> = _reportedContentIds.asStateFlow()
+
+    // أمان الحساب والمالية
+    private val _walletBalance = MutableStateFlow(1000.0)
+    val walletBalance: StateFlow<Double> = _walletBalance.asStateFlow()
 
     init {
         loadUserProfile()
@@ -212,7 +212,33 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     }
 
     // -------------------------------------------------------------
-    // 3. COMMENTS & MODERATION (التعليقات والإبلاغات)
+    // 3. STORE & CART & WALLET (السلة والشراء)
+    // -------------------------------------------------------------
+    fun addToCart(product: Product) {
+        val currentList = _cartItems.value.toMutableList()
+        val existingIndex = currentList.indexOfFirst { it.product.id == product.id }
+        if (existingIndex >= 0) {
+            val item = currentList[existingIndex]
+            currentList[existingIndex] = item.copy(quantity = item.quantity + 1)
+        } else {
+            currentList.add(CartItem(product = product, quantity = 1))
+        }
+        _cartItems.value = currentList
+    }
+
+    fun purchaseProductDirectly(product: Product, quantity: Int = 1, paymentMethod: String = "WALLET") {
+        val totalPrice = product.price * quantity
+        if (_walletBalance.value >= totalPrice) {
+            _walletBalance.value -= totalPrice
+        }
+    }
+
+    fun updateWalletBalance(amount: Double) {
+        _walletBalance.value += amount
+    }
+
+    // -------------------------------------------------------------
+    // 4. COMMENTS & MODERATION (التعليقات والإبلاغات)
     // -------------------------------------------------------------
     fun reportContent(contentId: String, reason: String) {
         _reportedContentIds.value = _reportedContentIds.value + contentId
@@ -250,7 +276,7 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     }
 
     // -------------------------------------------------------------
-    // 4. USER PROFILE MANAGEMENT
+    // 5. USER PROFILE MANAGEMENT
     // -------------------------------------------------------------
     private fun loadUserProfile() {
         val currentUser = auth.currentUser
