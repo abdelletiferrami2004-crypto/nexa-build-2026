@@ -1,4 +1,9 @@
 package com.example.ui.screens
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ShoppingBag
+import coil.compose.AsyncImage
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
