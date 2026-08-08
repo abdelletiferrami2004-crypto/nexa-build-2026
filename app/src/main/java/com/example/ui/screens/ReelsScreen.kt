@@ -481,7 +481,7 @@ fun ReelsScreen(
                                 reelAuthor = reel.author,
                                 reelLikesCount = reel.likesCount,
                                 reelCommentsCount = reel.commentsCount,
-                                reelSoundTrack = reel.soundTrack,
+                                
                                 userCaption = "شاهدوا هذا المقطع الرهيب في مجرة!"
                             )
                             showNotificationBanner = "تمت إعادة نشر الريلز إلى قصتك بنجاح"
