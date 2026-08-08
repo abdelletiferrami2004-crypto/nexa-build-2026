@@ -1,7 +1,6 @@
 package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -32,32 +31,18 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Send
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.ShoppingBag
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
-import com.example.ui.components.NexaVoiceAssistantModal
-import com.example.ui.components.NexaPrivateVaultModal
-import com.example.ui.components.QuickActionRadialOverlay
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -70,23 +55,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import com.example.R
-import com.example.data.model.Bubble3D
 import com.example.data.model.Post
 import com.example.ui.MajarrahViewModel
-import com.example.ui.components.Bubble3DOrbit
 import com.example.ui.components.GlassBadge
 import com.example.ui.components.GlassCard
+import com.example.ui.components.NexaPrivateVaultModal
+import com.example.ui.components.NexaVoiceAssistantModal
+import com.example.ui.components.QuickActionRadialOverlay
 import com.example.ui.theme.BackgroundDark
 import com.example.ui.theme.EncryptedGreen
 import com.example.ui.theme.NeonAmber
@@ -94,14 +77,6 @@ import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonPink
 import com.example.ui.theme.NeonPurple
 import com.example.ui.theme.TeenProtectionCyan
-
-import androidx.compose.material.icons.filled.CardGiftcard
-import androidx.compose.material.icons.filled.Diamond
-import androidx.compose.material.icons.filled.Toll
-import com.example.ui.components.AdMobBannerSpace
-import com.example.ui.components.DailyRewardsAndReferralModal
-import com.example.ui.components.InAppCreditsTopUpModal
-import com.example.ui.components.NexaVipSubscriptionModal
 
 @Composable
 fun HomeScreen(
@@ -113,7 +88,6 @@ fun HomeScreen(
 ) {
     val profile by viewModel.userProfile.collectAsState()
     val posts by viewModel.posts.collectAsState()
-    val bubbles by viewModel.bubbles.collectAsState()
     val stories by viewModel.stories.collectAsState()
     val blockedUsers by viewModel.blockedUsers.collectAsState()
     val reportedContentIds by viewModel.reportedContentIds.collectAsState()
@@ -133,17 +107,13 @@ fun HomeScreen(
     activeStoryForViewer?.let { story ->
         com.example.ui.components.ReelStoryViewerModal(
             story = story,
-            onLikeToggle = {
-                viewModel.toggleStoryLike(story.id)
-            },
-            onSendReply = { text ->
-                viewModel.sendStoryReply(story.id, text)
-            },
+            onLikeToggle = { viewModel.toggleStoryLike(story.id) },
+            onSendReply = { text -> viewModel.sendStoryReply(story.id, text) },
             onShareForward = {
                 viewModel.publishReelToStory(
-                    reelTitle = story.reelTitle ?: "مقطع نيون مميز",
-                    reelAuthor = story.reelAuthor ?: "@majarrah_official",
- userCaption ="بارتاج ستوري إلى أصدقائك"
+                    reelTitle = story.reelTitle ?: "مقطع مميز",
+                    reelAuthor = story.reelAuthor ?: "@nexa_official",
+                    userCaption = "مشاركة القصة"
                 )
             },
             onNavigateToReels = {
@@ -154,32 +124,9 @@ fun HomeScreen(
         )
     }
 
-    val isVipMember = profile?.isVipMember ?: false
-    val creditsBalance = profile?.creditsBalance ?: 850
-    val claimedDailyRewardDays = profile?.claimedDailyRewardDays ?: 3
-    val referralCode = profile?.referralCode ?: "NEXA-8821"
-
-    val isAdWatching by viewModel.isAdWatching.collectAsState()
-    val adWatchProgress by viewModel.adWatchProgress.collectAsState()
-    val monetizationMessage by viewModel.monetizationMessage.collectAsState()
-
-    val isPostingRestricted by viewModel.isPostingRestricted.collectAsState()
-    val postingRestrictionMessage by viewModel.postingRestrictionMessage.collectAsState()
-
-    val isDataSaverEnabled by viewModel.isDataSaverEnabled.collectAsState()
-    val isSocialPass6Active by viewModel.isSocialPass6Active.collectAsState()
-
-    val activeScreenTimeSeconds by viewModel.activeScreenTimeSeconds.collectAsState()
-
     var selectedSecondaryTab by remember { mutableStateOf(0) }
-
-    var showVipModal by remember { mutableStateOf(false) }
-    var showCreditsModal by remember { mutableStateOf(false) }
-    var showDailyRewardsModal by remember { mutableStateOf(false) }
-
     var newPostText by remember { mutableStateOf("") }
     var showCreatePostDialog by remember { mutableStateOf(false) }
-
     var showStoryCreatorModal by remember { mutableStateOf(false) }
     var activeReplyAuthor by remember { mutableStateOf<String?>(null) }
     var activeReplyText by remember { mutableStateOf<String?>(null) }
@@ -196,9 +143,7 @@ fun HomeScreen(
             targetAuthorName = postToReport.authorName,
             contentId = "post_${postToReport.id}",
             contentTypeTitle = "المنشور (${postToReport.content.take(20)}...)",
-            onReport = { reason ->
-                viewModel.reportContent("post_${postToReport.id}", reason)
-            },
+            onReport = { reason -> viewModel.reportContent("post_${postToReport.id}", reason) },
             onReportWithAi = { category, onFinished ->
                 viewModel.submitReportWithAiModeration(
                     targetAuthorName = postToReport.authorName,
@@ -209,42 +154,10 @@ fun HomeScreen(
                     onCompleted = onFinished
                 )
             },
-            onBlock = {
-                viewModel.blockUser(postToReport.authorName)
-            },
+            onBlock = { viewModel.blockUser(postToReport.authorName) },
             onDismiss = { activeReportPost = null }
         )
     }
-
-    if (showVipModal) {
-        NexaVipSubscriptionModal(
-            isCurrentlyVip = isVipMember,
-            onSubscribe = { tier -> viewModel.activateVipSubscription(tier) },
-            onDismiss = { showVipModal = false }
-        )
-    }
-
-    if (showCreditsModal) {
-        InAppCreditsTopUpModal(
-            creditsBalance = creditsBalance,
-            isAdWatching = isAdWatching,
-            adWatchProgress = adWatchProgress,
-            onTopUp = { amount, price -> viewModel.topUpCredits(amount, price) },
-            onWatchAd = { viewModel.watchRewardedAdForCredits() },
-            onDismiss = { showCreditsModal = false }
-        )
-    }
-
-    if (showDailyRewardsModal) {
-        DailyRewardsAndReferralModal(
-            claimedStreakDays = claimedDailyRewardDays,
-            referralCode = referralCode,
-            onClaimDaily = { viewModel.claimDailyReward() },
-            onApplyReferral = { code -> viewModel.applyReferralCode(code) },
-            onDismiss = { showDailyRewardsModal = false }
-        )
-    }
-
 
     activeCommentsPost?.let { activePost ->
         com.example.ui.components.PostCommentsModal(
@@ -269,9 +182,7 @@ fun HomeScreen(
                 activeReplyAuthor = null
                 activeReplyText = null
             },
-            onPublishStory = { story ->
-                viewModel.publishStory(story)
-            }
+            onPublishStory = { story -> viewModel.publishStory(story) }
         )
     }
 
@@ -279,16 +190,15 @@ fun HomeScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(BackgroundDark),
-        contentPadding = PaddingValues(bottom = 100.dp)
+        contentPadding = PaddingValues(bottom = 90.dp)
     ) {
-        // 1. TOP NAVIGATION & HEADER BAR (Facebook Mobile Style)
+        // 1. TOP HEADER & NAVIGATION BAR
         item {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(BackgroundDark)
             ) {
- // Top Header Row: Brand Logo ("NEXA") on left + Max 3 Action Icons on right
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -296,7 +206,6 @@ fun HomeScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Left: NEXA Brand Logo & Title
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.clickable { selectedSecondaryTab = 0 }
@@ -305,7 +214,7 @@ fun HomeScreen(
                             painter = painterResource(id = R.drawable.nexa_3d_icon_1785719681308),
                             contentDescription = "NEXA Logo",
                             modifier = Modifier
-                                .size(38.dp)
+                                .size(36.dp)
                                 .clip(CircleShape)
                                 .border(1.5.dp, NeonCyan, CircleShape)
                         )
@@ -319,65 +228,58 @@ fun HomeScreen(
                         )
                     }
 
-                    // Right Actions: Exactly 3 essential action icons (Search, Voice Assistant Mic, Plus Create)
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        // 1. Search Icon (البحث)
                         IconButton(
                             onClick = { showVoiceAssistantModal = true },
                             modifier = Modifier
-                                .size(38.dp)
+                                .size(36.dp)
                                 .clip(CircleShape)
                                 .background(Color.White.copy(alpha = 0.08f))
-                                .border(1.dp, Color.White.copy(alpha = 0.15f), CircleShape)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Search,
                                 contentDescription = "Search",
                                 tint = Color.White,
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(18.dp)
                             )
                         }
 
-                        // 2. Voice Assistant Mic Icon 🎙️ (المساعد الصوتي)
                         IconButton(
                             onClick = { showVoiceAssistantModal = true },
                             modifier = Modifier
-                                .size(38.dp)
+                                .size(36.dp)
                                 .clip(CircleShape)
-                                .background(NeonCyan.copy(alpha = 0.18f))
-                                .border(1.dp, NeonCyan, CircleShape)
+                                .background(NeonCyan.copy(alpha = 0.15f))
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Mic,
                                 contentDescription = "Voice Assistant",
                                 tint = NeonCyan,
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(18.dp)
                             )
                         }
 
-                        // 3. Quick Create / Plus Icon (+) ➕ (إنشاء منشور)
                         IconButton(
                             onClick = { showCreatePostDialog = true },
                             modifier = Modifier
-                                .size(38.dp)
+                                .size(36.dp)
                                 .clip(CircleShape)
-                                .background(NeonCyan.copy(alpha = 0.25f))
-                                .border(1.dp, NeonCyan, CircleShape)
+                                .background(NeonCyan)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Add,
                                 contentDescription = "Add Post",
-                                tint = NeonCyan,
-                                modifier = Modifier.size(22.dp)
+                                tint = BackgroundDark,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                     }
                 }
 
- // Secondary Tab Navigation Bar (Home , Friends , Messenger (+15), Reels , Notifications (+5), Profile )
+                // Secondary Tab Bar
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -410,9 +312,7 @@ fun HomeScreen(
                                 .padding(vertical = 8.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Box(contentAlignment = Alignment.TopEnd) {
                                     Icon(
                                         imageVector = icon,
@@ -437,14 +337,11 @@ fun HomeScreen(
                                         }
                                     }
                                 }
-
-                                Spacer(modifier = Modifier.height(6.dp))
-
-                                // Active tab indicator underline
+                                Spacer(modifier = Modifier.height(4.dp))
                                 Box(
                                     modifier = Modifier
-                                        .fillMaxWidth(0.6f)
-                                        .height(3.dp)
+                                        .fillMaxWidth(0.5f)
+                                        .height(2.dp)
                                         .clip(RoundedCornerShape(2.dp))
                                         .background(if (isSelected) NeonCyan else Color.Transparent)
                                 )
@@ -457,87 +354,184 @@ fun HomeScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(1.dp)
-                        .background(Color.White.copy(alpha = 0.1f))
+                        .background(Color.White.copy(alpha = 0.08f))
                 )
             }
         }
 
-        // Facebook-Style Data Saver Top Banner (*6 Social Media Pass)
+        // 2. STORIES CAROUSEL (Instagram-Style Circular Circles)
+        item {
+            Column(modifier = Modifier.padding(vertical = 12.dp)) {
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Item 1: Add My Story Circle
+                    item {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.clickable { showStoryCreatorModal = true }
+                        ) {
+                            Box(contentAlignment = Alignment.BottomEnd) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(68.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.White.copy(alpha = 0.08f))
+                                        .border(1.5.dp, Color.White.copy(alpha = 0.2f), CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = profile?.name?.take(1) ?: "م",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 20.sp
+                                    )
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .size(22.dp)
+                                        .clip(CircleShape)
+                                        .background(NeonCyan)
+                                        .border(2.dp, BackgroundDark, CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = "Add Story",
+                                        tint = BackgroundDark,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "قصتك",
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+
+                    // User Stories
+                    items(stories) { story ->
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.clickable { activeStoryForViewer = story }
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(68.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        Brush.linearGradient(
+                                            listOf(NeonCyan, NeonPink, NeonPurple)
+                                        )
+                                    )
+                                    .padding(2.5.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(CircleShape)
+                                        .background(BackgroundDark)
+                                        .padding(2.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .clip(CircleShape)
+                                            .background(NeonPurple.copy(alpha = 0.4f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = story.authorName.take(1),
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 18.sp
+                                        )
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = story.authorName,
+                                color = Color.LightGray,
+                                fontSize = 11.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.width(68.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(Color.White.copy(alpha = 0.05f))
+                )
+            }
+        }
+
+        // 3. WHAT'S ON YOUR MIND PROMPT BAR
         item {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 4.dp)
-            ) {
-                com.example.ui.components.FacebookDataSaverBanner(
-                    isDataSaverEnabled = isDataSaverEnabled,
-                    isSocialPass6Active = isSocialPass6Active,
-                    onToggleDataSaver = { viewModel.toggleDataSaver(it) }
-                )
-            }
-        }
-
-        // 2. STORY / STATUS CREATION PROMPT BAR ("بم تفكر؟" What's on your mind?)
-        item {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(Color.White.copy(alpha = 0.06f))
-                    .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(20.dp))
-                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(Color.White.copy(alpha = 0.05f))
+                    .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(24.dp))
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Right: User Profile Avatar (RTL start)
                     Box(
                         modifier = Modifier
-                            .size(40.dp)
+                            .size(36.dp)
                             .clip(CircleShape)
                             .background(NeonPurple.copy(alpha = 0.35f))
-                            .border(1.5.dp, NeonCyan, CircleShape),
+                            .border(1.dp, NeonCyan, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = profile?.name?.take(1) ?: "م",
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp
+                            fontSize = 14.sp
                         )
                     }
 
                     Spacer(modifier = Modifier.width(10.dp))
 
-                    // Middle: "بم تفكر؟" (What's on your mind?) rounded input button
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .clip(RoundedCornerShape(24.dp))
-                            .background(Color.White.copy(alpha = 0.08f))
-                            .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(24.dp))
+                            .clip(RoundedCornerShape(20.dp))
                             .clickable { showCreatePostDialog = true }
-                            .padding(horizontal = 14.dp, vertical = 10.dp)
+                            .padding(horizontal = 10.dp, vertical = 8.dp)
                     ) {
                         Text(
-                            text = "بم تفكر في مجرة اليوم؟...",
-                            color = Color.LightGray,
+                            text = "بم تفكر اليوم فـ NEXA؟...",
+                            color = Color.Gray,
                             fontSize = 13.sp
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    // Left: "صورة" (Photo/Media shortcut button)
                     Row(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(EncryptedGreen.copy(alpha = 0.2f))
-                            .border(1.dp, EncryptedGreen.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(EncryptedGreen.copy(alpha = 0.15f))
                             .clickable { showCreatePostDialog = true }
-                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
@@ -550,7 +544,7 @@ fun HomeScreen(
                         Text(
                             text = "صورة",
                             color = Color.White,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.SemiBold,
                             fontSize = 11.sp
                         )
                     }
@@ -558,432 +552,31 @@ fun HomeScreen(
             }
         }
 
-        // 3. VERTICAL RECTANGULAR STORIES FEED (Facebook Style Stories Carousel)
-        item {
-            LazyRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 6.dp),
-                contentPadding = PaddingValues(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                // First Story Card: "أنشئ قصة" (Create Story Card)
-                    item {
-                        Box(
-                            modifier = Modifier
-                                .width(110.dp)
-                                .height(175.dp)
-                                .clip(RoundedCornerShape(18.dp))
-                                .background(Color.White.copy(alpha = 0.08f))
-                                .border(1.dp, NeonCyan.copy(alpha = 0.4f), RoundedCornerShape(18.dp))
-                                .clickable { showStoryCreatorModal = true }
-                        ) {
-                            Column(
-                                modifier = Modifier.fillMaxSize()
-                            ) {
-                                // Top 62%: User Cover / Profile Avatar
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .weight(0.62f)
-                                        .background(
-                                            Brush.verticalGradient(
-                                                listOf(NeonPurple, BackgroundDark)
-                                            )
-                                        ),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(44.dp)
-                                            .clip(CircleShape)
-                                            .background(Color.White.copy(alpha = 0.2f))
-                                            .border(1.5.dp, Color.White, CircleShape),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = profile?.name?.take(1) ?: "م",
-                                            color = Color.White,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 18.sp
-                                        )
-                                    }
-                                }
-
-                                // Bottom 38%: Plus Action Circle Button & Label "أنشئ قصة"
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .weight(0.38f)
-                                        .background(Color.Black.copy(alpha = 0.45f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(28.dp)
-                                                .clip(CircleShape)
-                                                .background(NeonCyan),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Add,
-                                                contentDescription = "Add Story",
-                                                tint = BackgroundDark,
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                        }
-
-                                        Spacer(modifier = Modifier.height(4.dp))
-
-                                        Text(
-                                            text = "أنشئ قصة",
-                                            color = Color.White,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // User Story Cards List
-                    items(stories) { story ->
-                        val gradientColors = story.bgGradient.map { Color(it) }
-                        Box(
-                            modifier = Modifier
-                                .width(110.dp)
-                                .height(175.dp)
-                                .clip(RoundedCornerShape(18.dp))
-                                .background(Brush.verticalGradient(gradientColors))
-                                .border(1.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(18.dp))
-                                .clickable { activeStoryForViewer = story }
-                                .padding(8.dp)
-                        ) {
-                            // Top Profile Avatar with Glowing Ring
-                            Box(
-                                modifier = Modifier
-                                    .size(32.dp)
-                                    .clip(CircleShape)
-                                    .background(BackgroundDark)
-                                    .border(2.dp, NeonCyan, CircleShape)
-                                    .align(Alignment.TopStart),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = story.authorName.take(1),
-                                    color = Color.White,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-
-                            // Story Caption / Title at Bottom
-                            Column(
-                                modifier = Modifier.align(Alignment.BottomStart)
-                            ) {
-                                Text(
-                                    text = story.reelTitle ?: story.text,
-                                    color = Color.White,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 2,
-                                    lineHeight = 14.sp
-                                )
-
-                                Spacer(modifier = Modifier.height(2.dp))
-
-                                Text(
-                                    text = story.authorName,
-                                    color = Color.LightGray,
-                                    fontSize = 9.sp,
-                                    maxLines = 1
-                                )
-                            }
-                        }
-                    }
-                }
-        }
-
-        // Monetization System Notification Banner (if any)
-        if (monetizationMessage != null) {
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(NeonCyan.copy(alpha = 0.2f))
-                        .border(1.dp, NeonCyan, RoundedCornerShape(16.dp))
-                        .clickable { viewModel.clearMonetizationMessage() }
-                        .padding(12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = monetizationMessage ?: "",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Text(
- text ="إغلاق",
-                            color = NeonCyan,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
-        }
-
-        // Posting Restriction Warning Banner (AI Moderation)
-        if (isPostingRestricted) {
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 6.dp)
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(NeonAmber.copy(alpha = 0.18f))
-                        .border(1.dp, NeonAmber, RoundedCornerShape(18.dp))
-                        .padding(14.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
- text = postingRestrictionMessage ?:" إنذار أمان: تم تقييد النشر لمدة 24 ساعة بسبب مخالفة المعايير.",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "فهم التقييد",
-                            color = NeonAmber,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp,
-                            modifier = Modifier.clickable { viewModel.dismissPostingRestriction() }
-                        )
-                    }
-                }
-            }
-        }
-
-        // Under 18 Smart Screen Time & Break Control Card
-        if (isTeenMode) {
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 6.dp)
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(TeenProtectionCyan.copy(alpha = 0.15f))
-                        .border(1.dp, TeenProtectionCyan.copy(alpha = 0.6f), RoundedCornerShape(20.dp))
-                        .padding(14.dp)
-                ) {
-                    Column {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.Shield,
-                                    contentDescription = "Screen Time Protection",
-                                    tint = TeenProtectionCyan,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Column {
-                                    Text(
- text ="نظام استراحة الشاشة للناشئة (under_18_mode)",
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 12.sp
-                                    )
-                                    Text(
-                                        text = "تتبع نشط وتنبيه أوتوماتيكي بعد ساعتين لاستراحة عينيك ودراستك",
-                                        color = Color.LightGray,
-                                        fontSize = 10.sp
-                                    )
-                                }
-                            }
-
-                            // Current Screen Time Pill
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(BackgroundDark)
-                                    .padding(horizontal = 8.dp, vertical = 4.dp)
-                            ) {
-                                Text(
-                                    text = com.example.ui.components.formatTimeDuration(activeScreenTimeSeconds),
-                                    color = TeenProtectionCyan,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    fontSize = 12.sp
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        // Test & Simulation Action Buttons
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Button(
-                                onClick = { viewModel.simulateTwoHoursUsage() },
-                                colors = ButtonDefaults.buttonColors(containerColor = TeenProtectionCyan),
-                                shape = RoundedCornerShape(10.dp),
-                                modifier = Modifier.weight(1f).height(36.dp),
-                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
-                            ) {
- Text("محاكاة ساعتين", color = BackgroundDark, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                            }
-
-                            OutlinedButton(
-                                onClick = { viewModel.simulateReEntryAttempt() },
-                                shape = RoundedCornerShape(10.dp),
-                                modifier = Modifier.weight(1f).height(36.dp),
-                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
-                            ) {
- Text("إعادة دخول", color = NeonAmber, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                            }
-
-                            OutlinedButton(
-                                onClick = { viewModel.unlockScreenTimeForTest() },
-                                shape = RoundedCornerShape(10.dp),
-                                modifier = Modifier.weight(1f).height(36.dp),
-                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
-                            ) {
- Text("فك القفل", color = NeonCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Google AdMob Space
-        item {
-            AdMobBannerSpace(
-                isVipMember = isVipMember,
-                isAdWatching = isAdWatching,
-                adWatchProgress = adWatchProgress,
-                onWatchRewardedAd = { viewModel.watchRewardedAdForCredits() },
-                onGoVip = { showVipModal = true },
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
-            )
-        }
-
-
-        // HERO BANNER CAROUSEL
-        item {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .clip(RoundedCornerShape(24.dp))
-                    .height(160.dp)
-            ) {
-                Image(
-                    painter = painterResource(
-                        id = if (isTeenMode) R.drawable.img_teen_protection else R.drawable.img_hero_banner
-                    ),
-                    contentDescription = "Hero Banner",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            brush = Brush.horizontalGradient(
-                                colors = listOf(
-                                    Color.Black.copy(alpha = 0.85f),
-                                    Color.Transparent
-                                )
-                            )
-                        )
-                        .padding(16.dp),
-                    contentAlignment = Alignment.CenterStart
-                ) {
-                    Column {
-                        GlassBadge(
-                            text = if (isTeenMode) "حماية الناشئة الذكية" else "المتجر المستقبلي",
-                            accentColor = if (isTeenMode) TeenProtectionCyan else NeonPink
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = if (isTeenMode) "محتوى آمن مع تصفح تفاعلي مشفر" else "عروض النيون والحصرية في مجرة",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "استكشف أحدث المنشورات والأغراض الرقمية",
-                            color = Color.LightGray,
-                            fontSize = 12.sp
-                        )
-                    }
-                }
-            }
-        }
-
-        // 3D BUBBLES INTERACTIVE ORBIT GRID
-        item {
-            Bubble3DOrbit(
-                bubbles = bubbles,
-                isTeenMode = isTeenMode,
-                onBubbleClick = { bubble ->
-                    if (bubble.iconType == "chat") {
-                        onOpenChat()
-                    }
-                }
-            )
-        }
-
-        // POSTS FEED SECTION TITLE
+        // 4. POSTS FEED SECTION HEADER
         item {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
- text ="منشورات مجتمع مجرة",
+                    text = "المنشورات الحديثة",
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp
                 )
-
                 Text(
-                    text = "الكل",
+                    text = "الأحدث",
                     color = NeonCyan,
-                    fontSize = 13.sp,
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold
                 )
             }
         }
 
-        // SOCIAL POSTS FEED LIST
+        // 5. SOCIAL POSTS FEED LIST
         items(filteredPosts) { post ->
             PostCardItem(
                 post = post,
@@ -995,12 +588,8 @@ fun HomeScreen(
                     activeReplyText = text
                     showStoryCreatorModal = true
                 },
-                onReportClick = {
-                    activeReportPost = post
-                },
-                onLongClick = {
-                    activeQuickActionOverlayPost = post
-                }
+                onReportClick = { activeReportPost = post },
+                onLongClick = { activeQuickActionOverlayPost = post }
             )
             Spacer(modifier = Modifier.height(12.dp))
         }
@@ -1021,7 +610,7 @@ fun HomeScreen(
                         .padding(20.dp)
                 ) {
                     Text(
- text ="نشر محتوى جديد في مجرة",
+                        text = "نشر محتوى جديد",
                         color = Color.White,
                         fontWeight = FontWeight.Bold,
                         fontSize = 18.sp
@@ -1032,7 +621,7 @@ fun HomeScreen(
                     OutlinedTextField(
                         value = newPostText,
                         onValueChange = { newPostText = it },
-                        placeholder = { Text("اكتب منشورك الزجاجي هنا...", color = Color.Gray) },
+                        placeholder = { Text("اكتب منشورك هنا...", color = Color.Gray) },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(120.dp),
@@ -1092,16 +681,12 @@ fun HomeScreen(
                 showVoiceAssistantModal = false
                 onOpenChat()
             },
-            onSearchPosts = { query ->
-                showVoiceAssistantModal = false
-            }
+            onSearchPosts = { showVoiceAssistantModal = false }
         )
     }
 
     if (showPrivateVaultModal) {
-        NexaPrivateVaultModal(
-            onDismiss = { showPrivateVaultModal = false }
-        )
+        NexaPrivateVaultModal(onDismiss = { showPrivateVaultModal = false })
     }
 
     activeQuickActionOverlayPost?.let { post ->
@@ -1154,7 +739,7 @@ fun PostCardItem(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
-                            .size(42.dp)
+                            .size(40.dp)
                             .clip(CircleShape)
                             .background(NeonPurple.copy(alpha = 0.3f)),
                         contentAlignment = Alignment.Center
@@ -1176,7 +761,7 @@ fun PostCardItem(
                             fontSize = 14.sp
                         )
                         Text(
-                            text = "منذ بضع دقائق • مشفر زجاجياً",
+                            text = "منذ بضع دقائق",
                             color = Color.Gray,
                             fontSize = 11.sp
                         )
@@ -1185,7 +770,7 @@ fun PostCardItem(
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (post.isTeenSafe) {
- GlassBadge(text ="آمن للناشئة", accentColor = TeenProtectionCyan)
+                        GlassBadge(text = "آمن", accentColor = TeenProtectionCyan)
                         Spacer(modifier = Modifier.width(6.dp))
                     }
 
@@ -1193,7 +778,7 @@ fun PostCardItem(
                         IconButton(onClick = onLongClick, modifier = Modifier.size(28.dp)) {
                             Icon(
                                 imageVector = Icons.Default.MoreVert,
-                                contentDescription = "Quick Radial Menu",
+                                contentDescription = "Quick Menu",
                                 tint = NeonCyan,
                                 modifier = Modifier.size(18.dp)
                             )
@@ -1223,7 +808,6 @@ fun PostCardItem(
                 lineHeight = 20.sp
             )
 
-            // Tagged product shortcut box
             if (post.taggedProductId != null) {
                 Spacer(modifier = Modifier.height(10.dp))
                 Row(
@@ -1243,7 +827,7 @@ fun PostCardItem(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
- text ="منتج مرتبط من المتجر - انقر للاستعراض",
+                        text = "منتج مرتبط من المتجر - انقر للاستعراض",
                         color = NeonCyan,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold
@@ -1253,7 +837,7 @@ fun PostCardItem(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Footer (Likes, Comments with Crowns, Video Reply)
+            // Footer (Likes & Comments)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1291,7 +875,7 @@ fun PostCardItem(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
- text ="التيجان والتعليقات (${post.commentsCount})",
+                            text = "التعليقات (${post.commentsCount})",
                             color = NeonAmber,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold
@@ -1309,7 +893,7 @@ fun PostCardItem(
                             .padding(horizontal = 10.dp, vertical = 4.dp)
                     ) {
                         Text(
- text ="رد بفيديو/ستوري",
+                            text = "رد بفيديو",
                             color = NeonCyan,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
