@@ -1,15 +1,12 @@
 name: Build Android APK
 
 on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+  workflow_dispatch: # هذا الخيار يجعله يعمل يدويّاً فقط عبر الضغط على زر Run workflow
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
+    
     steps:
     - name: Checkout Code
       uses: actions/checkout@v4
