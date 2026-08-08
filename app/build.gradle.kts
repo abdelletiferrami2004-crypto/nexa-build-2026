@@ -30,8 +30,14 @@ android {
 }
 
 dependencies {
-    // Biometric Library (هذه هي المكتبة المفقودة التي ستصلح خطأ BIOMETRIC_STRONG)
+    // Biometric Library
     implementation("androidx.biometric:biometric:1.1.0")
+
+    // Image Loading (Coil for Compose) - لحل مشكلة coil
+    implementation("io.coil-kt:coil-compose:2.6.0")
+
+    // Material Icons Extended - لحل مشكلة ShoppingBag
+    implementation("androidx.compose.material:material-icons-extended:1.6.8")
 
     // Firebase Libraries
     implementation(platform("com.google.firebase:firebase-bom:33.1.2"))
