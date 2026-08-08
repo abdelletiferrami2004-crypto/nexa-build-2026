@@ -22,6 +22,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+
 class MajarrahViewModel(application: Application) : AndroidViewModel(application) {
 
     private val db = MajarrahDatabase.getDatabase(application)
