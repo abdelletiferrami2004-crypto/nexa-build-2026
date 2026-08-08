@@ -1,11 +1,5 @@
 package com.example.ui.screens
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ShoppingBag
-import coil.compose.AsyncImage
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -28,13 +22,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddShoppingCart
-import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -52,13 +43,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import com.example.R
 import com.example.data.model.Product
 import com.example.ui.MajarrahViewModel
 import com.example.ui.components.GlassBadge
@@ -66,7 +55,6 @@ import com.example.ui.components.GlassCard
 import com.example.ui.theme.BackgroundDark
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
-import com.example.ui.theme.NeonPink
 import com.example.ui.theme.NeonPurple
 import com.example.ui.theme.TeenProtectionCyan
 
@@ -121,13 +109,13 @@ fun StoreScreen(
         ) {
             Column {
                 Text(
- text ="متجر مجرة Marketplace",
+                    text = "متجر مجرة Marketplace",
                     style = MaterialTheme.typography.titleLarge,
                     color = Color.White,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
- text ="الرصيد: ${walletBalance.toInt()} ر.س | شحن مباشر سريع",
+                    text = "الرصيد: ${walletBalance.toInt()} ر.س | شحن مباشر سريع",
                     style = MaterialTheme.typography.bodySmall,
                     color = NeonCyan
                 )
@@ -141,7 +129,7 @@ fun StoreScreen(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = androidx.compose.material.icons.Icons.Default.ShoppingBag,
+                        imageVector = Icons.Default.ShoppingBag,
                         contentDescription = "Cart",
                         tint = NeonCyan,
                         modifier = Modifier.size(18.dp)
@@ -178,7 +166,7 @@ fun StoreScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
- text ="وضع الناشئة مفعّل: تظهر فقط المنتجات المعتمدة والآمنة للشباب",
+                        text = "وضع الناشئة مفعّل: تظهر فقط المنتجات المعتمدة والآمنة للشباب",
                         color = Color.White,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium
@@ -293,7 +281,7 @@ fun ProductGridItem(
                             .align(Alignment.TopStart)
                             .padding(6.dp)
                     ) {
- GlassBadge(text ="مميز", accentColor = NeonAmber)
+                        GlassBadge(text = "مميز", accentColor = NeonAmber)
                     }
                 }
             }
@@ -368,7 +356,7 @@ fun ProductGridItem(
                             .padding(horizontal = 6.dp, vertical = 4.dp)
                     ) {
                         Text(
- text ="شراء",
+                            text = "شراء",
                             color = BackgroundDark,
                             fontWeight = FontWeight.Bold,
                             fontSize = 10.sp
