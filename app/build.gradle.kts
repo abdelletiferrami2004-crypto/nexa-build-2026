@@ -1,10 +1,7 @@
-import com.google.gms.googleservices.GoogleServicesPlugin
-
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.google.devtools.ksp)
-    alias(libs.plugins.roborazzi)
     alias(libs.plugins.secrets)
     alias(libs.plugins.google.services)
 }
@@ -23,35 +20,6 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    signingConfigs {
-        create("release") {
-            val keystorePath = System.getenv("KEYSTORE_PATH")
-            if (keystorePath != null) {
-                storeFile = file(keystorePath)
-                storePassword = System.getenv("STORE_PASSWORD")
-                keyAlias = "upload"
-                keyPassword = System.getenv("KEY_PASSWORD")
-            }
-        }
-        create("debugConfig") {
-            storeFile = file("${rootDir}/debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
-        }
-    }
-
-    buildTypes {
-        release {
-            isMinifyEnabled = false
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("release")
-        }
-        debug {
-            signingConfig = signingConfigs.getByName("debugConfig")
-        }
-    }
-
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -67,11 +35,11 @@ android {
 }
 
 dependencies {
-    // Firebase Specific Versions
+    // Firebase Libraries
     implementation(platform("com.google.firebase:firebase-bom:33.1.2"))
-    implementation("com.google.firebase:firebase-analytics-ktx")
-    implementation("com.google.firebase:firebase-auth-ktx")
-    implementation("com.google.firebase:firebase-firestore-ktx")
+    implementation("com.google.firebase:firebase-analytics")
+    implementation("com.google.firebase:firebase-auth")
+    implementation("com.google.firebase:firebase-firestore")
 
     // AndroidX & Compose standard libraries
     implementation(libs.androidx.core.ktx)
