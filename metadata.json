@@ -1,0 +1,6 @@
+{
+  "name": "NEXA",
+  "description": "منصة NEXA للتواصل الاجتماعي والتسوق الذكي بتصميم Glassmorphism ودردشة مشفرة بـ PIN ونظام تيجان التعليقات.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
