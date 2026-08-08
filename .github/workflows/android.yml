@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Code
+    - name: Checkout Repository
       uses: actions/checkout@v4
 
     - name: Set up JDK 17
@@ -20,15 +20,16 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@v3
+    - name: Validate and Generate Gradle Wrapper
+      run: |
+        gradle wrapper --gradle-version 8.7
+        chmod +x gradlew
 
     - name: Build Debug APK
-      run: gradle assembleDebug --stacktrace --continue
+      run: ./gradlew assembleDebug --stacktrace
 
     - name: Upload Debug APK
       uses: actions/upload-artifact@v4
-      if: always()
       with:
         name: NEXA-app-debug
-        path: app/build/outputs/apk/debug/*.apk
+        path: '**/build/outputs/apk/debug/*.apk'
