@@ -58,7 +58,7 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     private val _reportedContentIds = MutableStateFlow<Set<String>>(emptySet())
     val reportedContentIds: StateFlow<Set<String>> = _reportedContentIds.asStateFlow()
 
-    // أمان الحساب والمالية والخصائص المطلوبة في الخدمات
+    // أمان الحساب والمالية والخصائص المطلوبة
     private val _walletBalance = MutableStateFlow(1000.0)
     val walletBalance: StateFlow<Double> = _walletBalance.asStateFlow()
 
@@ -105,7 +105,7 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     }
 
     // -------------------------------------------------------------
-    // 1. FIREBASE REALTIME POSTS (المنشورات الحية من السيرفر)
+    // 1. FIREBASE REALTIME POSTS
     // -------------------------------------------------------------
     private fun listenToPostsFromFirebase() {
         firestore.collection("posts")
@@ -170,7 +170,7 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     }
 
     // -------------------------------------------------------------
-    // 2. FIREBASE REALTIME STORIES (القصص الحية)
+    // 2. FIREBASE REALTIME STORIES
     // -------------------------------------------------------------
     private fun listenToStoriesFromFirebase() {
         firestore.collection("stories")
@@ -249,7 +249,7 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     }
 
     // -------------------------------------------------------------
-    // 3. STORE & CART & WALLET (السلة والشراء والمالية)
+    // 3. STORE & CART & WALLET
     // -------------------------------------------------------------
     fun addToCart(product: Product) {
         val currentList = _cartItems.value.toMutableList()
@@ -288,7 +288,7 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     }
 
     // -------------------------------------------------------------
-    // 4. SETTINGS & TOGGLES (إعدادات الخدمات)
+    // 4. SETTINGS & TOGGLES
     // -------------------------------------------------------------
     fun toggleTeenProtection(enabled: Boolean) {
         _isTeenProtectionEnabled.value = enabled
@@ -318,9 +318,7 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
         _autoCleanCache.value = enabled
     }
 
-    fun clearCache() {
-        // تنظيف ذاكرة التخزين المؤقت
-    }
+    fun clearCache() {}
 
     fun toggleVoiceAssistant(enabled: Boolean) {
         _aiVoiceAssistantEnabled.value = enabled
@@ -339,7 +337,7 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun unlockVaultWithPin(pin: String, onResult: (Boolean) -> Unit) {
-        if (pin == "1234" || pin.isNotEmpty()) {
+        if (pin.isNotEmpty()) {
             _privacyVaultLocked.value = false
             onResult(true)
         } else {
@@ -405,13 +403,9 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
         _blockedUsers.value = _blockedUsers.value + userName
     }
 
-    fun toggleBookmark(postId: Int) {
-        // Toggle Local Bookmark status
-    }
+    fun toggleBookmark(postId: Int) {}
 
-    fun sharePost(postId: Int) {
-        // Handle Post Share logic
-    }
+    fun sharePost(postId: Int) {}
 
     // -------------------------------------------------------------
     // 7. USER PROFILE MANAGEMENT
