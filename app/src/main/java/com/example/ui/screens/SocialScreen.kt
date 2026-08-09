@@ -23,10 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ChatBubbleOutline
-import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -79,16 +76,18 @@ fun SocialScreen(
         com.example.ui.components.ReelStoryViewerModal(
             story = story,
             onLikeToggle = {
-                viewModel.toggleStoryLike(story.id)
+                val storyIdInt = story.id.toString().toIntOrNull() ?: 0
+                viewModel.toggleStoryLike(storyIdInt)
             },
             onSendReply = { text ->
-                viewModel.sendStoryReply(story.id, text)
+                val storyIdInt = story.id.toString().toIntOrNull() ?: 0
+                viewModel.sendStoryReply(storyIdInt, text)
             },
             onShareForward = {
                 viewModel.publishReelToStory(
                     reelTitle = story.reelTitle ?: "مقطع نيون مميز",
                     reelAuthor = story.reelAuthor ?: "@majarrah_official",
- userCaption ="بارتاج ستوري إلى أصدقائك"
+                    userCaption = "بارتاج ستوري إلى أصدقائك"
                 )
             },
             onNavigateToReels = {
@@ -109,11 +108,11 @@ fun SocialScreen(
     }
 
     val friendsList = listOf(
- FriendItem("نورا القحطاني","تستكشف المنتجات الجديدة في المتجر", true, true),
- FriendItem("فيصل العتيبي","يبني تطبيقه القادم بـ Jetpack Compose", true, true),
- FriendItem("عبدالله الشهري","متواجد في دردشة مجرة المشفرة", false, true),
- FriendItem("سارة النمر","تتابع أحدث القصص والريلز", true, true),
- FriendItem("أحمد الغامدي","مشغول بالتسوق الذكي", false, false)
+        FriendItem("نورا القحطاني", "تستكشف المنتجات الجديدة في المتجر", true, true),
+        FriendItem("فيصل العتيبي", "يبني تطبيقه القادم بـ Jetpack Compose", true, true),
+        FriendItem("عبدالله الشهري", "متواجد في دردشة مجرة المشفرة", false, true),
+        FriendItem("سارة النمر", "تتابع أحدث القصص والريلز", true, true),
+        FriendItem("أحمد الغامدي", "مشغول بالتسوق الذكي", false, false)
     )
 
     val profile by viewModel.userProfile.collectAsState()
@@ -135,13 +134,13 @@ fun SocialScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
- text ="الأصدقاء والمجتمعات",
+                    text = "الأصدقاء والمجتمعات",
                     style = MaterialTheme.typography.titleLarge,
                     color = Color.White,
                     fontWeight = FontWeight.Bold
                 )
 
- GlassBadge(text ="محيط مجرة", accentColor = NeonCyan)
+                GlassBadge(text = "محيط مجرة", accentColor = NeonCyan)
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -169,7 +168,7 @@ fun SocialScreen(
         // Stories Row (قصص الأصدقاء)
         item {
             Text(
- text ="قصص الأصدقاء التفاعلية",
+                text = "قصص الأصدقاء التفاعلية",
                 color = Color.White,
                 fontWeight = FontWeight.Bold,
                 fontSize = 15.sp
@@ -219,7 +218,7 @@ fun SocialScreen(
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
- text = if (story.isReelShare)" ${story.authorName.split("").first()}" else story.authorName.split("").first(),
+                            text = story.authorName.split(" ").firstOrNull() ?: story.authorName,
                             color = Color.White,
                             fontSize = 11.sp
                         )
