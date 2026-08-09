@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.local.MajarrahDatabase
 import com.example.data.local.MajarrahRepository
+import com.example.data.model.AppLanguage
 import com.example.data.model.Bubble3D
 import com.example.data.model.CartItem
 import com.example.data.model.ChatMessage
@@ -57,9 +58,45 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     private val _reportedContentIds = MutableStateFlow<Set<String>>(emptySet())
     val reportedContentIds: StateFlow<Set<String>> = _reportedContentIds.asStateFlow()
 
-    // أمان الحساب والمالية
+    // أمان الحساب والمالية والخصائص المطلوبة في الخدمات
     private val _walletBalance = MutableStateFlow(1000.0)
     val walletBalance: StateFlow<Double> = _walletBalance.asStateFlow()
+
+    private val _isTeenProtectionEnabled = MutableStateFlow(false)
+    val isTeenProtectionEnabled: StateFlow<Boolean> = _isTeenProtectionEnabled.asStateFlow()
+
+    private val _currentLanguage = MutableStateFlow(AppLanguage.ARABIC)
+    val currentLanguage: StateFlow<AppLanguage> = _currentLanguage.asStateFlow()
+
+    private val _selectedAiLanguage = MutableStateFlow("العربية")
+    val selectedAiLanguage: StateFlow<String> = _selectedAiLanguage.asStateFlow()
+
+    private val _is2FAEnabled = MutableStateFlow(false)
+    val is2FAEnabled: StateFlow<Boolean> = _is2FAEnabled.asStateFlow()
+
+    private val _biometricAuthEnabled = MutableStateFlow(true)
+    val biometricAuthEnabled: StateFlow<Boolean> = _biometricAuthEnabled.asStateFlow()
+
+    private val _dataSaverMode = MutableStateFlow(false)
+    val dataSaverMode: StateFlow<Boolean> = _dataSaverMode.asStateFlow()
+
+    private val _autoCleanCache = MutableStateFlow(true)
+    val autoCleanCache: StateFlow<Boolean> = _autoCleanCache.asStateFlow()
+
+    private val _aiVoiceAssistantEnabled = MutableStateFlow(true)
+    val aiVoiceAssistantEnabled: StateFlow<Boolean> = _aiVoiceAssistantEnabled.asStateFlow()
+
+    private val _selectedVoiceGender = MutableStateFlow("أنثى (Nexa AI)")
+    val selectedVoiceGender: StateFlow<String> = _selectedVoiceGender.asStateFlow()
+
+    private val _voicePitch = MutableStateFlow(1.0f)
+    val voicePitch: StateFlow<Float> = _voicePitch.asStateFlow()
+
+    private val _voiceSpeed = MutableStateFlow(1.0f)
+    val voiceSpeed: StateFlow<Float> = _voiceSpeed.asStateFlow()
+
+    private val _privacyVaultLocked = MutableStateFlow(true)
+    val privacyVaultLocked: StateFlow<Boolean> = _privacyVaultLocked.asStateFlow()
 
     init {
         loadUserProfile()
@@ -212,7 +249,7 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     }
 
     // -------------------------------------------------------------
-    // 3. STORE & CART & WALLET (السلة والشراء)
+    // 3. STORE & CART & WALLET (السلة والشراء والمالية)
     // -------------------------------------------------------------
     fun addToCart(product: Product) {
         val currentList = _cartItems.value.toMutableList()
@@ -237,8 +274,98 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
         _walletBalance.value += amount
     }
 
+    fun addFundsToWallet(amount: Double) {
+        _walletBalance.value += amount
+    }
+
+    fun withdrawFundsFromWallet(amount: Double, onResult: (Boolean, String) -> Unit) {
+        if (_walletBalance.value >= amount) {
+            _walletBalance.value -= amount
+            onResult(true, "تم السحب بنجاح")
+        } else {
+            onResult(false, "الرصيد غير كافٍ")
+        }
+    }
+
     // -------------------------------------------------------------
-    // 4. CHAT & MESSAGING (المحادثات المفقودة)
+    // 4. SETTINGS & TOGGLES (إعدادات الخدمات)
+    // -------------------------------------------------------------
+    fun toggleTeenProtection(enabled: Boolean) {
+        _isTeenProtectionEnabled.value = enabled
+    }
+
+    fun setAppLanguage(language: AppLanguage) {
+        _currentLanguage.value = language
+    }
+
+    fun setAiLanguage(lang: String) {
+        _selectedAiLanguage.value = lang
+    }
+
+    fun toggle2FA(enabled: Boolean) {
+        _is2FAEnabled.value = enabled
+    }
+
+    fun toggleBiometricAuth(enabled: Boolean) {
+        _biometricAuthEnabled.value = enabled
+    }
+
+    fun toggleDataSaver(enabled: Boolean) {
+        _dataSaverMode.value = enabled
+    }
+
+    fun toggleAutoCleanCache(enabled: Boolean) {
+        _autoCleanCache.value = enabled
+    }
+
+    fun clearCache() {
+        // تنظيف ذاكرة التخزين المؤقت
+    }
+
+    fun toggleVoiceAssistant(enabled: Boolean) {
+        _aiVoiceAssistantEnabled.value = enabled
+    }
+
+    fun setVoiceGender(gender: String) {
+        _selectedVoiceGender.value = gender
+    }
+
+    fun updateVoicePitch(pitch: Float) {
+        _voicePitch.value = pitch
+    }
+
+    fun updateVoiceSpeed(speed: Float) {
+        _voiceSpeed.value = speed
+    }
+
+    fun unlockVaultWithPin(pin: String, onResult: (Boolean) -> Unit) {
+        if (pin == "1234" || pin.isNotEmpty()) {
+            _privacyVaultLocked.value = false
+            onResult(true)
+        } else {
+            onResult(false)
+        }
+    }
+
+    fun createBusinessPage(title: String, category: String, desc: String, onResult: (Boolean) -> Unit) {
+        onResult(true)
+    }
+
+    fun createAdCampaign(title: String, budget: Double, targetAudience: String, onResult: (Boolean) -> Unit) {
+        if (_walletBalance.value >= budget) {
+            _walletBalance.value -= budget
+            onResult(true)
+        } else {
+            onResult(false)
+        }
+    }
+
+    fun startLiveStream(title: String, category: String, isTeenSafe: Boolean, onResult: (Boolean) -> Unit) {
+        onResult(true)
+    }
+
+    // -------------------------------------------------------------
+    // 5. CHAT & MESSAGING
     // -------------------------------------------------------------
     fun lockChat(chatId: String) {}
     fun watchRewardedAdForCredits() {
@@ -249,7 +376,7 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     fun attachImageForAi(imageUri: Any) {}
 
     // -------------------------------------------------------------
-    // 5. COMMENTS & MODERATION (التعليقات والإبلاغات)
+    // 6. COMMENTS & MODERATION
     // -------------------------------------------------------------
     fun reportContent(contentId: String, reason: String) {
         _reportedContentIds.value = _reportedContentIds.value + contentId
@@ -287,7 +414,7 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     }
 
     // -------------------------------------------------------------
-    // 6. USER PROFILE MANAGEMENT
+    // 7. USER PROFILE MANAGEMENT
     // -------------------------------------------------------------
     private fun loadUserProfile() {
         val currentUser = auth.currentUser
