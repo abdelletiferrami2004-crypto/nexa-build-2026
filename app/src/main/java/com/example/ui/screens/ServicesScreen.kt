@@ -76,10 +76,10 @@ fun SocialScreen(
         com.example.ui.components.ReelStoryViewerModal(
             story = story,
             onLikeToggle = {
-                viewModel.toggleStoryLike(story.id)
+                viewModel.toggleStoryLike(story.id.toString())
             },
             onSendReply = { text ->
-                viewModel.sendStoryReply(story.id, text)
+                viewModel.sendStoryReply(story.id.toString(), text)
             },
             onShareForward = {
                 viewModel.publishReelToStory(
@@ -236,7 +236,7 @@ fun SocialScreen(
                             Text(friend.name.take(1), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
                         }
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text(friend.name.split(" ").first(), color = Color.White, fontSize = 11.sp)
+                        Text(friend.name.split(" ").firstOrNull() ?: friend.name, color = Color.White, fontSize = 11.sp)
                     }
                 }
             }
@@ -289,8 +289,8 @@ fun SocialScreen(
                                     modifier = Modifier
                                         .size(12.dp)
                                         .clip(CircleShape)
-                                    .background(EncryptedGreen)
-                                    .border(2.dp, BackgroundDark, CircleShape)
+                                        .background(EncryptedGreen)
+                                        .border(2.dp, BackgroundDark, CircleShape)
                                 )
                             }
                         }
