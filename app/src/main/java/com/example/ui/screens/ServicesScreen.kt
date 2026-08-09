@@ -1,7 +1,6 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,16 +15,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ChatBubbleOutline
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -38,8 +39,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -47,76 +48,35 @@ import com.example.ui.MajarrahViewModel
 import com.example.ui.components.GlassBadge
 import com.example.ui.components.GlassCard
 import com.example.ui.theme.BackgroundDark
-import com.example.ui.theme.EncryptedGreen
 import com.example.ui.theme.NeonCyan
-import com.example.ui.theme.NeonPink
 import com.example.ui.theme.NeonPurple
-import com.example.ui.theme.TeenProtectionCyan
 
-data class FriendItem(
-    val name: String,
-    val status: String,
-    val isOnline: Boolean,
-    val isTeenSafe: Boolean
+data class ServiceCategory(
+    val title: String,
+    val description: String,
+    val icon: ImageVector,
+    val color: Color
 )
 
 @Composable
-fun SocialScreen(
+fun ServicesScreen(
     viewModel: MajarrahViewModel,
-    onOpenChatWithFriend: (String) -> Unit,
-    onNavigateToReels: () -> Unit = {}
+    onServiceClick: (String) -> Unit = {}
 ) {
     var searchQuery by remember { mutableStateOf("") }
-    var showStoryCreator by remember { mutableStateOf(false) }
-    var activeStoryForViewer by remember { mutableStateOf<com.example.data.model.StoryItem?>(null) }
 
-    val stories by viewModel.stories.collectAsState()
-
-    activeStoryForViewer?.let { story ->
-        com.example.ui.components.ReelStoryViewerModal(
-            story = story,
-            onLikeToggle = {
-                viewModel.toggleStoryLike(story.id.toString())
-            },
-            onSendReply = { text ->
-                viewModel.sendStoryReply(story.id.toString(), text)
-            },
-            onShareForward = {
-                viewModel.publishReelToStory(
-                    reelTitle = story.reelTitle ?: "مقطع نيون مميز",
-                    reelAuthor = story.reelAuthor ?: "@majarrah_official",
-                    userCaption = "بارتاج ستوري إلى أصدقائك"
-                )
-            },
-            onNavigateToReels = {
-                activeStoryForViewer = null
-                onNavigateToReels()
-            },
-            onDismiss = { activeStoryForViewer = null }
-        )
-    }
-
-    if (showStoryCreator) {
-        com.example.ui.components.StoryCreatorModal(
-            onDismiss = { showStoryCreator = false },
-            onPublishStory = { story ->
-                viewModel.publishStory(story)
-            }
-        )
-    }
-
-    val friendsList = listOf(
-        FriendItem("نورا القحطاني", "تستكشف المنتجات الجديدة في المتجر", true, true),
-        FriendItem("فيصل العتيبي", "يبني تطبيقه القادم بـ Jetpack Compose", true, true),
-        FriendItem("عبدالله الشهري", "متواجد في دردشة مجرة المشفرة", false, true),
-        FriendItem("سارة النمر", "تتابع أحدث القصص والريلز", true, true),
-        FriendItem("أحمد الغامدي", "مشغول بالتسوق الذكي", false, false)
+    val services = listOf(
+        ServiceCategory("تطوير التطبيقات", "بناء تطبيقات أندرويد متطورة باستخدام Kotlin وCompose", Icons.Default.PhoneAndroid, NeonCyan),
+        ServiceCategory("التصميم والواجهات", "تصميم واجهات المستخدم العصرية بأسلوب النيون والتأثيرات", Icons.Default.Palette, NeonPurple),
+        ServiceCategory("الأمان والتشفير", "حلول حماية البيانات والاتصالات المشفرة لحماية الخصوصية", Icons.Default.Security, NeonCyan),
+        ServiceCategory("البرمجة والتطوير", "كتابة الأكواد البرمجية وصيانتها بأعلى معايير الجودة", Icons.Default.Code, NeonPurple),
+        ServiceCategory("الصيانة والدعم", "دعم فني وصيانة مستمرة للتطبيقات والأنظمة", Icons.Default.Build, NeonCyan)
     )
 
-    val profile by viewModel.userProfile.collectAsState()
-    val isTeen = profile?.isTeenMode ?: true
-
-    val filteredFriends = if (isTeen) friendsList.filter { it.isTeenSafe } else friendsList
+    val filteredServices = services.filter {
+        it.title.contains(searchQuery, ignoreCase = true) ||
+                it.description.contains(searchQuery, ignoreCase = true)
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -124,7 +84,6 @@ fun SocialScreen(
             .background(BackgroundDark),
         contentPadding = PaddingValues(bottom = 100.dp, top = 16.dp, start = 16.dp, end = 16.dp)
     ) {
-        // Header Title
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -132,22 +91,21 @@ fun SocialScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "الأصدقاء والمجتمعات",
+                    text = "الخدمات المتاحة",
                     style = MaterialTheme.typography.titleLarge,
                     color = Color.White,
                     fontWeight = FontWeight.Bold
                 )
 
-                GlassBadge(text = "محيط مجرة", accentColor = NeonCyan)
+                GlassBadge(text = "مجرة خدمات", accentColor = NeonCyan)
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Search input
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                placeholder = { Text("بحث عن أصدقاء أو مجتمعات...", color = Color.Gray) },
+                placeholder = { Text("بحث عن خدمة...", color = Color.Gray) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = NeonCyan) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
@@ -163,168 +121,50 @@ fun SocialScreen(
             Spacer(modifier = Modifier.height(20.dp))
         }
 
-        // Stories Row (قصص الأصدقاء)
-        item {
-            Text(
-                text = "قصص الأصدقاء التفاعلية",
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                fontSize = 15.sp
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                item {
-                    // Add Story Bubble
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.clickable { showStoryCreator = true }
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(64.dp)
-                                .clip(CircleShape)
-                                .background(NeonCyan.copy(alpha = 0.2f))
-                                .border(2.dp, NeonCyan, CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.Add, contentDescription = "Add Story", tint = NeonCyan, modifier = Modifier.size(32.dp))
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("إنشاء ستوري", color = NeonCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-
-                // Dynamic Published Stories
-                items(stories) { story ->
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.clickable { activeStoryForViewer = story }
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(64.dp)
-                                .clip(CircleShape)
-                                .background(if (story.isReelShare) NeonPink.copy(alpha = 0.35f) else NeonPurple.copy(alpha = 0.4f))
-                                .border(2.dp, if (story.isReelShare) NeonPink else TeenProtectionCyan, CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(story.authorName.take(1), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = story.authorName.split(" ").firstOrNull() ?: story.authorName,
-                            color = Color.White,
-                            fontSize = 11.sp
-                        )
-                    }
-                }
-
-                items(filteredFriends) { friend ->
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Box(
-                            modifier = Modifier
-                                .size(64.dp)
-                                .clip(CircleShape)
-                                .background(NeonPurple.copy(alpha = 0.3f))
-                                .border(2.dp, if (friend.isOnline) EncryptedGreen else NeonPurple, CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(friend.name.take(1), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(friend.name.split(" ").firstOrNull() ?: friend.name, color = Color.White, fontSize = 11.sp)
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-        }
-
-        // Friends List
-        item {
-            Text(
-                text = "قائمة الأصدقاء النشطين",
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                fontSize = 15.sp
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-        }
-
-        items(filteredFriends) { friend ->
+        items(filteredServices.size) { index ->
+            val service = filteredServices[index]
             GlassCard(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 6.dp),
+                    .padding(vertical = 8.dp)
+                    .clickable { onServiceClick(service.title) },
                 shape = RoundedCornerShape(18.dp)
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(14.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                        .padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Box(contentAlignment = Alignment.BottomEnd) {
-                            Box(
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .clip(CircleShape)
-                                    .background(NeonPurple.copy(alpha = 0.3f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(friend.name.take(1), color = Color.White, fontWeight = FontWeight.Bold)
-                            }
-                            if (friend.isOnline) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(12.dp)
-                                        .clip(CircleShape)
-                                        .background(EncryptedGreen)
-                                        .border(2.dp, BackgroundDark, CircleShape)
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.width(12.dp))
-
-                        Column {
-                            Text(
-                                text = friend.name,
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = friend.status,
-                                color = Color.LightGray,
-                                fontSize = 12.sp,
-                                maxLines = 1
-                            )
-                        }
-                    }
-
-                    // Direct chat button
-                    IconButton(
-                        onClick = { onOpenChatWithFriend("conv_1") },
+                    Box(
                         modifier = Modifier
-                            .clip(CircleShape)
-                            .background(EncryptedGreen.copy(alpha = 0.2f))
+                            .size(50.dp)
+                            .background(service.color.copy(alpha = 0.2f), RoundedCornerShape(12.dp)),
+                        contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.ChatBubbleOutline,
-                            contentDescription = "Chat",
-                            tint = EncryptedGreen
+                            imageVector = service.icon,
+                            contentDescription = service.title,
+                            tint = service.color,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(16.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = service.title,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = service.description,
+                            color = Color.LightGray,
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp
                         )
                     }
                 }
