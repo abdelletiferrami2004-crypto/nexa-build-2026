@@ -238,7 +238,18 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     }
 
     // -------------------------------------------------------------
-    // 4. COMMENTS & MODERATION (التعليقات والإبلاغات)
+    // 4. CHAT & MESSAGING (المحادثات المفقودة)
+    // -------------------------------------------------------------
+    fun lockChat(chatId: String) {}
+    fun watchRewardedAdForCredits() {
+        _walletBalance.value += 50.0
+    }
+    fun toggleMessageReaction(messageId: String, reaction: String) {}
+    fun sendImageMessage(chatId: String, imageUri: Any) {}
+    fun attachImageForAi(imageUri: Any) {}
+
+    // -------------------------------------------------------------
+    // 5. COMMENTS & MODERATION (التعليقات والإبلاغات)
     // -------------------------------------------------------------
     fun reportContent(contentId: String, reason: String) {
         _reportedContentIds.value = _reportedContentIds.value + contentId
@@ -276,7 +287,7 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     }
 
     // -------------------------------------------------------------
-    // 5. USER PROFILE MANAGEMENT
+    // 6. USER PROFILE MANAGEMENT
     // -------------------------------------------------------------
     private fun loadUserProfile() {
         val currentUser = auth.currentUser
