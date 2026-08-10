@@ -175,7 +175,7 @@ fun ReelStoryViewerModal(
                                         )
                                         Spacer(modifier = Modifier.width(4.dp))
                                         Text(
- text ="مشاهدة مقطع ريلز بالكامل",
+                                            text = "مشاهدة مقطع ريلز بالكامل",
                                             color = NeonCyan,
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.SemiBold
@@ -225,7 +225,7 @@ fun ReelStoryViewerModal(
                                 .align(Alignment.TopStart)
                                 .padding(16.dp)
                         ) {
- GlassBadge(text ="ريلز مشارك", accentColor = NeonPink)
+                            GlassBadge(text = "ريلز مشارك", accentColor = NeonPink)
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
                                 text = story.reelTitle ?: "مقطع ريلز نيون مميز",
