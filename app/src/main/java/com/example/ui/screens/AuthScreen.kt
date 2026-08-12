@@ -586,7 +586,7 @@ fun Step2DateOfBirthView(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "لأن عمرك أقل من 18 سنة (under_18_mode = true). حظر تام للمحتوى الحساس، وتفعيل تصفية صارمة للسماح بالمواد التعليمية والكرتونية والدينية النظيفة فقط.",
+                            text = "لأن عمرك أقل من 18 سنة. حظر تام للمحتوى غير المناسب، وتفعيل تصفية صارمة للسماح بالمواد التعليمية والترفيهية والدينية العائلية فقط.",
                             color = Color.LightGray,
                             fontSize = 11.sp,
                             lineHeight = 16.sp

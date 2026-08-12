@@ -3,7 +3,7 @@ package com.example.ui.theme
 import androidx.compose.ui.graphics.Color
 
 // Primary Dark Theme Colors
-val BackgroundDark = Color(0xFF090714)
+val BackgroundDark = Color(0xFF0D0B14)
 val BackgroundSurfaceDark = Color(0xFF130E26)
 val CardBackground = Color(0xFF130E26)
 val CardBorder = Color(0x38FFFFFF)
@@ -12,11 +12,11 @@ val GlassBorderDark = Color(0x38FFFFFF)
 val GlassCardBackground = Color(0x262A204E)
 
 // Neon Accent Colors
-val NeonCyan = Color(0xFF00F5FF)
-val NeonPurple = Color(0xFFA855F7)
-val NeonPink = Color(0xFFFF2A85)
+val NeonCyan = Color(0xFF00F0FF)
+val NeonPurple = Color(0xFF8A2BE2)
+val NeonPink = Color(0xFFFF007A)
 val NeonGreen = Color(0xFF10B981)
-val NeonAmber = Color(0xFFF59E0B)
+val NeonAmber = Color(0xFFFFBF00)
 
 // Status & Accent
 val TeenProtectionCyan = Color(0xFF06B6D4)

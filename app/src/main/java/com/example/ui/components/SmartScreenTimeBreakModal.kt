@@ -449,7 +449,7 @@ fun Under18ScreenTimeLockScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "تطبيقا لقواعد حماية الناشئة (under_18_mode = true)، التطبيق مقفل مؤقتاً لمساعدتك في أخذ قسط كافٍ من الراحة والتركيز على دروسك وقراءتك.",
+                text = "تطبيقاً لقواعد حماية الناشئة والأشبال، التطبيق مقفل مؤقتاً لمساعدتك في أخذ قسط كافٍ من الراحة والتركيز على دروسك وقراءتك.",
                 color = Color.LightGray,
                 fontSize = 13.sp,
                 textAlign = TextAlign.Center,

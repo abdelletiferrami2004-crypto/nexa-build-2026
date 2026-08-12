@@ -133,6 +133,67 @@ object FirebaseManager {
         }
     }
 
+    suspend fun saveStoryToCloud(story: com.example.data.model.StoryItem): Boolean {
+        val db = firestore ?: return false
+        return try {
+            val storyMap = hashMapOf(
+                "id" to story.id,
+                "authorName" to story.authorName,
+                "authorAvatarUrl" to story.authorAvatarUrl,
+                "timestamp" to story.timestamp,
+                "text" to story.text,
+                "isLikedByMe" to story.isLikedByMe,
+                "storyLikes" to story.storyLikes,
+                "isVideo" to story.isVideo,
+                "reelTitle" to story.reelTitle,
+                "reelAuthor" to story.reelAuthor,
+                "createdAt" to System.currentTimeMillis()
+            )
+            db.collection("nexa_stories").document("story_${story.id}")
+                .set(storyMap, SetOptions.merge()).await()
+            _cloudSyncStatus.value = "تم نشر القصة سحابياً في Firestore Cloud"
+            Log.d(TAG, "Story saved to Firestore")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to save story to Firestore", e)
+            false
+        }
+    }
+
+    fun listenToStoriesRealtime(onStoriesUpdated: (List<com.example.data.model.StoryItem>) -> Unit) {
+        val db = firestore ?: return
+        db.collection("nexa_stories")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.e(TAG, "Real-time Stories Firestore error", error)
+                    return@addSnapshotListener
+                }
+                if (snapshot != null && !snapshot.isEmpty) {
+                    val fetchedStories = snapshot.documents.mapNotNull { doc ->
+                        try {
+                            com.example.data.model.StoryItem(
+                                id = doc.getString("id") ?: doc.id,
+                                authorName = doc.getString("authorName") ?: "صانع مجرة",
+                                authorAvatarUrl = doc.getString("authorAvatarUrl") ?: "",
+                                timestamp = doc.getString("timestamp") ?: "الآن",
+                                text = doc.getString("text") ?: "",
+                                isLikedByMe = doc.getBoolean("isLikedByMe") ?: false,
+                                storyLikes = doc.getLong("storyLikes")?.toInt() ?: 0,
+                                isVideo = doc.getBoolean("isVideo") ?: false,
+                                reelTitle = doc.getString("reelTitle"),
+                                reelAuthor = doc.getString("reelAuthor")
+                            )
+                        } catch (e: Exception) {
+                            null
+                        }
+                    }
+                    if (fetchedStories.isNotEmpty()) {
+                        onStoriesUpdated(fetchedStories)
+                    }
+                }
+            }
+    }
+
     fun listenToPostsRealtime(onPostsUpdated: (List<Post>) -> Unit) {
         val db = firestore ?: return
         postsListenerRegistration?.remove()

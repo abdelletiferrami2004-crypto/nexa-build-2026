@@ -290,7 +290,7 @@ fun ServicesMenuBottomSheet(
 
                     Switch(
                         checked = isTeenMode,
-                        onCheckedChange = { viewModel.toggleTeenMode() },
+                        onCheckedChange = { viewModel.toggleTeenMode(it) },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = BackgroundDark,
                             checkedTrackColor = TeenProtectionCyan,
