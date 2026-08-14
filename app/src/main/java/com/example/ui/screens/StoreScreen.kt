@@ -89,7 +89,8 @@ fun StoreScreen(
             userWalletBalance = walletBalance,
             onDismiss = { directCheckoutProduct = null },
             onConfirmPurchase = { qty, paymentMethod ->
-                viewModel.purchaseProductDirectly(prod, qty, paymentMethod)
+                val success = viewModel.purchaseProductDirectly(prod, qty, paymentMethod)
+                success
             }
         )
     }
