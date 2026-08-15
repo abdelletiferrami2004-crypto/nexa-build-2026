@@ -149,9 +149,9 @@ APP_ARGS=$(save "$@")
 if [ ! -f "$CLASSPATH" ]; then
     mkdir -p "$APP_HOME/gradle/wrapper"
     if command -v curl >/dev/null 2>&1; then
-        curl -sLo "$CLASSPATH" "https://raw.githubusercontent.com/gradle/gradle/v8.2.0/gradle/wrapper/gradle-wrapper.jar" 2>/dev/null || true
+        curl -sLo "$CLASSPATH" "https://raw.githubusercontent.com/gradle/gradle/v8.8.0/gradle/wrapper/gradle-wrapper.jar" 2>/dev/null || true
     elif command -v wget >/dev/null 2>&1; then
-        wget -qO "$CLASSPATH" "https://raw.githubusercontent.com/gradle/gradle/v8.2.0/gradle/wrapper/gradle-wrapper.jar" 2>/dev/null || true
+        wget -qO "$CLASSPATH" "https://raw.githubusercontent.com/gradle/gradle/v8.8.0/gradle/wrapper/gradle-wrapper.jar" 2>/dev/null || true
     fi
 fi
 
