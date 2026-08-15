@@ -11,7 +11,8 @@ data class UserProfile(
     val age: Int = 16,
     val isTeenMode: Boolean = true, // automatically true if age < 18
     val isBiometricEnabled: Boolean = true,
-    val chatPin: String = "1234",
+    val isChatPinEnabled: Boolean = false,
+    val chatPin: String = "",
     val isLoggedIn: Boolean = false,
     val avatarUrl: String = "",
     val postsCount: Int = 12,

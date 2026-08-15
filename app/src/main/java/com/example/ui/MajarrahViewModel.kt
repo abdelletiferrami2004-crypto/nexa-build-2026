@@ -12,6 +12,11 @@ import com.example.data.model.Conversation
 import com.example.data.model.Post
 import com.example.data.model.Product
 import com.example.data.model.UserProfile
+import com.example.data.model.NexaNotification
+import com.example.data.model.NotificationCategory
+import com.example.data.model.GamificationBadge
+import com.example.data.model.DailyQuest
+import com.example.data.model.RankTier
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -546,8 +551,8 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
         _isPayoutClaimed.value = true
     }
 
-    // PIN Protection & Privacy Settings
-    private val _isChatUnlocked = MutableStateFlow(false)
+    // PIN Protection & Privacy Settings (Default unlocked unless PIN explicitly enabled in settings)
+    private val _isChatUnlocked = MutableStateFlow(true)
     val isChatUnlocked: StateFlow<Boolean> = _isChatUnlocked.asStateFlow()
 
     private val _hideChatPreviews = MutableStateFlow(true)
@@ -905,6 +910,57 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
 
     fun lockChat() {
         _isChatUnlocked.value = false
+    }
+
+    fun toggleChatPinLock(enabled: Boolean, defaultPin: String = "1234") {
+        try {
+            com.example.util.PinLockManager.setPinEnabled(getApplication(), enabled, if (enabled) defaultPin else "")
+        } catch (e: Throwable) {
+            // Safe fallback
+        }
+        val current = userProfile.value ?: com.example.data.model.UserProfile()
+        val newPin = if (enabled) {
+            if (current.chatPin.isNotBlank()) current.chatPin else defaultPin
+        } else {
+            ""
+        }
+        val updated = current.copy(isChatPinEnabled = enabled, chatPin = newPin)
+        viewModelScope.launch {
+            try {
+                repository.saveProfile(updated)
+                com.example.data.firebase.FirebaseManager.saveUserProfileToCloud(updated)
+            } catch (e: Throwable) {
+                // Safe handling
+            }
+            _isChatUnlocked.value = !enabled
+            _monetizationMessage.value = if (enabled) "تم تفعيل قفل المحادثات برمز PIN بنجاح 🔒" else "تم إلغاء قفل المحادثات - تفتح مباشرة 🔓"
+            try {
+                NotificationSoundManager.playPopChime(getApplication())
+            } catch (e: Throwable) {}
+        }
+    }
+
+    fun updateChatPin(newPin: String) {
+        try {
+            com.example.util.PinLockManager.setPinEnabled(getApplication(), true, newPin)
+        } catch (e: Throwable) {
+            // Safe fallback
+        }
+        val current = userProfile.value ?: com.example.data.model.UserProfile()
+        val updated = current.copy(isChatPinEnabled = true, chatPin = newPin)
+        viewModelScope.launch {
+            try {
+                repository.saveProfile(updated)
+                com.example.data.firebase.FirebaseManager.saveUserProfileToCloud(updated)
+            } catch (e: Throwable) {
+                // Safe handling
+            }
+            _isChatUnlocked.value = true
+            _monetizationMessage.value = "تم تعيين رمز PIN للمحادثات بنجاح 🔐"
+            try {
+                NotificationSoundManager.playPopChime(getApplication())
+            } catch (e: Throwable) {}
+        }
     }
 
     fun selectConversation(conversationId: String) {
@@ -1487,5 +1543,332 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     fun clearMonetizationMessage() {
         _monetizationMessage.value = null
     }
+
+    // =========================================================
+    // 4⃣ Dark/Light Modern Theme System
+    // =========================================================
+    private val _isDarkTheme = MutableStateFlow(true)
+    val isDarkTheme: StateFlow<Boolean> = _isDarkTheme.asStateFlow()
+
+    fun toggleTheme(isDark: Boolean? = null) {
+        _isDarkTheme.value = isDark ?: !_isDarkTheme.value
+        NotificationSoundManager.playPopChime(getApplication())
+    }
+
+    // =========================================================
+    // 5⃣ Smart In-App Notifications Engine
+    // =========================================================
+    private val _notifications = MutableStateFlow<List<NexaNotification>>(
+        listOf(
+            NexaNotification(
+                id = "n1",
+                title = "مساعد NEXA الصوتي متاح الآن! 🎙️",
+                message = "اكتشف واجهة الصوت الذكية بموجات صوتية نيون وردود فورية من محرك الذكاء الاصطناعي.",
+                category = NotificationCategory.AI,
+                timeAgo = "منذ 5 دقائق",
+                actionRoute = "voice",
+                rewardExp = 50
+            ),
+            NexaNotification(
+                id = "n2",
+                title = "مكافأة السلسلة اليومية جاهزة! 🔥",
+                message = "حافظت على تواجدك لـ 6 أيام متتالية. استلم مكافأتك اليومية وارتقِ للمستوى التالي.",
+                category = NotificationCategory.REWARDS,
+                timeAgo = "منذ 25 دقيقة",
+                actionRoute = "rewards",
+                rewardExp = 80
+            ),
+            NexaNotification(
+                id = "n3",
+                title = "تأمين فائق 256-bit E2EE 🛡️",
+                message = "تم تشفير كافة محادثاتك ورسائلك الخاصة بتقنية التشفير الطرفي فائق الأمان.",
+                category = NotificationCategory.SECURITY,
+                timeAgo = "منذ ساعة",
+                actionRoute = "chat"
+            ),
+            NexaNotification(
+                id = "n4",
+                title = "تحديث ريلز مجرة الأسبوعي ⚡",
+                message = "أكثر من 150 صانع محتوى نشروا مقاطع جديدة في قسم التكنولوجيا والذكاء الاصطناعي.",
+                category = NotificationCategory.SOCIAL,
+                timeAgo = "منذ ساعتين",
+                actionRoute = "reels"
+            )
+        )
+    )
+    val notifications: StateFlow<List<NexaNotification>> = _notifications.asStateFlow()
+
+    private val _activeInAppToast = MutableStateFlow<NexaNotification?>(null)
+    val activeInAppToast: StateFlow<NexaNotification?> = _activeInAppToast.asStateFlow()
+
+    val unreadNotificationsCount: StateFlow<Int> = _notifications.combine(_notifications) { list, _ ->
+        list.count { !it.isRead }
+    }.stateIn(viewModelScope, SharingStarted.Lazily, 3)
+
+    fun markNotificationAsRead(notificationId: String) {
+        _notifications.value = _notifications.value.map {
+            if (it.id == notificationId) it.copy(isRead = true) else it
+        }
+    }
+
+    fun markAllNotificationsAsRead() {
+        _notifications.value = _notifications.value.map { it.copy(isRead = true) }
+        NotificationSoundManager.playPopChime(getApplication())
+    }
+
+    fun deleteNotification(notificationId: String) {
+        _notifications.value = _notifications.value.filterNot { it.id == notificationId }
+    }
+
+    fun clearAllNotifications() {
+        _notifications.value = emptyList()
+    }
+
+    fun dismissInAppToast() {
+        _activeInAppToast.value = null
+    }
+
+    fun triggerSmartAiTipNotification() {
+        val tips = listOf(
+            Pair("نصيحة ذكية: استخدام الموجات الصوتية 🌊", "يمكنك النقر على زر الميكروفون وسؤال المساعد عن أي فكرة منشور أو كود برمجي فوراً."),
+            Pair("نصيحة الأمان: الخزنة السرية المشفرة 🔐", "احفظ صورك وملاحظاتك داخل الخزنة المشفرة برمز PIN أو البصمة البيومترية."),
+            Pair("نصيحة المكافآت: إكمال المهام اليومية ⭐", "أنجز مهام التفاعل اليومية لكسب نقاط EXP وشارات النيون وفتح ألقاب حصرية."),
+            Pair("ميزة جديدة: تيجان التعليقات المباشرة 👑", "التعليقات الأكثر فائدة وتفاعلاً تحصل على تاج ذهبي أعلى كل منشور في مجرة.")
+        )
+        val selected = tips.random()
+        val newNotification = NexaNotification(
+            title = selected.first,
+            message = selected.second,
+            category = NotificationCategory.AI,
+            timeAgo = "الآن",
+            rewardExp = 40
+        )
+        _notifications.value = listOf(newNotification) + _notifications.value
+        _activeInAppToast.value = newNotification
+        NotificationSoundManager.playPopChime(getApplication())
+
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(6000)
+            if (_activeInAppToast.value?.id == newNotification.id) {
+                _activeInAppToast.value = null
+            }
+        }
+    }
+
+    fun claimNotificationExp(notificationId: String, exp: Int) {
+        if (exp <= 0) return
+        markNotificationAsRead(notificationId)
+        _notifications.value = _notifications.value.map {
+            if (it.id == notificationId) it.copy(rewardExp = 0) else it
+        }
+        addExp(exp, "مكافأة إشعار ذكي")
+    }
+
+    // =========================================================
+    // 6⃣ Gamification & Rewards System (Levels, EXP, Badges, Quests)
+    // =========================================================
+    private val _userLevel = MutableStateFlow(6)
+    val userLevel: StateFlow<Int> = _userLevel.asStateFlow()
+
+    private val _currentExp = MutableStateFlow(720)
+    val currentExp: StateFlow<Int> = _currentExp.asStateFlow()
+
+    private val _nextLevelExp = MutableStateFlow(1000)
+    val nextLevelExp: StateFlow<Int> = _nextLevelExp.asStateFlow()
+
+    private val _streakDays = MutableStateFlow(6)
+    val streakDays: StateFlow<Int> = _streakDays.asStateFlow()
+
+    private val _gamificationBadges = MutableStateFlow<List<GamificationBadge>>(
+        listOf(
+            GamificationBadge(
+                id = "b1",
+                title = "سلسلة التواجد الناري",
+                description = "تسجيل الدخول لـ 5 أيام متتالية",
+                iconType = "fire",
+                category = "التواجد",
+                requiredProgress = 5,
+                currentProgress = 6,
+                isUnlocked = true,
+                expReward = 150,
+                isClaimed = true
+            ),
+            GamificationBadge(
+                id = "b2",
+                title = "رائد الذكاء الصوتي",
+                description = "استشارة المساعد الصوتي 10 مرات",
+                iconType = "voice",
+                category = "الصوت والـ AI",
+                requiredProgress = 10,
+                currentProgress = 8,
+                isUnlocked = false,
+                expReward = 200,
+                isClaimed = false
+            ),
+            GamificationBadge(
+                id = "b3",
+                title = "حارس الخصوصية 256-bit",
+                description = "تفعيل قفل PIN والتشفير E2EE",
+                iconType = "lock",
+                category = "الأمان",
+                requiredProgress = 1,
+                currentProgress = 1,
+                isUnlocked = true,
+                expReward = 120,
+                isClaimed = false
+            ),
+            GamificationBadge(
+                id = "b4",
+                title = "سيد التفاعل والتيجان",
+                description = "الحصول على تاج تعليق في منشور",
+                iconType = "crown",
+                category = "المجتمع",
+                requiredProgress = 3,
+                currentProgress = 3,
+                isUnlocked = true,
+                expReward = 180,
+                isClaimed = false
+            ),
+            GamificationBadge(
+                id = "b5",
+                title = "عضوية VIP الماسية",
+                description = "الارتقاء إلى رتبة المشتركين المميزين",
+                iconType = "diamond",
+                category = "التميز",
+                requiredProgress = 1,
+                currentProgress = 1,
+                isUnlocked = true,
+                expReward = 300,
+                isClaimed = true
+            ),
+            GamificationBadge(
+                id = "b6",
+                title = "صانع القصص النيون",
+                description = "نشر 5 قصص أو ستوريات في المنصة",
+                iconType = "ai",
+                category = "المحتوى",
+                requiredProgress = 5,
+                currentProgress = 3,
+                isUnlocked = false,
+                expReward = 160,
+                isClaimed = false
+            )
+        )
+    )
+    val gamificationBadges: StateFlow<List<GamificationBadge>> = _gamificationBadges.asStateFlow()
+
+    private val _dailyQuests = MutableStateFlow<List<DailyQuest>>(
+        listOf(
+            DailyQuest(
+                id = "q1",
+                title = "تحدث مع المساعد الصوتي",
+                description = "قم بتجربة أمر صوتي عبر واجهة الموجات الصوتية",
+                expReward = 60,
+                creditsReward = 25,
+                currentProgress = 1,
+                targetProgress = 1,
+                isCompleted = true,
+                isClaimed = false,
+                actionKey = "voice"
+            ),
+            DailyQuest(
+                id = "q2",
+                title = "تفاعل مع منشورات المجتمع",
+                description = "أضف إعجاباً أو تعليقاً على 3 منشورات",
+                expReward = 50,
+                creditsReward = 20,
+                currentProgress = 2,
+                targetProgress = 3,
+                isCompleted = false,
+                isClaimed = false,
+                actionKey = "home"
+            ),
+            DailyQuest(
+                id = "q3",
+                title = "شاهد مقاطع الريلز",
+                description = "استمتع بمشاهدة مقطعي ريلز في خلاصة الفيديو",
+                expReward = 40,
+                creditsReward = 15,
+                currentProgress = 2,
+                targetProgress = 2,
+                isCompleted = true,
+                isClaimed = true,
+                actionKey = "reels"
+            ),
+            DailyQuest(
+                id = "q4",
+                title = "تفعيل الأمان والتشفير E2EE",
+                description = "تأكد من تشغيل التشفير الفائق في إعدادات الأمان",
+                expReward = 70,
+                creditsReward = 30,
+                currentProgress = 1,
+                targetProgress = 1,
+                isCompleted = true,
+                isClaimed = false,
+                actionKey = "services"
+            )
+        )
+    )
+    val dailyQuests: StateFlow<List<DailyQuest>> = _dailyQuests.asStateFlow()
+
+    fun addExp(amount: Int, reason: String = "إنجاز جديد") {
+        val total = _currentExp.value + amount
+        if (total >= _nextLevelExp.value) {
+            val leftover = total - _nextLevelExp.value
+            _userLevel.value += 1
+            _currentExp.value = leftover
+            _nextLevelExp.value = (_nextLevelExp.value * 1.25).toInt()
+            
+            // Trigger Level Up Toast Notification
+            val levelUpNotification = NexaNotification(
+                title = "🎉 مبروك! ارتقيت للمستوى ${_userLevel.value}!",
+                message = "وصلت إلى رتبة جديدة (${RankTier.fromLevel(_userLevel.value).titleArabic}) وحصلت على +100 رصيد مجاناً.",
+                category = NotificationCategory.REWARDS,
+                timeAgo = "الآن",
+                rewardExp = 50
+            )
+            _notifications.value = listOf(levelUpNotification) + _notifications.value
+            _activeInAppToast.value = levelUpNotification
+            topUpCredits(100, "مكافأة الارتقاء للمستوى ${_userLevel.value}")
+        } else {
+            _currentExp.value = total
+        }
+        NotificationSoundManager.playPopChime(getApplication())
+    }
+
+    fun claimQuestReward(quest: DailyQuest) {
+        if (!quest.isCompleted || quest.isClaimed) return
+        _dailyQuests.value = _dailyQuests.value.map {
+            if (it.id == quest.id) it.copy(isClaimed = true) else it
+        }
+        addExp(quest.expReward, "إكمال مهمة: ${quest.title}")
+        topUpCredits(quest.creditsReward, "مكافأة مهمة: ${quest.title}")
+    }
+
+    fun claimBadgeReward(badge: GamificationBadge) {
+        if (!badge.isUnlocked || badge.isClaimed) return
+        _gamificationBadges.value = _gamificationBadges.value.map {
+            if (it.id == badge.id) it.copy(isClaimed = true) else it
+        }
+        addExp(badge.expReward, "استلام شارة: ${badge.title}")
+    }
+
+    fun incrementQuestProgress(actionKey: String, count: Int = 1) {
+        _dailyQuests.value = _dailyQuests.value.map { quest ->
+            if (quest.actionKey == actionKey && !quest.isCompleted) {
+                val newProgress = (quest.currentProgress + count).coerceAtMost(quest.targetProgress)
+                val completed = newProgress >= quest.targetProgress
+                quest.copy(currentProgress = newProgress, isCompleted = completed)
+            } else {
+                quest
+            }
+        }
+    }
+
+    fun handleVoiceInteractionSuccess(exp: Int = 35) {
+        incrementQuestProgress("voice", 1)
+        addExp(exp, "استخدام المساعد الصوتي")
+    }
 }
+
 

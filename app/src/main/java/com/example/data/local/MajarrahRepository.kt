@@ -110,7 +110,8 @@ class MajarrahRepository(private val dao: MajarrahDao) {
             age = 16,
             isTeenMode = true,
             isBiometricEnabled = true,
-            chatPin = "1234",
+            isChatPinEnabled = false,
+            chatPin = "",
             isLoggedIn = true,
             postsCount = 18,
             followersCount = 1_250_000, // 1.25M Followers to show VIP Diamond Aura
@@ -231,7 +232,7 @@ class MajarrahRepository(private val dao: MajarrahDao) {
                 contactName = "نورا القحطاني",
  lastMessage =" رسالة مشفرة بـ PIN: هل استلمت حقيبة البرمجة؟",
                 unreadCount = 2,
-                isPinRequired = true
+                isPinRequired = false
             ),
             Conversation(
                 id = "conv_2",
@@ -245,7 +246,7 @@ class MajarrahRepository(private val dao: MajarrahDao) {
                 contactName = "عبدالله الشهري",
                 lastMessage = "ما رأيك في تجربة التسوق الجديدة بالألوان النيون؟",
                 unreadCount = 1,
-                isPinRequired = true
+                isPinRequired = false
             )
         )
         dao.insertConversations(sampleConversations)

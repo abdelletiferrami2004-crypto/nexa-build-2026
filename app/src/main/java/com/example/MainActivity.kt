@@ -45,7 +45,8 @@ class MainActivity : FragmentActivity() {
             android.util.Log.e("MainActivity", "NotificationSoundManager init exception caught", e)
         }
         setContent {
-            MajarrahTheme {
+            val isDarkTheme by viewModel.isDarkTheme.collectAsState()
+            MajarrahTheme(darkTheme = isDarkTheme) {
                 // Mandatory RTL Layout Direction for Arabic Interface
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                     MajarrahApp(viewModel = viewModel)
@@ -190,12 +191,12 @@ fun MajarrahApp(viewModel: MajarrahViewModel) {
                     }
                 )
             },
-            containerColor = BackgroundDark
+            containerColor = androidx.compose.material3.MaterialTheme.colorScheme.background
         ) { innerPadding ->
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(BackgroundDark)
+                    .background(androidx.compose.material3.MaterialTheme.colorScheme.background)
                     .padding(innerPadding)
             ) {
                 when (currentRoute) {

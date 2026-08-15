@@ -1,6 +1,8 @@
 package com.example.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -14,10 +16,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AdUnits
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
@@ -51,7 +54,8 @@ fun AdMobBannerSpace(
     adWatchProgress: Float,
     onWatchRewardedAd: () -> Unit,
     onGoVip: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    compact: Boolean = true
 ) {
     // If VIP member, ads are automatically hidden
     if (isVipMember) return
@@ -60,83 +64,65 @@ fun AdMobBannerSpace(
 
     if (isBannerClosedTemporarily) return
 
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .background(
-                Brush.horizontalGradient(
-                    listOf(
-                        Color(0xFF1E1B4B).copy(alpha = 0.9f),
-                        Color(0xFF311042).copy(alpha = 0.9f)
+    AnimatedVisibility(
+        visible = !isBannerClosedTemporarily,
+        enter = fadeIn(),
+        exit = fadeOut()
+    ) {
+        Box(
+            modifier = modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(
+                            Color(0xFF131B2E).copy(alpha = 0.85f),
+                            Color(0xFF261238).copy(alpha = 0.85f)
+                        )
                     )
                 )
-            )
-            .border(
-                1.dp,
-                Brush.horizontalGradient(listOf(NeonCyan, NeonPink)),
-                RoundedCornerShape(18.dp)
-            )
-            .padding(12.dp)
-    ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(NeonAmber)
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                .border(
+                    1.dp,
+                    Brush.horizontalGradient(
+                        listOf(
+                            NeonCyan.copy(alpha = 0.35f),
+                            NeonPink.copy(alpha = 0.35f)
+                        )
+                    ),
+                    RoundedCornerShape(14.dp)
+                )
+                .padding(horizontal = 10.dp, vertical = 6.dp)
+        ) {
+            if (isAdWatching) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Google AdMob",
-                            color = BackgroundDark,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 9.sp
+                            text = "جاري عرض إعلان فيديو AdMob (+50 رصيد)...",
+                            color = NeonCyan,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "${(adWatchProgress * 100).toInt()}%",
+                            color = Color.LightGray,
+                            fontSize = 10.sp
                         )
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "إعلان رعاية • احصل على +50 رصيد مجاناً",
-                        color = Color.LightGray,
-                        fontSize = 10.sp
-                    )
-                }
-
-                IconButton(
-                    onClick = { isBannerClosedTemporarily = true },
-                    modifier = Modifier.size(20.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Close Ad",
-                        tint = Color.Gray,
-                        modifier = Modifier.size(14.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            if (isAdWatching) {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        text = "جاري عرض فيديو إعلان AdMob... (+50 رصيد)",
-                        color = NeonCyan,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     LinearProgressIndicator(
                         progress = { adWatchProgress },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(6.dp)
-                            .clip(RoundedCornerShape(3.dp)),
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(2.dp)),
                         color = NeonCyan,
                         trackColor = Color.White.copy(alpha = 0.1f)
                     )
@@ -147,63 +133,90 @@ fun AdMobBannerSpace(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(NeonAmber.copy(alpha = 0.2f))
+                                .border(1.dp, NeonAmber.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+                                .padding(horizontal = 5.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "AdMob",
+                                color = NeonAmber,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 9.sp
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
                         Text(
-                            text = "شاهد إعلان فيديو قصير لمدة 5 ثوانٍ لكسب +50 رصيد مجاني!",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp,
-                            lineHeight = 16.sp
+                            text = "شاهد إعلان لكسب +50 رصيد مجاني",
+                            color = Color.White.copy(alpha = 0.9f),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(10.dp))
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Button(
-                            onClick = onWatchRewardedAd,
-                            colors = ButtonDefaults.buttonColors(containerColor = NeonCyan),
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.height(36.dp)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(NeonCyan)
+                                .clickable { onWatchRewardedAd() }
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
-                                    imageVector = Icons.Default.PlayCircle,
+                                    imageVector = Icons.Default.PlayArrow,
                                     contentDescription = null,
                                     tint = BackgroundDark,
-                                    modifier = Modifier.size(14.dp)
+                                    modifier = Modifier.size(12.dp)
                                 )
-                                Spacer(modifier = Modifier.width(4.dp))
+                                Spacer(modifier = Modifier.width(2.dp))
                                 Text(
                                     text = "شاهد (+50)",
                                     color = BackgroundDark,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 11.sp
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold
                                 )
                             }
                         }
 
-                        Button(
-                            onClick = onGoVip,
-                            colors = ButtonDefaults.buttonColors(containerColor = NeonPink),
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.height(36.dp)
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(NeonPink.copy(alpha = 0.2f))
+                                .border(1.dp, NeonPink.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                                .clickable { onGoVip() }
+                                .padding(horizontal = 6.dp, vertical = 4.dp)
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.Star,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "VIP إزالة",
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 11.sp
-                                )
-                            }
+                            Text(
+                                text = "إزالة VIP",
+                                color = NeonPink,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        IconButton(
+                            onClick = { isBannerClosedTemporarily = true },
+                            modifier = Modifier.size(20.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Close Ad",
+                                tint = Color.Gray,
+                                modifier = Modifier.size(12.dp)
+                            )
                         }
                     }
                 }

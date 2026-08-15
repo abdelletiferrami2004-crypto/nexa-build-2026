@@ -175,25 +175,19 @@ fun AuthScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Image(
-                        painter = painterResource(id = R.drawable.img_app_icon),
-                        contentDescription = "Majarrah App Logo",
+                        painter = painterResource(id = R.drawable.nexa_launcher_icon_1786810216912),
+                        contentDescription = "NEXA App Logo",
                         modifier = Modifier.size(38.dp)
                     )
                 }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column {
-                    Text(
- text ="منصة NEXA | مجرة",
-                        color = Color.White,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                    Text(
-                        text = "منصة التواصل المستقبلي والتسوق الذكي",
-                        color = NeonCyan,
-                        fontSize = 11.sp
-                    )
-                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = "NEXA",
+                    color = Color.White,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 1.2.sp
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -1631,21 +1625,9 @@ fun ModernTabbedAuthView(
 
         if (selectedTabIndex == 0) {
             // ==========================================
-            // TAB 1: LOGIN
+            // TAB 1: LOGIN (Clean Minimalist Form)
             // ==========================================
-            Text(
-                text = "مرحباً بك مجدداً",
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                fontSize = 17.sp
-            )
-            Text(
-                text = "سجّل دخولك للاستفادة من مزايا المكافآت والتسوق المشفر.",
-                color = Color.LightGray,
-                fontSize = 11.sp
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             // Phone / Username Clean Field
             OutlinedTextField(

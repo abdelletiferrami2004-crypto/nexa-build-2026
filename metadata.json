@@ -1,6 +1,6 @@
 {
   "name": "NEXA",
-  "description": "منصة NEXA للتواصل الاجتماعي والتسوق الذكي بتصميم Glassmorphism ودردشة مشفرة بـ PIN ونظام تيجان التعليقات.",
+  "description": "منصة NEXA المستقبلية: نظام إشعارات ذكي، رفيق صوتي بموجات صوتية متحركة، نظام مكافآت وشارات EXP، وتصميم Glassmorphism يدعم المظهر الداكن والفاتح.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
