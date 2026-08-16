@@ -965,6 +965,12 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
 
     fun selectConversation(conversationId: String) {
         _selectedConversationId.value = conversationId
+        val existing = conversations.value.firstOrNull { it.id == conversationId }
+        if (existing != null && existing.unreadCount > 0) {
+            viewModelScope.launch {
+                repository.saveConversation(existing.copy(unreadCount = 0))
+            }
+        }
         repository.listenToConversationRealtime(conversationId, viewModelScope)
         viewModelScope.launch {
             repository.getMessagesForConversation(conversationId).collect { msgs ->
@@ -973,36 +979,132 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun startConversationWithUser(user: User) {
+        val convId = "user_${user.id}"
+        val existing = conversations.value.firstOrNull { it.id == convId || it.contactName == user.name }
+        if (existing == null) {
+            val newConv = Conversation(
+                id = convId,
+                contactName = user.name,
+                contactAvatar = user.avatarUrl ?: "",
+                lastMessage = "بدأت محادثة مشفرة جديدة E2EE 🔒",
+                lastTimestamp = System.currentTimeMillis(),
+                unreadCount = 0,
+                isPinRequired = false
+            )
+            viewModelScope.launch {
+                repository.saveConversation(newConv)
+                val welcomeMsg = ChatMessage(
+                    conversationId = convId,
+                    senderName = user.name,
+                    senderAvatar = user.avatarUrl ?: "",
+                    text = "أهلاً بك! محادثتنا محمية بنظام التشفير التام 256-bit",
+                    isFromUser = false,
+                    isEncrypted = true,
+                    mediaType = "text"
+                )
+                repository.sendMessage(welcomeMsg)
+            }
+        }
+        selectConversation(existing?.id ?: convId)
+    }
+
     fun sendChatMessage(conversationId: String, text: String) {
         if (text.isBlank()) return
+        val isAiChat = conversationId == "nexa_ai" || conversationId == "ai_bot"
         viewModelScope.launch {
+            val now = System.currentTimeMillis()
             val msg = ChatMessage(
                 conversationId = conversationId,
-                senderName = userProfile.value?.name ?: "مستخدم مجرة",
+                senderName = userProfile.value?.name ?: "أنت",
                 senderAvatar = userProfile.value?.avatarUrl ?: "",
                 text = text,
+                timestamp = now,
                 isFromUser = true,
                 isEncrypted = true
             )
             repository.sendMessage(msg)
+
+            val existingConv = conversations.value.firstOrNull { it.id == conversationId }
+            if (existingConv != null) {
+                repository.saveConversation(existingConv.copy(lastMessage = text, lastTimestamp = now, unreadCount = 0))
+            }
+
+            NotificationSoundManager.playPopChime(getApplication())
+
+            if (isAiChat) {
+                _isAiThinking.value = true
+                val replyText = com.example.data.remote.GeminiRepository.generateContent(
+                    prompt = text,
+                    imageBitmap = _attachedImageBitmap.value
+                )
+                val aiMsg = ChatMessage(
+                    conversationId = conversationId,
+                    senderName = "ذكاء NEXA AI",
+                    senderAvatar = "",
+                    text = replyText,
+                    timestamp = System.currentTimeMillis(),
+                    isFromUser = false,
+                    isEncrypted = true,
+                    mediaType = "text"
+                )
+                repository.sendMessage(aiMsg)
+                _isAiThinking.value = false
+                NotificationSoundManager.playPopChime(getApplication())
+
+                if (_isAutoReadTtsEnabled.value) {
+                    com.example.util.SpeechAndTtsManager.speak(replyText, getApplication())
+                }
+            }
+        }
+    }
+
+    fun sendVoiceMessage(conversationId: String, durationSeconds: Int = 12) {
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            val sender = userProfile.value?.name ?: "أنت"
+            val msg = ChatMessage(
+                conversationId = conversationId,
+                senderName = sender,
+                senderAvatar = userProfile.value?.avatarUrl ?: "",
+                text = "🎙️ رسالة صوتية (0:${if (durationSeconds < 10) "0$durationSeconds" else "$durationSeconds"})",
+                timestamp = now,
+                mediaType = "voice",
+                isFromUser = true,
+                isEncrypted = true
+            )
+            repository.sendMessage(msg)
+
+            val existingConv = conversations.value.firstOrNull { it.id == conversationId }
+            if (existingConv != null) {
+                repository.saveConversation(existingConv.copy(lastMessage = "🎙️ رسالة صوتية", lastTimestamp = now, unreadCount = 0))
+            }
+            NotificationSoundManager.playPopChime(getApplication())
         }
     }
 
     fun sendImageMessage(conversationId: String, imageUrl: String, caption: String = "") {
         viewModelScope.launch {
-            val sender = userProfile.value?.name ?: "مستخدم مجرة"
+            val now = System.currentTimeMillis()
+            val sender = userProfile.value?.name ?: "أنت"
             val avatar = userProfile.value?.avatarUrl ?: ""
             val msg = ChatMessage(
                 conversationId = conversationId,
                 senderName = sender,
                 senderAvatar = avatar,
                 text = caption.ifBlank { "📷 صورة مرفقة" },
+                timestamp = now,
                 mediaType = "image",
                 mediaUrl = imageUrl,
                 isFromUser = true,
                 isEncrypted = true
             )
             repository.sendMessage(msg)
+
+            val existingConv = conversations.value.firstOrNull { it.id == conversationId }
+            if (existingConv != null) {
+                repository.saveConversation(existingConv.copy(lastMessage = "📷 صورة مرفقة", lastTimestamp = now, unreadCount = 0))
+            }
             NotificationSoundManager.playPopChime(getApplication())
         }
     }

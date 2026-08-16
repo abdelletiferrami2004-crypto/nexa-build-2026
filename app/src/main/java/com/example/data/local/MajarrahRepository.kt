@@ -41,6 +41,10 @@ class MajarrahRepository(private val dao: MajarrahDao) {
         FirebaseManager.savePostToCloud(updated)
     }
 
+    suspend fun saveConversation(conversation: Conversation) {
+        dao.insertConversation(conversation)
+    }
+
     suspend fun sendMessage(message: ChatMessage) {
         dao.insertMessage(message)
         FirebaseManager.saveMessageToCloud(message)
@@ -114,8 +118,8 @@ class MajarrahRepository(private val dao: MajarrahDao) {
             chatPin = "",
             isLoggedIn = true,
             postsCount = 18,
-            followersCount = 1_250_000, // 1.25M Followers to show VIP Diamond Aura
-            totalViewsCount = 1_450_000L, // 1.45M Views to unlock Creator Fund
+            followersCount = 1_250_000,
+            totalViewsCount = 1_450_000L,
             points = 890
         )
         dao.insertOrUpdateProfile(defaultProfile)
@@ -184,7 +188,7 @@ class MajarrahRepository(private val dao: MajarrahDao) {
                 category = "عطور فاخرة",
                 imageUrl = "https://images.unsplash.com/photo-1523293182086-7651a899d37f?w=600&auto=format&fit=crop",
                 rating = 5.0f,
-                isTeenFriendly = false, // Restricted for adults in Adult Mode
+                isTeenFriendly = false,
                 isFeatured = false,
                 description = "عطر فاخر بخلاصة العود النادر والمسك الأسود مخصص للفئات البالغة فقط."
             )
@@ -196,7 +200,7 @@ class MajarrahRepository(private val dao: MajarrahDao) {
             Post(
                 id = 1,
                 authorName = "فيصل العتيبي",
- content ="أطلقت اليوم أول مجتمع برمجيات ذكية على منصة مجرة! شاركونا أفكاركم حول تجربة الدردشة المشفرة الجديدة.",
+                content = "أطلقت اليوم أول مجتمع برمجيات ذكية على منصة مجرة! شاركونا أفكاركم حول تجربة الدردشة المشفرة الجديدة.",
                 likesCount = 142,
                 commentsCount = 28,
                 isLiked = true,
@@ -206,7 +210,7 @@ class MajarrahRepository(private val dao: MajarrahDao) {
             Post(
                 id = 2,
                 authorName = "ريم الشمري",
- content ="سماعات Hologram Sound رهيبة جداً! جودة الصوت والنقاء غير طبيعية مع وضع الناشئة",
+                content = "سماعات Hologram Sound رهيبة جداً! جودة الصوت والنقاء غير طبيعية مع وضع الناشئة",
                 likesCount = 89,
                 commentsCount = 12,
                 isLiked = false,
@@ -226,26 +230,51 @@ class MajarrahRepository(private val dao: MajarrahDao) {
         dao.insertPosts(samplePosts)
 
         // Seed Conversations & Chat Messages
+        val now = System.currentTimeMillis()
         val sampleConversations = listOf(
             Conversation(
                 id = "conv_1",
                 contactName = "نورا القحطاني",
- lastMessage =" رسالة مشفرة بـ PIN: هل استلمت حقيبة البرمجة؟",
+                contactAvatar = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop",
+                lastMessage = "هل استلمت حقيبة البرمجة الذكية اليوم؟",
+                lastTimestamp = now - (1000 * 60 * 5),
                 unreadCount = 2,
                 isPinRequired = false
             ),
             Conversation(
                 id = "conv_2",
-                contactName = "فريق دعم مجرة الذكي",
-                lastMessage = "تم تفعيل وضع الناشئة تلقائياً لحسابك لحماية المحتوى.",
-                unreadCount = 0,
+                contactName = "فيصل العتيبي",
+                contactAvatar = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop",
+                lastMessage = "🎙️ تسجيل صوتي (0:24)",
+                lastTimestamp = now - (1000 * 60 * 45),
+                unreadCount = 1,
                 isPinRequired = false
             ),
             Conversation(
                 id = "conv_3",
+                contactName = "سارة النمر",
+                contactAvatar = "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop",
+                lastMessage = "📷 صورة مرفقة: تصميم النيون الجديد مذهل!",
+                lastTimestamp = now - (1000 * 60 * 120),
+                unreadCount = 0,
+                isPinRequired = false
+            ),
+            Conversation(
+                id = "conv_4",
                 contactName = "عبدالله الشهري",
+                contactAvatar = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop",
                 lastMessage = "ما رأيك في تجربة التسوق الجديدة بالألوان النيون؟",
-                unreadCount = 1,
+                lastTimestamp = now - (1000 * 60 * 360),
+                unreadCount = 0,
+                isPinRequired = false
+            ),
+            Conversation(
+                id = "conv_5",
+                contactName = "فريق دعم مجرة الذكي",
+                contactAvatar = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop",
+                lastMessage = "تم تفعيل التشفير التام 256-bit لحسابك بنجاح.",
+                lastTimestamp = now - (1000 * 60 * 60 * 24),
+                unreadCount = 0,
                 isPinRequired = false
             )
         )
@@ -256,7 +285,9 @@ class MajarrahRepository(private val dao: MajarrahDao) {
                 id = 1,
                 conversationId = "conv_1",
                 senderName = "نورا القحطاني",
- text ="مرحباً! محادثتنا محمية ومجهزة بنظام التشفير الخاص برمز الـ PIN",
+                senderAvatar = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop",
+                text = "مرحباً! كيف حالك يا صديقي؟",
+                timestamp = now - (1000 * 60 * 30),
                 isFromUser = false,
                 isEncrypted = true,
                 mediaType = "text"
@@ -265,7 +296,9 @@ class MajarrahRepository(private val dao: MajarrahDao) {
                 id = 2,
                 conversationId = "conv_1",
                 senderName = "سارة النمر",
-                text = "أهلاً نورا! هذا ممتاز، خصوصية كاملة وسرعة فائقة.",
+                senderAvatar = "",
+                text = "أهلاً نورا! كل شيء رائع، استكشفت مزايا التشفير والمحادثات الجديدة في تطبيق NEXA.",
+                timestamp = now - (1000 * 60 * 25),
                 isFromUser = true,
                 isEncrypted = true,
                 mediaType = "text"
@@ -274,12 +307,56 @@ class MajarrahRepository(private val dao: MajarrahDao) {
                 id = 3,
                 conversationId = "conv_1",
                 senderName = "نورا القحطاني",
-                text = "لقد قمت بتجربة الشراء من المتجر اليوم بالتصميم الزجاجي المذهل!",
+                senderAvatar = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop",
+                text = "هل استلمت حقيبة البرمجة الذكية اليوم؟",
+                timestamp = now - (1000 * 60 * 5),
                 isFromUser = false,
                 isEncrypted = true,
                 mediaType = "text"
             )
         )
         dao.insertMessages(sampleMessagesConv1)
+
+        val sampleMessagesConv2 = listOf(
+            ChatMessage(
+                id = 4,
+                conversationId = "conv_2",
+                senderName = "فيصل العتيبي",
+                senderAvatar = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop",
+                text = "السلام عليكم، هل جربت ميزة المكالمات الصوتية والمحادثة المشفرة؟",
+                timestamp = now - (1000 * 60 * 60),
+                isFromUser = false,
+                isEncrypted = true,
+                mediaType = "text"
+            ),
+            ChatMessage(
+                id = 5,
+                conversationId = "conv_2",
+                senderName = "فيصل العتيبي",
+                senderAvatar = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop",
+                text = "استمع للتسجيل الصوتي المرفق حول مشروعنا القادم!",
+                timestamp = now - (1000 * 60 * 45),
+                isFromUser = false,
+                isEncrypted = true,
+                mediaType = "voice"
+            )
+        )
+        dao.insertMessages(sampleMessagesConv2)
+
+        val sampleMessagesConv3 = listOf(
+            ChatMessage(
+                id = 6,
+                conversationId = "conv_3",
+                senderName = "سارة النمر",
+                senderAvatar = "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop",
+                text = "تصميم النيون الجديد مذهل!",
+                timestamp = now - (1000 * 60 * 120),
+                isFromUser = false,
+                isEncrypted = true,
+                mediaType = "image",
+                mediaUrl = "https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=600&auto=format&fit=crop"
+            )
+        )
+        dao.insertMessages(sampleMessagesConv3)
     }
 }

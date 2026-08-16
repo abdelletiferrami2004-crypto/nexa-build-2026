@@ -50,6 +50,9 @@ interface MajarrahDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertConversations(conversations: List<Conversation>)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertConversation(conversation: Conversation)
+
     @Query("SELECT * FROM chat_messages WHERE conversationId = :conversationId ORDER BY timestamp ASC")
     fun getMessagesForConversation(conversationId: String): Flow<List<ChatMessage>>
 
