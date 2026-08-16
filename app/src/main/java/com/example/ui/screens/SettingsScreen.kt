@@ -94,6 +94,15 @@ fun SettingsScreen(
     var notificationsEnabled by remember { mutableStateOf(true) }
     var biometricEnabled by remember { mutableStateOf(profile.isBiometricEnabled) }
     var showSetPinDialog by remember { mutableStateOf(false) }
+    var showLegalModal by remember { mutableStateOf(false) }
+    var activeLegalTab by remember { mutableStateOf(com.example.ui.components.LegalTab.PRIVACY_POLICY) }
+
+    if (showLegalModal) {
+        com.example.ui.components.GooglePlayLegalModal(
+            initialTab = activeLegalTab,
+            onDismiss = { showLegalModal = false }
+        )
+    }
 
     if (showSetPinDialog) {
         SetChatPinModal(
@@ -295,6 +304,32 @@ fun SettingsScreen(
                             uncheckedTrackColor = Color.DarkGray
                         )
                     )
+                }
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            SettingsItemTile(
+                icon = Icons.Default.PrivacyTip,
+                iconTint = NeonCyan,
+                title = "سياسة الخصوصية واستخدام البيانات",
+                subtitle = "شرح استخدام الكاميرا والميكروفون وبيانات المستخدم (Google Play)",
+                onClick = {
+                    activeLegalTab = com.example.ui.components.LegalTab.PRIVACY_POLICY
+                    showLegalModal = true
+                }
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            SettingsItemTile(
+                icon = Icons.Default.Security,
+                iconTint = NeonPurple,
+                title = "شروط الاستخدام واتفاقية المستخدم",
+                subtitle = "معايير الأمان وحماية المجتمع الرقمي",
+                onClick = {
+                    activeLegalTab = com.example.ui.components.LegalTab.TERMS_OF_SERVICE
+                    showLegalModal = true
                 }
             )
 

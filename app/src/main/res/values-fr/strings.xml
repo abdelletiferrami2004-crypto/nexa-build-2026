@@ -1,0 +1,12 @@
+<resources>
+    <string name="app_name">NEXA</string>
+    <string name="app_tagline">Plateforme Sociale et d\'Intelligence Artificielle Nouvelle Génération</string>
+    <string name="store_short_description">Messagerie chiffrée intelligente, assistant IA Gemini, reels et protection avancée.</string>
+    <string name="store_full_description">NEXA est l\'application sociale futuriste combinant messagerie chiffrée de bout en bout, assistant intelligent Gemini, partage de reels et stories, et mode protection des adolescents.</string>
+    
+    <!-- Privacy & Permissions Descriptions for Google Play -->
+    <string name="perm_camera_desc">Prendre des photos et vidéos pour les partager dans les reels, stories et messages chiffrés.</string>
+    <string name="perm_mic_desc">Enregistrer des messages vocaux et interagir avec l\'assistant vocal intelligent.</string>
+    <string name="perm_storage_desc">Accéder aux photos et médias pour les partager et mettre à jour votre profil en toute sécurité.</string>
+    <string name="perm_notification_desc">Recevoir des notifications instantanées pour les nouveaux messages, alertes et mises à jour.</string>
+</resources>

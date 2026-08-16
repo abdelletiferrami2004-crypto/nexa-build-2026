@@ -1,0 +1,12 @@
+<resources>
+    <string name="app_name">NEXA</string>
+    <string name="app_tagline">Next-Gen Smart Social and AI Platform</string>
+    <string name="store_short_description">Smart encrypted chat, Gemini AI assistant, reels sharing, and next-gen social experience.</string>
+    <string name="store_full_description">NEXA is the futuristic smart social platform combining real-time encrypted messaging, real Gemini AI intelligence, voice interactions, short reels, and teen safety mode.</string>
+    
+    <!-- Privacy & Permissions Descriptions for Google Play -->
+    <string name="perm_camera_desc">Capture photos and videos to share in reels, stories, and encrypted chat messages.</string>
+    <string name="perm_mic_desc">Record voice messages and communicate seamlessly with the smart voice assistant.</string>
+    <string name="perm_storage_desc">Access and share photos, videos, and profile media securely.</string>
+    <string name="perm_notification_desc">Receive instant alerts for new incoming messages, reels interactions, and security updates.</string>
+</resources>

@@ -1,3 +1,12 @@
 <resources>
     <string name="app_name">NEXA</string>
+    <string name="app_tagline">منصة التواصل والتجارة والذكاء الاصطناعي المستقبلية</string>
+    <string name="store_short_description">تطبيق التواصل الذكي، المساعد الصوتي، ومشاركة القصص والمحتوى بتقنيات تشفير فائقة الأمان.</string>
+    <string name="store_full_description">تطبيق NEXA هو المنصة الاجتماعية الذكية المستقبلية التي تجمع بين التواصل الفوري المشفر، مساعد الذكاء الاصطناعي الذكي، مشاركة مقاطع الريلز والقصص اليومية، والتجارة الإلكترونية مع نظام حماية اليافعين المتطور.</string>
+    
+    <!-- Privacy & Permissions Descriptions for Google Play -->
+    <string name="perm_camera_desc">استخدام الكاميرا لالتقاط الصور ومقاطع الفيديو ونشر القصص والريلز ومشاركتها مع الأصدقاء.</string>
+    <string name="perm_mic_desc">استخدام الميكروفون لتسجيل الرسائل الصوتية الحقيقية والتفاعل مع المساعد الصوتي الذكي.</string>
+    <string name="perm_storage_desc">الوصول إلى الصور والوسائط لحفظ ومشاركة الصور والملفات الشخصية بأمان.</string>
+    <string name="perm_notification_desc">إرسال إشعارات فورية عند استلام رسائل جديدة، تحديثات، وتنبيهات أمان.</string>
 </resources>
