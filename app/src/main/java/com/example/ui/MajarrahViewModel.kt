@@ -2029,6 +2029,29 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     )
     val dailyQuests: StateFlow<List<DailyQuest>> = _dailyQuests.asStateFlow()
 
+    fun updateDisplayName(newName: String) {
+        if (newName.isBlank()) return
+        val current = userProfile.value ?: com.example.data.model.UserProfile()
+        val updated = current.copy(name = newName.trim())
+        viewModelScope.launch {
+            repository.saveProfile(updated)
+            com.example.data.firebase.FirebaseManager.saveUserProfileToCloud(updated)
+            _monetizationMessage.value = "تم تحديث الاسم بنجاح ✨"
+            NotificationSoundManager.playPopChime(getApplication())
+        }
+    }
+
+    fun updateBio(newBio: String) {
+        val current = userProfile.value ?: com.example.data.model.UserProfile()
+        val updated = current.copy(bio = newBio.trim())
+        viewModelScope.launch {
+            repository.saveProfile(updated)
+            com.example.data.firebase.FirebaseManager.saveUserProfileToCloud(updated)
+            _monetizationMessage.value = "تم تحديث الحالة والنبذة التعريفية بنجاح 📝"
+            NotificationSoundManager.playPopChime(getApplication())
+        }
+    }
+
     fun addExp(amount: Int, reason: String = "إنجاز جديد") {
         val total = _currentExp.value + amount
         if (total >= _nextLevelExp.value) {

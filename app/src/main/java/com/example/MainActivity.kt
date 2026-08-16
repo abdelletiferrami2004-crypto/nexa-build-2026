@@ -75,6 +75,15 @@ class MainActivity : FragmentActivity() {
 
 @Composable
 fun MajarrahApp(viewModel: MajarrahViewModel) {
+    var isShowingSplash by remember { mutableStateOf(true) }
+
+    if (isShowingSplash) {
+        com.example.ui.components.NexaAnimatedSplashScreen(
+            onSplashFinished = { isShowingSplash = false }
+        )
+        return
+    }
+
     val loginStep by viewModel.loginStep.collectAsState()
     val isAnomalyDetected by viewModel.isAnomalyDetected.collectAsState()
     val anomalyReason by viewModel.anomalyReason.collectAsState()

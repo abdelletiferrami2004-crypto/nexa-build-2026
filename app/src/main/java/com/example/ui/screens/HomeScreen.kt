@@ -216,27 +216,30 @@ fun HomeScreen(
         )
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // In-App Notification Toast Slide Down
-        InAppNotificationToast(
-            notification = activeToast,
-            onDismiss = { viewModel?.dismissInAppToast() },
-            onClick = {
-                activeToast?.actionRoute?.let { route ->
-                    when (route) {
-                        "voice" -> showVoiceCompanionModal = true
-                        "rewards" -> showRewardsModal = true
-                        "chat" -> onOpenChat()
-                        "reels" -> onNavigateToReels("reels")
+        Column(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            // In-App Notification Toast Slide Down
+            InAppNotificationToast(
+                notification = activeToast,
+                onDismiss = { viewModel?.dismissInAppToast() },
+                onClick = {
+                    activeToast?.actionRoute?.let { route ->
+                        when (route) {
+                            "voice" -> showVoiceCompanionModal = true
+                            "rewards" -> showRewardsModal = true
+                            "chat" -> onOpenChat()
+                            "reels" -> onNavigateToReels("reels")
+                        }
                     }
+                    viewModel?.dismissInAppToast()
                 }
-                viewModel?.dismissInAppToast()
-            }
-        )
+            )
 
         // TOP HEADER BAR (NEXA Logo, Level Chip, Voice Mic, Theme Toggle, Notification Bell, Chat)
         Row(
@@ -540,8 +543,58 @@ fun HomeScreen(
                     Spacer(modifier = Modifier.height(12.dp))
                 }
             }
+
+            item {
+                Spacer(modifier = Modifier.height(80.dp))
+            }
+        } // LazyColumn
+
+        // Glowing Floating NEXA AI Assistant Button
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            contentAlignment = Alignment.BottomEnd
+        ) {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(
+                        Brush.linearGradient(
+                            colors = listOf(NeonCyan, NeonPurple, NeonPink)
+                        )
+                    )
+                    .clickable {
+                        viewModel?.selectConversation("nexa_ai")
+                        onOpenChat()
+                    }
+                    .padding(2.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(26.dp))
+                        .background(BackgroundDark.copy(alpha = 0.92f))
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AutoAwesome,
+                        contentDescription = "NEXA AI",
+                        tint = NeonCyan,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        text = "ذكاء NEXA",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
+                    )
+                }
+            }
         }
-    }
+        } // Column
+    } // Box
 }
 
 @Composable
