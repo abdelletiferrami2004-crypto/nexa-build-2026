@@ -43,7 +43,9 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Diamond
+import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Image
@@ -1963,12 +1965,40 @@ fun DirectChatMessageBubble(
                         )
                         if (isUser) {
                             Spacer(modifier = Modifier.width(4.dp))
-                            Icon(
-                                imageVector = Icons.Default.DoneAll,
-                                contentDescription = "Delivered",
-                                tint = NeonCyan,
-                                modifier = Modifier.size(12.dp)
-                            )
+                            when (message.deliveryStatus) {
+                                "sending" -> {
+                                    Icon(
+                                        imageVector = Icons.Default.AccessTime,
+                                        contentDescription = "Sending",
+                                        tint = Color.LightGray.copy(alpha = 0.6f),
+                                        modifier = Modifier.size(11.dp)
+                                    )
+                                }
+                                "sent" -> {
+                                    Icon(
+                                        imageVector = Icons.Default.Done,
+                                        contentDescription = "Sent",
+                                        tint = Color.LightGray.copy(alpha = 0.8f),
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                }
+                                "delivered" -> {
+                                    Icon(
+                                        imageVector = Icons.Default.DoneAll,
+                                        contentDescription = "Delivered",
+                                        tint = Color.LightGray.copy(alpha = 0.85f),
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                }
+                                else -> { // "read"
+                                    Icon(
+                                        imageVector = Icons.Default.DoneAll,
+                                        contentDescription = "Read",
+                                        tint = NeonCyan,
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }

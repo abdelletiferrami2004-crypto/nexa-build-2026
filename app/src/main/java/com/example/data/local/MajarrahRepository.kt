@@ -45,9 +45,17 @@ class MajarrahRepository(private val dao: MajarrahDao) {
         dao.insertConversation(conversation)
     }
 
-    suspend fun sendMessage(message: ChatMessage) {
-        dao.insertMessage(message)
-        FirebaseManager.saveMessageToCloud(message)
+    suspend fun sendMessage(message: ChatMessage): ChatMessage {
+        val rowId = dao.insertMessage(message)
+        val savedMsg = if (message.id == 0) message.copy(id = rowId.toInt()) else message
+        FirebaseManager.saveMessageToCloud(savedMsg)
+        return savedMsg
+    }
+
+    suspend fun updateMessageStatus(message: ChatMessage, status: String, isRead: Boolean = (status == "read")) {
+        val updated = message.copy(deliveryStatus = status, isRead = isRead)
+        dao.insertMessage(updated)
+        FirebaseManager.saveMessageToCloud(updated)
     }
 
     suspend fun updateMessageReaction(message: ChatMessage, newReaction: String?) {

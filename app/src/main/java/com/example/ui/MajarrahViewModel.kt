@@ -975,6 +975,10 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             repository.getMessagesForConversation(conversationId).collect { msgs ->
                 _currentConversationMessages.value = msgs
+                // Mark unread peer messages as read
+                msgs.filter { !it.isFromUser && it.deliveryStatus != "read" }.forEach { unreadMsg ->
+                    repository.updateMessageStatus(unreadMsg, "read", true)
+                }
             }
         }
     }
@@ -1001,7 +1005,9 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
                     text = "أهلاً بك! محادثتنا محمية بنظام التشفير التام 256-bit",
                     isFromUser = false,
                     isEncrypted = true,
-                    mediaType = "text"
+                    mediaType = "text",
+                    deliveryStatus = "read",
+                    isRead = true
                 )
                 repository.sendMessage(welcomeMsg)
             }
@@ -1014,16 +1020,18 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
         val isAiChat = conversationId == "nexa_ai" || conversationId == "ai_bot"
         viewModelScope.launch {
             val now = System.currentTimeMillis()
-            val msg = ChatMessage(
+            val initialMsg = ChatMessage(
                 conversationId = conversationId,
                 senderName = userProfile.value?.name ?: "أنت",
                 senderAvatar = userProfile.value?.avatarUrl ?: "",
                 text = text,
                 timestamp = now,
                 isFromUser = true,
-                isEncrypted = true
+                isEncrypted = true,
+                deliveryStatus = "sent",
+                isRead = false
             )
-            repository.sendMessage(msg)
+            val savedMsg = repository.sendMessage(initialMsg)
 
             val existingConv = conversations.value.firstOrNull { it.id == conversationId }
             if (existingConv != null) {
@@ -1038,6 +1046,7 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
                     prompt = text,
                     imageBitmap = _attachedImageBitmap.value
                 )
+                repository.updateMessageStatus(savedMsg, "read", true)
                 val aiMsg = ChatMessage(
                     conversationId = conversationId,
                     senderName = "ذكاء NEXA AI",
@@ -1046,7 +1055,9 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
                     timestamp = System.currentTimeMillis(),
                     isFromUser = false,
                     isEncrypted = true,
-                    mediaType = "text"
+                    mediaType = "text",
+                    deliveryStatus = "read",
+                    isRead = true
                 )
                 repository.sendMessage(aiMsg)
                 _isAiThinking.value = false
@@ -1054,6 +1065,14 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
 
                 if (_isAutoReadTtsEnabled.value) {
                     com.example.util.SpeechAndTtsManager.speak(replyText, getApplication())
+                }
+            } else {
+                // Real-time Delivery Simulation Lifecycle: Sent -> Delivered -> Read
+                viewModelScope.launch {
+                    kotlinx.coroutines.delay(600)
+                    repository.updateMessageStatus(savedMsg, "delivered", false)
+                    kotlinx.coroutines.delay(1200)
+                    repository.updateMessageStatus(savedMsg, "read", true)
                 }
             }
         }
@@ -1063,7 +1082,7 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             val now = System.currentTimeMillis()
             val sender = userProfile.value?.name ?: "أنت"
-            val msg = ChatMessage(
+            val initialMsg = ChatMessage(
                 conversationId = conversationId,
                 senderName = sender,
                 senderAvatar = userProfile.value?.avatarUrl ?: "",
@@ -1071,15 +1090,24 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
                 timestamp = now,
                 mediaType = "voice",
                 isFromUser = true,
-                isEncrypted = true
+                isEncrypted = true,
+                deliveryStatus = "sent",
+                isRead = false
             )
-            repository.sendMessage(msg)
+            val savedMsg = repository.sendMessage(initialMsg)
 
             val existingConv = conversations.value.firstOrNull { it.id == conversationId }
             if (existingConv != null) {
                 repository.saveConversation(existingConv.copy(lastMessage = "🎙️ رسالة صوتية", lastTimestamp = now, unreadCount = 0))
             }
             NotificationSoundManager.playPopChime(getApplication())
+
+            viewModelScope.launch {
+                kotlinx.coroutines.delay(600)
+                repository.updateMessageStatus(savedMsg, "delivered", false)
+                kotlinx.coroutines.delay(1200)
+                repository.updateMessageStatus(savedMsg, "read", true)
+            }
         }
     }
 
@@ -1088,7 +1116,7 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
             val now = System.currentTimeMillis()
             val sender = userProfile.value?.name ?: "أنت"
             val avatar = userProfile.value?.avatarUrl ?: ""
-            val msg = ChatMessage(
+            val initialMsg = ChatMessage(
                 conversationId = conversationId,
                 senderName = sender,
                 senderAvatar = avatar,
@@ -1097,15 +1125,24 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
                 mediaType = "image",
                 mediaUrl = imageUrl,
                 isFromUser = true,
-                isEncrypted = true
+                isEncrypted = true,
+                deliveryStatus = "sent",
+                isRead = false
             )
-            repository.sendMessage(msg)
+            val savedMsg = repository.sendMessage(initialMsg)
 
             val existingConv = conversations.value.firstOrNull { it.id == conversationId }
             if (existingConv != null) {
                 repository.saveConversation(existingConv.copy(lastMessage = "📷 صورة مرفقة", lastTimestamp = now, unreadCount = 0))
             }
             NotificationSoundManager.playPopChime(getApplication())
+
+            viewModelScope.launch {
+                kotlinx.coroutines.delay(600)
+                repository.updateMessageStatus(savedMsg, "delivered", false)
+                kotlinx.coroutines.delay(1200)
+                repository.updateMessageStatus(savedMsg, "read", true)
+            }
         }
     }
 

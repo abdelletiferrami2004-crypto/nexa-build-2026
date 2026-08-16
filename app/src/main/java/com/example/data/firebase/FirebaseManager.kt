@@ -278,10 +278,15 @@ object FirebaseManager {
                 "id" to message.id,
                 "conversationId" to message.conversationId,
                 "senderName" to message.senderName,
+                "senderAvatar" to message.senderAvatar,
                 "text" to message.text,
                 "isFromUser" to message.isFromUser,
                 "isEncrypted" to message.isEncrypted,
                 "mediaType" to message.mediaType,
+                "mediaUrl" to (message.mediaUrl ?: ""),
+                "reaction" to (message.reaction ?: ""),
+                "deliveryStatus" to message.deliveryStatus,
+                "isRead" to message.isRead,
                 "timestamp" to System.currentTimeMillis()
             )
             db.collection("nexa_conversations")
@@ -319,10 +324,16 @@ object FirebaseManager {
                                 id = doc.getLong("id")?.toInt() ?: (doc.id.hashCode() and 0x7FFFFFFF),
                                 conversationId = doc.getString("conversationId") ?: conversationId,
                                 senderName = doc.getString("senderName") ?: "مستخدم NEXA",
+                                senderAvatar = doc.getString("senderAvatar") ?: "",
                                 text = doc.getString("text") ?: "",
+                                timestamp = doc.getLong("timestamp") ?: System.currentTimeMillis(),
                                 isFromUser = doc.getBoolean("isFromUser") ?: false,
                                 isEncrypted = doc.getBoolean("isEncrypted") ?: true,
-                                mediaType = doc.getString("mediaType") ?: "text"
+                                mediaType = doc.getString("mediaType") ?: "text",
+                                mediaUrl = doc.getString("mediaUrl")?.ifBlank { null },
+                                reaction = doc.getString("reaction")?.ifBlank { null },
+                                deliveryStatus = doc.getString("deliveryStatus") ?: "read",
+                                isRead = doc.getBoolean("isRead") ?: true
                             )
                         } catch (e: Exception) {
                             null

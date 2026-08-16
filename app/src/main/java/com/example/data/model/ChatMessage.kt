@@ -15,7 +15,9 @@ data class ChatMessage(
     val isEncrypted: Boolean = true,
     val mediaType: String = "text", // "text", "voice", "image", "product"
     val mediaUrl: String? = null,
-    val reaction: String? = null
+    val reaction: String? = null,
+    val deliveryStatus: String = "read", // "sending", "sent", "delivered", "read"
+    val isRead: Boolean = true
 )
 
 @Entity(tableName = "conversations")

@@ -57,7 +57,10 @@ interface MajarrahDao {
     fun getMessagesForConversation(conversationId: String): Flow<List<ChatMessage>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertMessage(message: ChatMessage)
+    suspend fun insertMessage(message: ChatMessage): Long
+
+    @Update
+    suspend fun updateMessage(message: ChatMessage)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMessages(messages: List<ChatMessage>)
