@@ -23,6 +23,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddShoppingCart
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Shield
@@ -30,6 +32,7 @@ import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -41,7 +44,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -79,6 +84,9 @@ fun StoreScreen(
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("الكل") }
     var directCheckoutProduct by remember { mutableStateOf<Product?>(null) }
+    var aiSearchResult by remember { mutableStateOf<String?>(null) }
+    var isAiSearching by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
 
     val categories = listOf("الكل", "إلكترونيات", "أزياء", "ألعاب وتعليم", "عطور فاخرة")
 
@@ -184,22 +192,111 @@ fun StoreScreen(
             Spacer(modifier = Modifier.height(14.dp))
         }
 
-        // Search Field
+        // Search Field with Real Gemini AI Smart Search
         OutlinedTextField(
             value = searchQuery,
             onValueChange = { searchQuery = it },
-            placeholder = { Text("ابحث في متجر مجرة...", color = Color.Gray) },
+            placeholder = { Text("ابحث أو اسأل ذكاء NEXA AI عن المنتجات...", color = Color.Gray, fontSize = 13.sp) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = NeonCyan) },
+            trailingIcon = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (isAiSearching) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = NeonPink,
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                    }
+                    IconButton(
+                        onClick = {
+                            if (searchQuery.isNotBlank()) {
+                                isAiSearching = true
+                                coroutineScope.launch {
+                                    val aiPrompt = "اقترح أفضل المنتجات والنصائح للشراء بناءً على هذا البحث في متجر مجرة: $searchQuery"
+                                    val response = com.example.data.remote.GeminiRepository.generateContent(
+                                        prompt = aiPrompt,
+                                        systemInstruction = "أنت مساعد تسوق ذكي في منصة مجرة NEXA. قدم توصيات منتجات دقيقة ومختصرة باللغة العربية بأسلوب نيون مميز."
+                                    )
+                                    aiSearchResult = response
+                                    isAiSearching = false
+                                }
+                            }
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = "Gemini AI Search Assist",
+                            tint = if (searchQuery.isNotBlank()) NeonPink else Color.Gray
+                        )
+                    }
+                }
+            },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = NeonCyan,
+                focusedBorderColor = NeonPink,
                 unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
                 focusedTextColor = Color.White,
                 unfocusedTextColor = Color.White
             ),
             shape = RoundedCornerShape(16.dp)
         )
+
+        // Gemini AI Smart Search Recommendation Card
+        aiSearchResult?.let { result ->
+            Spacer(modifier = Modifier.height(10.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(NeonPurple.copy(alpha = 0.2f))
+                    .border(1.dp, NeonPink.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
+                    .padding(12.dp)
+            ) {
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = "AI",
+                                tint = NeonPink,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "تحليل ذكاء NEXA AI (Gemini 3.5 Flash)",
+                                color = NeonPink,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            )
+                        }
+                        IconButton(
+                            onClick = { aiSearchResult = null },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Close AI Card",
+                                tint = Color.LightGray,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = result,
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        lineHeight = 18.sp
+                    )
+                }
+            }
+        }
 
         Spacer(modifier = Modifier.height(14.dp))
 

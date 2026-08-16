@@ -29,6 +29,7 @@ import com.example.data.model.User
 
 import com.example.data.model.AppLanguage
 import com.example.util.LanguageManager
+import com.example.util.NexaNotificationManager
 import com.example.util.NotificationSoundManager
 
 sealed class LoginStep {
@@ -963,6 +964,21 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    // Real-Time Online & Typing Status Management
+    private val _peerOnlineState = MutableStateFlow<Map<String, Boolean>>(
+        mapOf("nexa_ai" to true, "ai_bot" to true)
+    )
+    val peerOnlineState: StateFlow<Map<String, Boolean>> = _peerOnlineState.asStateFlow()
+
+    private val _peerTypingState = MutableStateFlow<Map<String, Boolean>>(emptyMap())
+    val peerTypingState: StateFlow<Map<String, Boolean>> = _peerTypingState.asStateFlow()
+
+    fun setUserTyping(conversationId: String, isTyping: Boolean) {
+        val current = _peerTypingState.value.toMutableMap()
+        current[conversationId] = isTyping
+        _peerTypingState.value = current
+    }
+
     fun selectConversation(conversationId: String) {
         _selectedConversationId.value = conversationId
         val existing = conversations.value.firstOrNull { it.id == conversationId }
@@ -971,6 +987,11 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
                 repository.saveConversation(existing.copy(unreadCount = 0))
             }
         }
+        // Set peer online by default
+        val onlineMap = _peerOnlineState.value.toMutableMap()
+        onlineMap[conversationId] = true
+        _peerOnlineState.value = onlineMap
+
         repository.listenToConversationRealtime(conversationId, viewModelScope)
         viewModelScope.launch {
             repository.getMessagesForConversation(conversationId).collect { msgs ->
@@ -1042,6 +1063,10 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
 
             if (isAiChat) {
                 _isAiThinking.value = true
+                val typingMap = _peerTypingState.value.toMutableMap()
+                typingMap[conversationId] = true
+                _peerTypingState.value = typingMap
+
                 val replyText = com.example.data.remote.GeminiRepository.generateContent(
                     prompt = text,
                     imageBitmap = _attachedImageBitmap.value
@@ -1061,7 +1086,18 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
                 )
                 repository.sendMessage(aiMsg)
                 _isAiThinking.value = false
+
+                val stoppedTypingMap = _peerTypingState.value.toMutableMap()
+                stoppedTypingMap[conversationId] = false
+                _peerTypingState.value = stoppedTypingMap
+
                 NotificationSoundManager.playPopChime(getApplication())
+                NexaNotificationManager.showIncomingMessageNotification(
+                    context = getApplication(),
+                    conversationId = conversationId,
+                    senderName = "ذكاء NEXA AI",
+                    messageText = replyText
+                )
 
                 if (_isAutoReadTtsEnabled.value) {
                     com.example.util.SpeechAndTtsManager.speak(replyText, getApplication())
@@ -1073,12 +1109,54 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
                     repository.updateMessageStatus(savedMsg, "delivered", false)
                     kotlinx.coroutines.delay(1200)
                     repository.updateMessageStatus(savedMsg, "read", true)
+
+                    // Simulate peer reading & typing reply
+                    kotlinx.coroutines.delay(1000)
+                    val tMap = _peerTypingState.value.toMutableMap()
+                    tMap[conversationId] = true
+                    _peerTypingState.value = tMap
+
+                    kotlinx.coroutines.delay(2200)
+                    val tMapStop = _peerTypingState.value.toMutableMap()
+                    tMapStop[conversationId] = false
+                    _peerTypingState.value = tMapStop
+
+                    val peerName = existingConv?.contactName ?: "صديقك في NEXA"
+                    val peerReplies = listOf(
+                        "وصلت رسالتك تماماً! 🚀",
+                        "شكراً لك، اتفقنا بالتأكيد 👍",
+                        "ممتاز جداً، سأراجع التفاصيل وأخبرك فوراً.",
+                        "مفهوم، نظام المحادثات المشفر يعمل بشكل رائع! 🔐✨"
+                    )
+                    val reply = peerReplies.random()
+
+                    val peerMsg = ChatMessage(
+                        conversationId = conversationId,
+                        senderName = peerName,
+                        senderAvatar = existingConv?.contactAvatar ?: "",
+                        text = reply,
+                        timestamp = System.currentTimeMillis(),
+                        isFromUser = false,
+                        isEncrypted = true,
+                        mediaType = "text",
+                        deliveryStatus = "read",
+                        isRead = true
+                    )
+                    repository.sendMessage(peerMsg)
+                    repository.saveConversation(existingConv?.copy(lastMessage = reply, lastTimestamp = System.currentTimeMillis()) ?: return@launch)
+                    NotificationSoundManager.playPopChime(getApplication())
+                    NexaNotificationManager.showIncomingMessageNotification(
+                        context = getApplication(),
+                        conversationId = conversationId,
+                        senderName = peerName,
+                        messageText = reply
+                    )
                 }
             }
         }
     }
 
-    fun sendVoiceMessage(conversationId: String, durationSeconds: Int = 12) {
+    fun sendVoiceMessage(conversationId: String, audioFilePath: String? = null, durationSeconds: Int = 12) {
         viewModelScope.launch {
             val now = System.currentTimeMillis()
             val sender = userProfile.value?.name ?: "أنت"
@@ -1086,9 +1164,10 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
                 conversationId = conversationId,
                 senderName = sender,
                 senderAvatar = userProfile.value?.avatarUrl ?: "",
-                text = "🎙️ رسالة صوتية (0:${if (durationSeconds < 10) "0$durationSeconds" else "$durationSeconds"})",
+                text = "🎙️ تسجيل صوتي (0:${if (durationSeconds < 10) "0$durationSeconds" else "$durationSeconds"})",
                 timestamp = now,
                 mediaType = "voice",
+                mediaUrl = audioFilePath,
                 isFromUser = true,
                 isEncrypted = true,
                 deliveryStatus = "sent",

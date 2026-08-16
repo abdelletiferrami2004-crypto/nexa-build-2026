@@ -241,6 +241,15 @@ class MajarrahRepository(private val dao: MajarrahDao) {
         val now = System.currentTimeMillis()
         val sampleConversations = listOf(
             Conversation(
+                id = "ai_bot",
+                contactName = "ذكاء NEXA AI",
+                contactAvatar = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop",
+                lastMessage = "أهلاً بك! أنا مساعدك الذكي المدعوم بـ Gemini 3.5 Flash. كيف يمكنني مساعدتك اليوم؟",
+                lastTimestamp = now,
+                unreadCount = 1,
+                isPinRequired = false
+            ),
+            Conversation(
                 id = "conv_1",
                 contactName = "نورا القحطاني",
                 contactAvatar = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop",
@@ -287,6 +296,23 @@ class MajarrahRepository(private val dao: MajarrahDao) {
             )
         )
         dao.insertConversations(sampleConversations)
+
+        val sampleMessagesAi = listOf(
+            ChatMessage(
+                id = 100,
+                conversationId = "ai_bot",
+                senderName = "ذكاء NEXA AI",
+                senderAvatar = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop",
+                text = "مرحباً بك! أنا مساعدك الذكي المتقدم المدعوم بنموذج Gemini 3.5 Flash ⚡. يمكنك سؤالي عن أي شيء، تحليل الصور، استكشاف المنتجات، أو الترجمة والمحادثة الحية!",
+                timestamp = now - (1000 * 60 * 10),
+                isFromUser = false,
+                isEncrypted = true,
+                mediaType = "text",
+                deliveryStatus = "read",
+                isRead = true
+            )
+        )
+        dao.insertMessages(sampleMessagesAi)
 
         val sampleMessagesConv1 = listOf(
             ChatMessage(

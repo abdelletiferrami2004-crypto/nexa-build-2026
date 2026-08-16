@@ -1,7 +1,9 @@
 package com.example
 
 import android.os.Bundle
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.fragment.app.FragmentActivity
 import androidx.compose.foundation.background
@@ -11,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,8 +44,22 @@ class MainActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         try {
             com.example.util.NotificationSoundManager.init(this)
+            com.example.util.NexaNotificationManager.initNotificationChannels(this)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                if (androidx.core.content.ContextCompat.checkSelfPermission(
+                        this,
+                        android.Manifest.permission.POST_NOTIFICATIONS
+                    ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+                ) {
+                    androidx.core.app.ActivityCompat.requestPermissions(
+                        this,
+                        arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
+                        101
+                    )
+                }
+            }
         } catch (e: Throwable) {
-            android.util.Log.e("MainActivity", "NotificationSoundManager init exception caught", e)
+            android.util.Log.e("MainActivity", "Init exception caught", e)
         }
         setContent {
             val isDarkTheme by viewModel.isDarkTheme.collectAsState()
@@ -81,6 +98,25 @@ fun MajarrahApp(viewModel: MajarrahViewModel) {
     var currentRoute by remember { mutableStateOf("home") }
     var isChatActive by remember { mutableStateOf(false) }
     var showGlobalStoryCreatorModal by remember { mutableStateOf(false) }
+
+    // Multi-Permission Runtime Requester for Microphone, Camera, Storage, and Notifications
+    val permissionsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { _ -> }
+
+    LaunchedEffect(Unit) {
+        val permissionsList = mutableListOf(
+            android.Manifest.permission.RECORD_AUDIO,
+            android.Manifest.permission.CAMERA
+        )
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            permissionsList.add(android.Manifest.permission.POST_NOTIFICATIONS)
+            permissionsList.add(android.Manifest.permission.READ_MEDIA_IMAGES)
+        } else {
+            permissionsList.add(android.Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+        permissionsLauncher.launch(permissionsList.toTypedArray())
+    }
 
     if (showGlobalStoryCreatorModal) {
         com.example.ui.components.StoryCreatorModal(

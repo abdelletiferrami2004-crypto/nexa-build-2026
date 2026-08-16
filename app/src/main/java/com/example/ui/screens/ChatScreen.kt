@@ -1002,6 +1002,25 @@ fun DirectChatScreen(
     val isAdWatching by viewModel.isAdWatching.collectAsState()
     val adWatchProgress by viewModel.adWatchProgress.collectAsState()
 
+    // Real-Time Online & Typing Status
+    val peerOnlineMap by viewModel.peerOnlineState.collectAsState()
+    val peerTypingMap by viewModel.peerTypingState.collectAsState()
+    val isPeerOnline = peerOnlineMap[conversationId] ?: true
+    val isPeerTyping = (peerTypingMap[conversationId] == true) || (isAiChat && isAiThinking)
+
+    // Real Audio Recording State
+    val isRecordingAudio by com.example.util.AudioRecordManager.isRecording.collectAsState()
+    val recordDurationSec by com.example.util.AudioRecordManager.recordDurationSeconds.collectAsState()
+    val recordAmplitude by com.example.util.AudioRecordManager.currentAmplitude.collectAsState()
+
+    val audioPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            com.example.util.AudioRecordManager.startRecording(context)
+        }
+    }
+
     var messageText by remember { mutableStateOf("") }
     var showMoreMenu by remember { mutableStateOf(false) }
     var showPhotoMenu by remember { mutableStateOf(false) }
@@ -1023,7 +1042,15 @@ fun DirectChatScreen(
             if (isAiChat) {
                 viewModel.attachImageForAi(it)
             }
-            viewModel.sendImageMessage(conversationId, "https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=600&auto=format&fit=crop", messageText)
+            try {
+                val file = java.io.File(context.cacheDir, "nexa_cam_${System.currentTimeMillis()}.jpg")
+                file.outputStream().use { out ->
+                    it.compress(Bitmap.CompressFormat.JPEG, 90, out)
+                }
+                viewModel.sendImageMessage(conversationId, file.absolutePath, messageText)
+            } catch (e: Throwable) {
+                viewModel.sendImageMessage(conversationId, "https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=600&auto=format&fit=crop", messageText)
+            }
             messageText = ""
         }
     }
@@ -1147,14 +1174,16 @@ fun DirectChatScreen(
                         }
 
                         // Online green badge
-                        Box(
-                            modifier = Modifier
-                                .size(9.dp)
-                                .align(Alignment.BottomEnd)
-                                .clip(CircleShape)
-                                .background(EncryptedGreen)
-                                .border(1.dp, BackgroundDark, CircleShape)
-                        )
+                        if (isPeerOnline) {
+                            Box(
+                                modifier = Modifier
+                                    .size(9.dp)
+                                    .align(Alignment.BottomEnd)
+                                    .clip(CircleShape)
+                                    .background(EncryptedGreen)
+                                    .border(1.dp, BackgroundDark, CircleShape)
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.width(8.dp))
@@ -1180,12 +1209,45 @@ fun DirectChatScreen(
                                 )
                             }
                         }
-                        Text(
-                            text = if (isAiThinking) "يكتب الآن..." else if (isAiChat) "ذكاء اصطناعي فوري • E2EE" else "متصل الآن • تشفير 256-bit",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (isAiThinking) NeonCyan else EncryptedGreen,
-                            fontSize = 10.sp
-                        )
+                        if (isPeerTyping) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.GraphicEq,
+                                    contentDescription = null,
+                                    tint = NeonCyan,
+                                    modifier = Modifier.size(11.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = "يكتب الآن...",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = NeonCyan,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        } else if (isAiChat) {
+                            Text(
+                                text = "ذكاء اصطناعي فوري • E2EE",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = NeonCyan,
+                                fontSize = 10.sp
+                            )
+                        } else if (isPeerOnline) {
+                            Text(
+                                text = "متصل الآن • تشفير 256-bit",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = EncryptedGreen,
+                                fontSize = 10.sp
+                            )
+                        } else {
+                            Text(
+                                text = "آخر ظهور مؤخراً",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.LightGray.copy(alpha = 0.7f),
+                                fontSize = 10.sp
+                            )
+                        }
                     }
                 }
 
@@ -1502,149 +1564,245 @@ fun DirectChatScreen(
                 }
             }
 
-            // 6. MODERN FLOATING INPUT DOCK
+            // 6. MODERN FLOATING INPUT DOCK WITH REAL AUDIO RECORDER
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 10.dp, vertical = 8.dp)
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .shadow(12.dp, RoundedCornerShape(26.dp), spotColor = NeonCyan.copy(alpha = 0.3f))
-                        .clip(RoundedCornerShape(26.dp))
-                        .background(Color(0xFF111726).copy(alpha = 0.96f))
-                        .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(26.dp))
-                        .padding(horizontal = 6.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Attachment Action (Gallery / Camera)
-                    Box {
+                if (isRecordingAudio) {
+                    // LIVE REAL AUDIO RECORDING BAR
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .shadow(12.dp, RoundedCornerShape(26.dp), spotColor = NeonPink.copy(alpha = 0.4f))
+                            .clip(RoundedCornerShape(26.dp))
+                            .background(Color(0xFF161026).copy(alpha = 0.98f))
+                            .border(1.dp, NeonPink.copy(alpha = 0.6f), RoundedCornerShape(26.dp))
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        // Cancel Button
                         IconButton(
-                            onClick = { showPhotoMenu = true },
+                            onClick = {
+                                com.example.util.AudioRecordManager.cancelRecording()
+                            },
                             modifier = Modifier.size(36.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Image,
-                                contentDescription = "Attach Media",
-                                tint = NeonCyan,
+                                imageVector = Icons.Default.Clear,
+                                contentDescription = "Cancel Recording",
+                                tint = Color(0xFFEF4444),
                                 modifier = Modifier.size(20.dp)
                             )
                         }
 
-                        DropdownMenu(
-                            expanded = showPhotoMenu,
-                            onDismissRequest = { showPhotoMenu = false },
-                            modifier = Modifier
-                                .background(Color(0xFF13192B))
-                                .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
+                        // Pulsing Red Dot + Timer + Animated Amplitude Waveform
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            DropdownMenuItem(
-                                text = {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text("معرض الصور", color = Color.White, fontSize = 12.sp)
-                                    }
-                                },
-                                onClick = {
-                                    showPhotoMenu = false
-                                    galleryLauncher.launch("image/*")
-                                }
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFFEF4444))
                             )
-                            DropdownMenuItem(
-                                text = {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.CameraAlt, contentDescription = null, tint = NeonPink, modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text("التقاط صورة", color = Color.White, fontSize = 12.sp)
-                                    }
-                                },
-                                onClick = {
-                                    showPhotoMenu = false
-                                    cameraLauncher.launch(null)
+
+                            val minutes = recordDurationSec / 60
+                            val seconds = recordDurationSec % 60
+                            Text(
+                                text = String.format(java.util.Locale.getDefault(), "%02d:%02d", minutes, seconds),
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
+
+                            // Live oscillating waveform bars
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                val normalizedAmp = (recordAmplitude / 5000f).coerceIn(0.1f, 1f)
+                                listOf(10, 18, 26, 14, 22, 28, 16, 20, 12).forEachIndexed { i, baseH ->
+                                    val dynamicHeight = (baseH * (0.6f + normalizedAmp * 0.8f)).coerceIn(6f, 30f)
+                                    Box(
+                                        modifier = Modifier
+                                            .width(3.dp)
+                                            .height(dynamicHeight.dp)
+                                            .clip(RoundedCornerShape(1.5.dp))
+                                            .background(if (i % 2 == 0) NeonPink else NeonCyan)
+                                    )
                                 }
+                            }
+                        }
+
+                        // Send Voice Note Button
+                        IconButton(
+                            onClick = {
+                                val (audioFile, duration) = com.example.util.AudioRecordManager.stopRecording()
+                                viewModel.sendVoiceMessage(conversationId, audioFile?.absolutePath, duration)
+                            },
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .background(Brush.linearGradient(listOf(NeonCyan, NeonPurple)))
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Send,
+                                contentDescription = "Send Voice Note",
+                                tint = BackgroundDark,
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .shadow(12.dp, RoundedCornerShape(26.dp), spotColor = NeonCyan.copy(alpha = 0.3f))
+                            .clip(RoundedCornerShape(26.dp))
+                            .background(Color(0xFF111726).copy(alpha = 0.96f))
+                            .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(26.dp))
+                            .padding(horizontal = 6.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Attachment Action (Gallery / Camera)
+                        Box {
+                            IconButton(
+                                onClick = { showPhotoMenu = true },
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Image,
+                                    contentDescription = "Attach Media",
+                                    tint = NeonCyan,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
 
-                    Spacer(modifier = Modifier.width(2.dp))
-
-                    // Voice Input / Record Voice Note Button
-                    IconButton(
-                        onClick = {
-                            if (isListening) {
-                                com.example.util.SpeechAndTtsManager.stopListening()
-                            } else {
-                                com.example.util.SpeechAndTtsManager.startListening(
-                                    context = context,
-                                    onResult = { spoken ->
-                                        messageText = spoken
+                            DropdownMenu(
+                                expanded = showPhotoMenu,
+                                onDismissRequest = { showPhotoMenu = false },
+                                modifier = Modifier
+                                    .background(Color(0xFF13192B))
+                                    .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
+                            ) {
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("معرض الصور", color = Color.White, fontSize = 12.sp)
+                                        }
+                                    },
+                                    onClick = {
+                                        showPhotoMenu = false
+                                        galleryLauncher.launch("image/*")
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.CameraAlt, contentDescription = null, tint = NeonPink, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("التقاط صورة", color = Color.White, fontSize = 12.sp)
+                                        }
+                                    },
+                                    onClick = {
+                                        showPhotoMenu = false
+                                        cameraLauncher.launch(null)
                                     }
                                 )
                             }
-                        },
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Mic,
-                            contentDescription = "Voice Input",
-                            tint = if (isListening) NeonPink else Color(0xFF94A3B8),
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
+                        }
 
-                    Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(2.dp))
 
-                    // Text Input Field
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(vertical = 8.dp),
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        if (messageText.isEmpty()) {
-                            Text(
-                                text = if (isAiChat) "اكتب رسالتك لـ NEXA AI..." else "اكتب رسالتك لـ $contactName...",
-                                color = Color.Gray,
-                                fontSize = 13.sp
+                        // Voice Input / Record Voice Note Button
+                        IconButton(
+                            onClick = {
+                                if (androidx.core.content.ContextCompat.checkSelfPermission(
+                                        context,
+                                        android.Manifest.permission.RECORD_AUDIO
+                                    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                                ) {
+                                    com.example.util.AudioRecordManager.startRecording(context)
+                                } else {
+                                    audioPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                                }
+                            },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Mic,
+                                contentDescription = "Record Audio",
+                                tint = NeonPink,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
-                        BasicTextField(
-                            value = messageText,
-                            onValueChange = { messageText = it },
-                            textStyle = TextStyle(color = Color.White, fontSize = 13.sp),
-                            cursorBrush = SolidColor(NeonCyan),
-                            maxLines = 4,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
 
-                    Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
 
-                    // Send Message Button
-                    IconButton(
-                        onClick = {
-                            if (messageText.isNotBlank()) {
-                                viewModel.sendChatMessage(conversationId, messageText)
-                                messageText = ""
-                            } else {
-                                viewModel.sendVoiceMessage(conversationId, 18)
+                        // Text Input Field
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(vertical = 8.dp),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            if (messageText.isEmpty()) {
+                                Text(
+                                    text = if (isAiChat) "اكتب رسالتك لـ NEXA AI..." else "اكتب رسالتك لـ $contactName...",
+                                    color = Color.Gray,
+                                    fontSize = 13.sp
+                                )
                             }
-                        },
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(
-                                Brush.linearGradient(listOf(NeonCyan, NeonPurple))
+                            BasicTextField(
+                                value = messageText,
+                                onValueChange = { messageText = it },
+                                textStyle = TextStyle(color = Color.White, fontSize = 13.sp),
+                                cursorBrush = SolidColor(NeonCyan),
+                                maxLines = 4,
+                                modifier = Modifier.fillMaxWidth()
                             )
-                    ) {
-                        Icon(
-                            imageVector = if (messageText.isNotBlank()) Icons.AutoMirrored.Filled.Send else Icons.Default.GraphicEq,
-                            contentDescription = "Send",
-                            tint = BackgroundDark,
-                            modifier = Modifier.size(18.dp)
-                        )
+                        }
+
+                        Spacer(modifier = Modifier.width(4.dp))
+
+                        // Send Message Button
+                        IconButton(
+                            onClick = {
+                                if (messageText.isNotBlank()) {
+                                    viewModel.sendChatMessage(conversationId, messageText)
+                                    messageText = ""
+                                } else {
+                                    if (androidx.core.content.ContextCompat.checkSelfPermission(
+                                            context,
+                                            android.Manifest.permission.RECORD_AUDIO
+                                        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                                    ) {
+                                        com.example.util.AudioRecordManager.startRecording(context)
+                                    } else {
+                                        audioPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                                    }
+                                }
+                            },
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    Brush.linearGradient(listOf(NeonCyan, NeonPurple))
+                                )
+                        ) {
+                            Icon(
+                                imageVector = if (messageText.isNotBlank()) Icons.AutoMirrored.Filled.Send else Icons.Default.Mic,
+                                contentDescription = "Send",
+                                tint = BackgroundDark,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -1697,7 +1855,13 @@ fun DirectChatMessageBubble(
     val context = LocalContext.current
     val isUser = message.isFromUser
     var showReactionMenu by remember { mutableStateOf(false) }
-    var isPlayingVoice by remember { mutableStateOf(false) }
+
+    val playingMessageId by com.example.util.AudioPlaybackManager.currentPlayingMessageId.collectAsState()
+    val isPlayingAudio by com.example.util.AudioPlaybackManager.isPlaying.collectAsState()
+    val playbackProgress by com.example.util.AudioPlaybackManager.playbackProgress.collectAsState()
+    val currentPosSec by com.example.util.AudioPlaybackManager.currentPositionSec.collectAsState()
+    val totalDurSec by com.example.util.AudioPlaybackManager.totalDurationSec.collectAsState()
+    val isThisPlaying = (playingMessageId == message.id && isPlayingAudio)
 
     val reactionsList = listOf("❤️", "👍", "🔥", "😂", "😮", "👏")
 
@@ -1892,8 +2056,12 @@ fun DirectChatMessageBubble(
                         ) {
                             IconButton(
                                 onClick = {
-                                    isPlayingVoice = !isPlayingVoice
-                                    NotificationSoundManager.playPopChime(context)
+                                    com.example.util.AudioPlaybackManager.togglePlay(
+                                        context = context,
+                                        messageId = message.id,
+                                        audioPathOrUrl = message.mediaUrl,
+                                        fallbackDurationSec = 14
+                                    )
                                 },
                                 modifier = Modifier
                                     .size(32.dp)
@@ -1901,7 +2069,7 @@ fun DirectChatMessageBubble(
                                     .background(if (isUser) EncryptedGreen else NeonCyan)
                             ) {
                                 Icon(
-                                    imageVector = if (isPlayingVoice) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                    imageVector = if (isThisPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                     contentDescription = "Play Voice",
                                     tint = BackgroundDark,
                                     modifier = Modifier.size(18.dp)
@@ -1910,7 +2078,7 @@ fun DirectChatMessageBubble(
 
                             Spacer(modifier = Modifier.width(8.dp))
 
-                            // Waveform visualizer effect
+                            // Waveform visualizer effect with progress coloring
                             Row(
                                 modifier = Modifier.weight(1f),
                                 horizontalArrangement = Arrangement.spacedBy(2.dp),
@@ -1918,13 +2086,15 @@ fun DirectChatMessageBubble(
                             ) {
                                 val heights = listOf(8, 14, 22, 10, 18, 24, 16, 12, 20, 26, 14, 18, 10, 22, 16, 12)
                                 heights.forEachIndexed { index, h ->
+                                    val barFraction = index.toFloat() / heights.size
+                                    val isPassed = isThisPlaying && barFraction <= playbackProgress
                                     Box(
                                         modifier = Modifier
                                             .weight(1f)
                                             .height(h.dp)
                                             .clip(RoundedCornerShape(2.dp))
                                             .background(
-                                                if (isPlayingVoice && index % 2 == 0) NeonPink else Color.White.copy(alpha = 0.7f)
+                                                if (isPassed) NeonPink else Color.White.copy(alpha = 0.7f)
                                             )
                                     )
                                 }
@@ -1932,8 +2102,11 @@ fun DirectChatMessageBubble(
 
                             Spacer(modifier = Modifier.width(8.dp))
 
+                            val displaySec = if (isThisPlaying) currentPosSec else (if (totalDurSec > 0) totalDurSec else 14)
+                            val displayMin = displaySec / 60
+                            val displayS = displaySec % 60
                             Text(
-                                text = "0:24",
+                                text = String.format(java.util.Locale.getDefault(), "%d:%02d", displayMin, displayS),
                                 color = Color.LightGray,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold
