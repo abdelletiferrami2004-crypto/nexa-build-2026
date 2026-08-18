@@ -35,8 +35,29 @@ class MajarrahRepository(private val dao: MajarrahDao) {
     suspend fun toggleLikePost(post: Post) {
         val updated = post.copy(
             isLiked = !post.isLiked,
-            likesCount = if (post.isLiked) post.likesCount - 1 else post.likesCount + 1
+            userReaction = if (!post.isLiked) "❤️" else null,
+            likesCount = if (post.isLiked) (post.likesCount - 1).coerceAtLeast(0) else post.likesCount + 1
         )
+        dao.updatePost(updated)
+        FirebaseManager.savePostToCloud(updated)
+    }
+
+    suspend fun updatePostReaction(post: Post, reaction: String) {
+        val isRemoving = post.userReaction == reaction
+        val newReaction = if (isRemoving) null else reaction
+        val newIsLiked = !isRemoving
+        val likesDelta = if (isRemoving) -1 else if (post.userReaction == null) 1 else 0
+        val updated = post.copy(
+            userReaction = newReaction,
+            isLiked = newIsLiked,
+            likesCount = (post.likesCount + likesDelta).coerceAtLeast(0)
+        )
+        dao.updatePost(updated)
+        FirebaseManager.savePostToCloud(updated)
+    }
+
+    suspend fun incrementPostShare(post: Post) {
+        val updated = post.copy(sharesCount = post.sharesCount + 1)
         dao.updatePost(updated)
         FirebaseManager.savePostToCloud(updated)
     }
@@ -222,32 +243,52 @@ class MajarrahRepository(private val dao: MajarrahDao) {
             Post(
                 id = 1,
                 authorName = "فيصل العتيبي",
-                content = "أطلقت اليوم أول مجتمع برمجيات ذكية على منصة مجرة! شاركونا أفكاركم حول تجربة الدردشة المشفرة الجديدة.",
+                content = "أطلقت اليوم أول مجتمع برمجيات ذكية على منصة مجرة! شاركونا أفكاركم حول تجربة الدردشة المشفرة الجديدة واستكشفوا نظارة GlassVR التفاعلية. 🚀✨ #ذكاء_اصطناعي #NEXA",
+                imageUrl = "https://images.unsplash.com/photo-1593508512255-86ab42a8e620?w=800&auto=format&fit=crop",
+                mediaType = "image",
                 likesCount = 142,
                 commentsCount = 28,
+                sharesCount = 19,
                 isLiked = true,
+                userReaction = "🔥",
                 taggedProductId = 1,
+                taggedProductName = "نظارة الواقع الافتراضي GlassVR",
+                taggedProductPrice = 650.0,
                 isTeenSafe = true,
                 isAuthorVerified = true
             ),
             Post(
                 id = 2,
                 authorName = "ريم الشمري",
-                content = "سماعات Hologram Sound رهيبة جداً! جودة الصوت والنقاء غير طبيعية مع وضع الناشئة",
+                content = "سماعات Hologram Sound رهيبة جداً! جودة الصوت والنقاء غير طبيعية مع وضع الناشئة وعزل الضوضاء الذكي 🎧🎵",
+                videoUrl = "https://assets.mixkit.co/videos/preview/mixkit-futuristic-technology-interaction-animation-42512-large.mp4",
+                videoDuration = "0:30",
+                mediaType = "video",
                 likesCount = 89,
                 commentsCount = 12,
+                sharesCount = 8,
                 isLiked = false,
+                userReaction = null,
                 taggedProductId = 3,
+                taggedProductName = "سماعات Hologram Sound",
+                taggedProductPrice = 180.0,
                 isTeenSafe = true,
                 isAuthorVerified = false
             ),
             Post(
                 id = 3,
                 authorName = "أكاديمية المستقبل للذكاء الاصطناعي",
-                content = "ورشة عمل تفاعلية جديدة للناشئة والأجيال الواعدة في تصميم واجهات Glassmorphism وتطبيقات أندرويد الحديثة. انضموا إلينا!",
+                content = "ورشة عمل تفاعلية جديدة للناشئة والأجيال الواعدة في تصميم واجهات Glassmorphism وتطبيقات أندرويد الحديثة عبر Jetpack Compose. انضموا إلينا الآن! 💡🤖",
+                imageUrl = "https://images.unsplash.com/photo-1517048676732-d65bc937f952?w=800&auto=format&fit=crop",
+                mediaType = "image",
                 likesCount = 310,
                 commentsCount = 45,
+                sharesCount = 52,
                 isLiked = true,
+                userReaction = "❤️",
+                taggedProductId = 5,
+                taggedProductName = "مجموعة CyberCode Kit البرمجية",
+                taggedProductPrice = 320.0,
                 isTeenSafe = true,
                 isAuthorVerified = true
             )

@@ -10,11 +10,18 @@ data class Post(
     val authorAvatarUrl: String = "",
     val content: String,
     val imageUrl: String? = null,
+    val videoUrl: String? = null,
+    val videoDuration: String? = null,
+    val mediaType: String = "text",
     val timestamp: Long = System.currentTimeMillis(),
     val likesCount: Int = 24,
     val commentsCount: Int = 5,
+    val sharesCount: Int = 3,
     val isLiked: Boolean = false,
+    val userReaction: String? = null,
     val taggedProductId: Int? = null,
+    val taggedProductName: String? = null,
+    val taggedProductPrice: Double? = null,
     val isTeenSafe: Boolean = true,
     val isAuthorVerified: Boolean = false
 )

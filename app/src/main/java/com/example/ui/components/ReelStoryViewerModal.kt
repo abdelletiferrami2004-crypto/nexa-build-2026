@@ -1,11 +1,20 @@
 package com.example.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,6 +34,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Comment
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Send
@@ -37,9 +47,12 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,6 +60,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -58,6 +75,8 @@ import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonPink
 import com.example.ui.theme.NeonPurple
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun ReelStoryViewerModal(
@@ -68,8 +87,30 @@ fun ReelStoryViewerModal(
     onNavigateToReels: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
+    val coroutineScope = rememberCoroutineScope()
+
     var replyText by remember { mutableStateOf("") }
-    var isReplying by remember { mutableStateOf(false) }
+    var isPaused by remember { mutableStateOf(false) }
+    var progress by remember { mutableFloatStateOf(0f) }
+    var flyingReactionEmoji by remember { mutableStateOf<String?>(null) }
+
+    val reactionEmojis = listOf("🔥", "❤️", "😂", "👏", "😮", "💯")
+
+    // Auto-advance progress timer (5 seconds duration)
+    LaunchedEffect(story.id, isPaused) {
+        if (!isPaused) {
+            val totalSteps = 100
+            val stepTime = 50L
+            while (progress < 1f && !isPaused) {
+                delay(stepTime)
+                progress += 1f / totalSteps
+            }
+            if (progress >= 1f) {
+                onDismiss()
+            }
+        }
+    }
 
     val scaleHeart by animateFloatAsState(
         targetValue = if (story.isLikedByMe) 1.25f else 1f,
@@ -83,57 +124,99 @@ fun ReelStoryViewerModal(
     ) {
         Surface(
             modifier = Modifier.fillMaxSize(),
-            color = Color.Black.copy(alpha = 0.93f)
+            color = Color.Black.copy(alpha = 0.95f)
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onPress = {
+                                isPaused = true
+                                tryAwaitRelease()
+                                isPaused = false
+                            },
+                            onTap = { offset ->
+                                val screenWidth = size.width
+                                if (offset.x < screenWidth * 0.3f) {
+                                    // Previous / restart progress
+                                    progress = 0f
+                                } else if (offset.x > screenWidth * 0.7f) {
+                                    // Next / finish
+                                    onDismiss()
+                                }
+                            }
+                        )
+                    }
                     .padding(16.dp)
             ) {
-                // Background Glow Orbs
-                Box(
-                    modifier = Modifier
-                        .size(250.dp)
-                        .clip(CircleShape)
-                        .background(NeonPurple.copy(alpha = 0.25f))
-                        .align(Alignment.TopEnd)
-                )
+                // Background Dynamic Gradient Mesh
+                val bgColors = if (story.bgGradient.isNotEmpty()) {
+                    story.bgGradient.map { Color(it.toULong()) }
+                } else {
+                    listOf(Color(0xFF130E26), Color(0xFF2B1055), Color(0xFF0A0518))
+                }
 
                 Box(
                     modifier = Modifier
-                        .size(220.dp)
-                        .clip(CircleShape)
-                        .background(NeonCyan.copy(alpha = 0.2f))
-                        .align(Alignment.BottomStart)
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(28.dp))
+                        .background(Brush.verticalGradient(bgColors))
+                        .border(1.dp, NeonPurple.copy(alpha = 0.5f), RoundedCornerShape(28.dp))
                 )
+
+                // Flying Reaction Burst Animation
+                if (flyingReactionEmoji != null) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .graphicsLayer {
+                                scaleX = 1.6f
+                                scaleY = 1.6f
+                            }
+                    ) {
+                        Text(
+                            text = flyingReactionEmoji ?: "",
+                            fontSize = 72.sp
+                        )
+                    }
+                }
 
                 Column(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // TOP METADATA HEADER
+                    // TOP METADATA & PROGRESS BARS
                     Column {
-                        Spacer(modifier = Modifier.height(24.dp))
-                        
-                        // Story Progress Bar Indicator
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(3.dp)
-                                .clip(RoundedCornerShape(2.dp))
-                                .background(Color.White.copy(alpha = 0.25f))
+                        Spacer(modifier = Modifier.height(18.dp))
+
+                        // Multi-Segment Story Progress Bar Indicator
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .fillMaxWidth(0.65f)
-                                    .height(3.dp)
+                                    .weight(1f)
+                                    .height(3.5.dp)
                                     .clip(RoundedCornerShape(2.dp))
-                                    .background(NeonCyan)
-                            )
+                                    .background(Color.White.copy(alpha = 0.3f))
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(progress)
+                                        .height(3.5.dp)
+                                        .clip(RoundedCornerShape(2.dp))
+                                        .background(NeonCyan)
+                                )
+                            }
                         }
 
                         Spacer(modifier = Modifier.height(14.dp))
 
+                        // Creator Header Row
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -141,7 +224,7 @@ fun ReelStoryViewerModal(
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 CreatorAvatarWithAura(
-                                    followersCount = 1_500_000,
+                                    followersCount = 1_250_000,
                                     authorInitial = story.authorName,
                                     size = 42.dp,
                                     showBadgeChip = false
@@ -157,28 +240,22 @@ fun ReelStoryViewerModal(
                                             fontWeight = FontWeight.Bold,
                                             fontSize = 15.sp
                                         )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = "• ${story.timestamp}",
-                                            color = Color.LightGray,
-                                            fontSize = 12.sp
-                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        BlueVerificationBadge(size = 14.dp)
                                     }
 
-                                    // Status line
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Icon(
-                                            imageVector = Icons.Default.PlayArrow,
+                                            imageVector = Icons.Default.HourglassEmpty,
                                             contentDescription = null,
-                                            tint = NeonCyan,
-                                            modifier = Modifier.size(14.dp)
+                                            tint = NeonAmber,
+                                            modifier = Modifier.size(12.dp)
                                         )
-                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Spacer(modifier = Modifier.width(3.dp))
                                         Text(
- text ="مشاهدة مقطع ريلز بالكامل",
-                                            color = NeonCyan,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.SemiBold
+                                            text = "ستوري 24 ساعة • ${story.timestamp}",
+                                            color = Color.LightGray,
+                                            fontSize = 11.sp
                                         )
                                     }
                                 }
@@ -189,7 +266,7 @@ fun ReelStoryViewerModal(
                                 modifier = Modifier
                                     .size(36.dp)
                                     .clip(CircleShape)
-                                    .background(Color.White.copy(alpha = 0.15f))
+                                    .background(Color.White.copy(alpha = 0.18f))
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Close,
@@ -200,206 +277,163 @@ fun ReelStoryViewerModal(
                         }
                     }
 
-                    // CENTER REEL PREVIEW CARD
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(380.dp)
-                            .clip(RoundedCornerShape(28.dp))
-                            .background(
-                                brush = Brush.verticalGradient(
-                                    listOf(
-                                        Color(0xFF130E26),
-                                        Color(0xFF231448),
-                                        Color(0xFF0A0518)
-                                    )
-                                )
-                            )
-                            .border(1.5.dp, NeonCyan.copy(alpha = 0.7f), RoundedCornerShape(28.dp))
-                            .clickable { onNavigateToReels() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        // Reel Title & Author Overlay Header
-                        Column(
-                            modifier = Modifier
-                                .align(Alignment.TopStart)
-                                .padding(16.dp)
-                        ) {
- GlassBadge(text ="ريلز مشارك", accentColor = NeonPink)
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                text = story.reelTitle ?: "مقطع ريلز نيون مميز",
-                                color = Color.White,
-                                fontWeight = FontWeight.ExtraBold,
-                                fontSize = 16.sp
-                            )
-                            Text(
-                                text = story.reelAuthor ?: "@majarrah_official",
-                                color = NeonCyan,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-
-                        // Play Icon Pulse Graphic
+                    // CENTER STORY / REEL CONTENT
+                    if (story.isReelShare) {
+                        // Shared Reel Card
                         Box(
                             modifier = Modifier
-                                .size(70.dp)
-                                .clip(CircleShape)
+                                .fillMaxWidth()
+                                .height(360.dp)
+                                .clip(RoundedCornerShape(24.dp))
                                 .background(Color.Black.copy(alpha = 0.45f))
-                                .border(2.dp, NeonCyan, CircleShape),
+                                .border(1.5.dp, NeonCyan.copy(alpha = 0.8f), RoundedCornerShape(24.dp))
+                                .clickable { onNavigateToReels() },
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.PlayArrow,
-                                contentDescription = "Play Reel",
-                                tint = Color.White,
-                                modifier = Modifier.size(42.dp)
-                            )
-                        }
-
-                        // FLOATING INTERACTIVE NAVIGATION PILL BUTTON
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.Center)
-                                .padding(top = 110.dp)
-                                .clip(RoundedCornerShape(50))
-                                .background(
-                                    brush = Brush.horizontalGradient(
-                                        listOf(NeonPurple, NeonPink)
-                                    )
-                                )
-                                .border(1.5.dp, Color.White.copy(alpha = 0.8f), RoundedCornerShape(50))
-                                .clickable { onNavigateToReels() }
-                                .padding(horizontal = 16.dp, vertical = 10.dp)
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(
+                                modifier = Modifier
+                                    .align(Alignment.TopStart)
+                                    .padding(16.dp)
+                            ) {
+                                GlassBadge(text = "مقطع ريلز مشارك", accentColor = NeonPink)
+                                Spacer(modifier = Modifier.height(6.dp))
                                 Text(
-                                    text = "مشاهدة مقطع ريلز بالكامل",
+                                    text = story.reelTitle ?: "مقطع ريلز نيون مميز",
                                     color = Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 12.sp
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 16.sp
                                 )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Icon(
-                                    imageVector = Icons.Default.ChevronRight,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(16.dp)
+                                Text(
+                                    text = story.reelAuthor ?: "@majarrah_official",
+                                    color = NeonCyan,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
                                 )
                             }
-                        }
 
-                        // BOTTOM STATS & SOUND TRACK OVERLAY
-                        Column(
-                            modifier = Modifier
-                                .align(Alignment.BottomStart)
-                                .fillMaxWidth()
-                                .background(
-                                    brush = Brush.verticalGradient(
-                                        listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f))
-                                    )
-                                )
-                                .padding(16.dp)
-                        ) {
-                            Text(
-                                text = story.text,
-                                color = Color.White,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            // Engagement Statistics Row
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                            // Play Pulse Button
+                            Box(
+                                modifier = Modifier
+                                    .size(68.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.Black.copy(alpha = 0.5f))
+                                    .border(2.dp, NeonCyan, CircleShape),
+                                contentAlignment = Alignment.Center
                             ) {
+                                Icon(
+                                    imageVector = Icons.Default.PlayArrow,
+                                    contentDescription = "Play Reel",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(40.dp)
+                                )
+                            }
+
+                            // Reel sound & caption
+                            Column(
+                                modifier = Modifier
+                                    .align(Alignment.BottomStart)
+                                    .fillMaxWidth()
+                                    .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f))))
+                                    .padding(14.dp)
+                            ) {
+                                Text(
+                                    text = story.text,
+                                    color = Color.White,
+                                    fontSize = 13.sp
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
-                                        imageVector = Icons.Default.Visibility,
-                                        contentDescription = "Views",
+                                        imageVector = Icons.Default.MusicNote,
+                                        contentDescription = null,
                                         tint = NeonCyan,
-                                        modifier = Modifier.size(14.dp)
+                                        modifier = Modifier.size(13.dp)
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text(
-                                        text = story.reelViewsCount,
-                                        color = Color.LightGray,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-
-                                    Spacer(modifier = Modifier.width(12.dp))
-
-                                    Icon(
-                                        imageVector = Icons.Default.Favorite,
-                                        contentDescription = "Reel Likes",
-                                        tint = NeonPink,
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = story.reelLikesCount,
-                                        color = Color.LightGray,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-
-                                    Spacer(modifier = Modifier.width(12.dp))
-
-                                    Icon(
-                                        imageVector = Icons.Default.Comment,
-                                        contentDescription = "Reel Comments",
-                                        tint = NeonAmber,
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = story.reelCommentsCount,
-                                        color = Color.LightGray,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
+                                        text = story.reelSoundTrack,
+                                        color = NeonCyan,
+                                        fontSize = 11.sp
                                     )
                                 }
                             }
-
-                            Spacer(modifier = Modifier.height(6.dp))
-
-                            // Sound Track Line
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.MusicNote,
-                                    contentDescription = "Audio",
-                                    tint = NeonCyan,
-                                    modifier = Modifier.size(13.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = story.reelSoundTrack,
-                                    color = NeonCyan,
-                                    fontSize = 11.sp
-                                )
+                        }
+                    } else {
+                        // Standard 24h Text/Photo Story
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(24.dp))
+                                        .background(Color.Black.copy(alpha = 0.35f))
+                                        .border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(24.dp))
+                                        .padding(24.dp)
+                                ) {
+                                    Text(
+                                        text = story.text.ifBlank { "قصة مميزة وحصرية على منصة NEXA 🚀" },
+                                        color = Color.White,
+                                        fontSize = 20.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        lineHeight = 28.sp
+                                    )
+                                }
                             }
                         }
                     }
 
-                    // BOTTOM SOCIAL INTERACTIONS & ACTION CONTROLS
-                    Column(modifier = Modifier.fillMaxWidth()) {
+                    // BOTTOM BAR: QUICK REACTIONS & DIRECT REPLY
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        // Quick Emoji Reactions Row
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceAround,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            reactionEmojis.forEach { emoji ->
+                                Box(
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.White.copy(alpha = 0.12f))
+                                        .clickable {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            flyingReactionEmoji = emoji
+                                            onLikeToggle()
+                                            coroutineScope.launch {
+                                                delay(1000)
+                                                flyingReactionEmoji = null
+                                            }
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(text = emoji, fontSize = 20.sp)
+                                }
+                            }
+                        }
+
+                        // Reply Input + Actions
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            // Direct Message / Reply Input Field
                             OutlinedTextField(
                                 value = replyText,
                                 onValueChange = { replyText = it },
                                 placeholder = {
                                     Text(
-                                        text = "إرسال رسالة لـ @${story.authorName.split(" ").first()}...",
+                                        text = "رد على @${story.authorName.split(" ").first()}...",
                                         color = Color.Gray,
                                         fontSize = 12.sp
                                     )
@@ -431,95 +465,43 @@ fun ReelStoryViewerModal(
                                 }
                             )
 
-                            // Interactive Like Button with Heart Counter
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.clickable { onLikeToggle() }
+                            // Like Story Button
+                            IconButton(
+                                onClick = onLikeToggle,
+                                modifier = Modifier
+                                    .size(46.dp)
+                                    .scale(scaleHeart)
+                                    .clip(CircleShape)
+                                    .background(if (story.isLikedByMe) NeonPink.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.12f))
+                                    .border(1.dp, if (story.isLikedByMe) NeonPink else Color.White.copy(alpha = 0.3f), CircleShape)
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(46.dp)
-                                        .scale(scaleHeart)
-                                        .clip(CircleShape)
-                                        .background(if (story.isLikedByMe) NeonPink.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.12f))
-                                        .border(1.dp, if (story.isLikedByMe) NeonPink else Color.White.copy(alpha = 0.3f), CircleShape),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = if (story.isLikedByMe) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                        contentDescription = "Like Story",
-                                        tint = if (story.isLikedByMe) NeonPink else Color.White,
-                                        modifier = Modifier.size(22.dp)
-                                    )
-                                }
-                                Text(
-                                    text = "${story.storyLikes}",
-                                    color = Color.White,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold
+                                Icon(
+                                    imageVector = if (story.isLikedByMe) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                    contentDescription = "Like",
+                                    tint = if (story.isLikedByMe) NeonPink else Color.White,
+                                    modifier = Modifier.size(22.dp)
                                 )
                             }
 
-                            // Comment Trigger Button
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.clickable {
-                                    isReplying = !isReplying
-                                }
+                            // Share / Forward
+                            IconButton(
+                                onClick = onShareForward,
+                                modifier = Modifier
+                                    .size(46.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White.copy(alpha = 0.12f))
+                                    .border(1.dp, Color.White.copy(alpha = 0.3f), CircleShape)
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(46.dp)
-                                        .clip(CircleShape)
-                                        .background(NeonCyan.copy(alpha = 0.2f))
-                                        .border(1.dp, NeonCyan, CircleShape),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Comment,
-                                        contentDescription = "Comment",
-                                        tint = NeonCyan,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                                Text(
-                                    text = "تعليق",
-                                    color = NeonCyan,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-
-                            // Share / Forward Button (بارتاج / برطاج)
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.clickable { onShareForward() }
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(46.dp)
-                                        .clip(CircleShape)
-                                        .background(NeonPurple.copy(alpha = 0.3f))
-                                        .border(1.dp, NeonPurple, CircleShape),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Share,
-                                        contentDescription = "Share Story",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                                Text(
-                                    text = "بارتاج",
-                                    color = Color.White,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold
+                                Icon(
+                                    imageVector = Icons.Default.Share,
+                                    contentDescription = "Share Story",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
                     }
                 }
             }

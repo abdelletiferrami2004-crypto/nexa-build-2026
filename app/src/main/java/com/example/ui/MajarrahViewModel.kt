@@ -1480,9 +1480,25 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
         NotificationSoundManager.playPopChime(getApplication())
     }
 
+    // Stories Viewed State & Tracking
+    private val _viewedStoryIds = MutableStateFlow<Set<String>>(emptySet())
+    val viewedStoryIds: StateFlow<Set<String>> = _viewedStoryIds.asStateFlow()
+
+    fun markStoryAsViewed(storyId: String) {
+        _viewedStoryIds.value = _viewedStoryIds.value + storyId
+    }
+
     fun toggleLike(post: Post) {
         viewModelScope.launch {
             repository.toggleLikePost(post)
+            NotificationSoundManager.playPopChime(getApplication())
+        }
+    }
+
+    fun reactToPost(post: Post, reactionEmoji: String) {
+        viewModelScope.launch {
+            repository.updatePostReaction(post, reactionEmoji)
+            NotificationSoundManager.playPopChime(getApplication())
         }
     }
 
@@ -1492,12 +1508,62 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun sharePost(postId: Int) {
-        _monetizationMessage.value = "تمت مشاركة المنشور بنجاح! 🚀"
+        viewModelScope.launch {
+            val post = posts.value.firstOrNull { it.id == postId }
+            if (post != null) {
+                repository.incrementPostShare(post)
+            }
+            _monetizationMessage.value = "تمت مشاركة المنشور بنجاح! 🚀"
+            NotificationSoundManager.playPopChime(getApplication())
+        }
+    }
+
+    fun sharePostToStory(post: Post) {
+        val user = userProfile.value
+        val storyItem = com.example.data.model.StoryItem(
+            id = "story_post_${post.id}_${System.currentTimeMillis()}",
+            authorName = user?.name ?: "أنت",
+            text = "مشاركة منشور @${post.authorName}: ${post.content.take(60)}...",
+            isReelShare = false,
+            bgGradient = listOf(0xFF130E26, 0xFF2B1055, 0xFF0D0620),
+            timestamp = "الآن"
+        )
+        publishStory(storyItem)
+        _monetizationMessage.value = "تمت مشاركة المنشور إلى ستوري 24 ساعة بنجاح! ✨"
         NotificationSoundManager.playPopChime(getApplication())
     }
 
-    fun createPost(content: String) {
-        if (content.isBlank()) return
+    fun sharePostToChat(post: Post, conversationId: String) {
+        viewModelScope.launch {
+            val shareText = "📌 مشاركة منشور من @${post.authorName}:\n\"${post.content.take(120)}\""
+            val sender = userProfile.value?.name ?: "أنت"
+            val shareMsg = ChatMessage(
+                conversationId = conversationId,
+                senderName = sender,
+                senderAvatar = userProfile.value?.avatarUrl ?: "",
+                text = shareText,
+                timestamp = System.currentTimeMillis(),
+                mediaType = if (post.imageUrl != null) "image" else "text",
+                mediaUrl = post.imageUrl,
+                isFromUser = true,
+                isEncrypted = true,
+                deliveryStatus = "sent",
+                isRead = false
+            )
+            repository.sendMessage(shareMsg)
+            _monetizationMessage.value = "تم إرسال المنشور في المحادثة بنجاح 💬"
+            NotificationSoundManager.playPopChime(getApplication())
+        }
+    }
+
+    fun createPost(
+        content: String,
+        imageUrl: String? = null,
+        videoUrl: String? = null,
+        mediaType: String = if (videoUrl != null) "video" else if (imageUrl != null) "image" else "text",
+        taggedProduct: Product? = null
+    ) {
+        if (content.isBlank() && imageUrl == null && videoUrl == null) return
         val prohibitedKeywords = listOf("احتيال", "احتيالي", "ربح سريع جدا", "spam.link", "مسيء", "شتم")
         val isFlagged = prohibitedKeywords.any { content.contains(it, ignoreCase = true) }
         
@@ -1509,13 +1575,23 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
 
         viewModelScope.launch {
             val author = userProfile.value?.name ?: "عضو مجرة"
+            val isVerified = userProfile.value?.isVerified ?: false
             val newPost = Post(
                 authorName = author,
                 content = content,
+                imageUrl = imageUrl,
+                videoUrl = videoUrl,
+                mediaType = mediaType,
                 likesCount = 1,
                 commentsCount = 0,
+                sharesCount = 0,
                 isLiked = true,
-                isTeenSafe = true
+                userReaction = "❤️",
+                taggedProductId = taggedProduct?.id,
+                taggedProductName = taggedProduct?.title,
+                taggedProductPrice = taggedProduct?.price,
+                isTeenSafe = true,
+                isAuthorVerified = isVerified
             )
             repository.addPost(newPost)
             _monetizationMessage.value = "تم نشر منشورك بنجاح ومراجعته بالذكاء الاصطناعي ✨"
