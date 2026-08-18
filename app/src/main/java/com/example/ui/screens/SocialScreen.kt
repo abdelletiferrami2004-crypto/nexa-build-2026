@@ -47,6 +47,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.MajarrahViewModel
+import com.example.ui.components.BlueVerificationBadge
 import com.example.ui.components.GlassBadge
 import com.example.ui.components.GlassCard
 import com.example.ui.theme.BackgroundDark
@@ -60,7 +61,8 @@ data class FriendItem(
     val name: String,
     val status: String,
     val isOnline: Boolean,
-    val isTeenSafe: Boolean
+    val isTeenSafe: Boolean,
+    val isVerified: Boolean = true
 )
 
 @Composable
@@ -301,12 +303,18 @@ fun SocialScreen(
                         Spacer(modifier = Modifier.width(12.dp))
 
                         Column {
-                            Text(
-                                text = friend.name,
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = friend.name,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp
+                                )
+                                if (friend.isVerified) {
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    BlueVerificationBadge(size = 14.dp)
+                                }
+                            }
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = friend.status,

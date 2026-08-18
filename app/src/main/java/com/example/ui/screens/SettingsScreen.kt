@@ -20,8 +20,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.filled.Backspace
+import androidx.compose.material.icons.filled.DeleteForever
+import androidx.compose.material.icons.filled.PhonelinkLock
+import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material3.AlertDialog
+import com.example.ui.components.BlueVerificationBadge
+import com.example.ui.components.NexaSecurityAnd2faModal
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Key
@@ -95,7 +101,112 @@ fun SettingsScreen(
     var biometricEnabled by remember { mutableStateOf(profile.isBiometricEnabled) }
     var showSetPinDialog by remember { mutableStateOf(false) }
     var showLegalModal by remember { mutableStateOf(false) }
+    var showSecurityModal by remember { mutableStateOf(false) }
+    var showDeleteAccountDialog by remember { mutableStateOf(false) }
+    var showVerificationModal by remember { mutableStateOf(false) }
     var activeLegalTab by remember { mutableStateOf(com.example.ui.components.LegalTab.PRIVACY_POLICY) }
+
+    if (showSecurityModal) {
+        NexaSecurityAnd2faModal(
+            onDismiss = { showSecurityModal = false }
+        )
+    }
+
+    if (showDeleteAccountDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteAccountDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.DeleteForever, contentDescription = null, tint = Color.Red)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("حذف الحساب نهائياً (GDPR)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
+            },
+            text = {
+                Text(
+                    text = "تحذير: سيتم محو كافة بياناتك، محادثاتك المشفرة، منشوراتك، ومفاتيح التشفير بشكل نهائي وغير قابل للاسترداد وفقاً لمعايير الخصوصية الدولية (GDPR). هل أنت متأكد؟",
+                    color = Color.LightGray,
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteAccountDialog = false
+                        viewModel.deleteAccountAndData {
+                            onLogoutClick()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                ) {
+                    Text("نعم، احذف حسابي الآن", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteAccountDialog = false }) {
+                    Text("إلغاء", color = Color.Gray)
+                }
+            },
+            containerColor = Color(0xFF1B1218),
+            shape = RoundedCornerShape(18.dp)
+        )
+    }
+
+    if (showVerificationModal) {
+        AlertDialog(
+            onDismissRequest = { showVerificationModal = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    BlueVerificationBadge(size = 20.dp)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("توثيق الحساب بالعلامة الزرقاء", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
+            },
+            text = {
+                Column {
+                    Text(
+                        text = if (profile.isVerified) "حسابك موثق حالياً بالعلامة الزرقاء الرسمية على شبكة NEXA."
+                        else "العلامة الزرقاء تمنح حسابك الأولوية في النشر، الحماية من انتحال الشخصية، والظهور الموثق في المحادثات والموجز العام.",
+                        color = Color.LightGray,
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    if (!profile.isVerified) {
+                        Text(
+                            text = "حالة الطلب: مؤهل للتوثيق الفوري 🛡️",
+                            color = NeonCyan,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showVerificationModal = false
+                        viewModel.toggleVerificationBadge(!profile.isVerified)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = NeonCyan)
+                ) {
+                    Text(
+                        text = if (profile.isVerified) "إلغاء التوثيق" else "تفعيل التوثيق الآن ✨",
+                        color = BackgroundDark,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showVerificationModal = false }) {
+                    Text("إغلاق", color = Color.Gray)
+                }
+            },
+            containerColor = Color(0xFF13182B),
+            shape = RoundedCornerShape(18.dp)
+        )
+    }
 
     if (showLegalModal) {
         com.example.ui.components.GooglePlayLegalModal(
@@ -178,12 +289,18 @@ fun SettingsScreen(
                     }
                     Spacer(modifier = Modifier.width(14.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = profile?.name ?: "المستخدم",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = profile?.name ?: "المستخدم",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp
+                            )
+                            if (profile?.isVerified == true) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                BlueVerificationBadge(size = 18.dp)
+                            }
+                        }
                         Text(
                             text = profile?.phone ?: "حساب NEXA موثق",
                             color = Color.Gray,
@@ -277,6 +394,58 @@ fun SettingsScreen(
                 }
             )
 
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // 2FA Tile
+            SettingsItemTile(
+                icon = Icons.Default.PhonelinkLock,
+                iconTint = EncryptedGreen,
+                title = "المصادقة الثنائية (2FA)",
+                subtitle = if (profile.isTwoFactorEnabled) "مفعل: حماية الحساب برمز تحقق إضافي عند الدخول" else "معطل: انقر لتفعيل طبقة الأمان الإضافية",
+                onClick = {
+                    showSecurityModal = true
+                },
+                trailing = {
+                    Switch(
+                        checked = profile.isTwoFactorEnabled,
+                        onCheckedChange = { isChecked ->
+                            viewModel.toggleTwoFactorAuth(isChecked)
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = BackgroundDark,
+                            checkedTrackColor = EncryptedGreen,
+                            uncheckedThumbColor = Color.Gray,
+                            uncheckedTrackColor = Color.DarkGray
+                        )
+                    )
+                }
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Blue Badge Verification Tile
+            SettingsItemTile(
+                icon = Icons.Default.Verified,
+                iconTint = NeonCyan,
+                title = "توثيق الحساب (Blue Badge)",
+                subtitle = if (profile.isVerified) "حسابك موثق بالعلامة الزرقاء الرسمية 🛡️" else "طلب شارة التوثيق الزرقاء لملفك ومحادثاتك",
+                onClick = {
+                    showVerificationModal = true
+                },
+                trailing = {
+                    if (profile.isVerified) {
+                        BlueVerificationBadge(size = 20.dp)
+                    } else {
+                        Text(
+                            text = "طلب توثيق",
+                            color = NeonCyan,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            )
+
             Spacer(modifier = Modifier.height(20.dp))
 
             // Section: Preferences
@@ -333,7 +502,66 @@ fun SettingsScreen(
                 }
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Section: Danger Zone (GDPR Compliance & Account Actions)
+            Text(
+                text = "إدارة البيانات والحساب (GDPR)",
+                color = Color.Red.copy(alpha = 0.8f),
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // GDPR Delete Account Tile
+            GlassCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        showDeleteAccountDialog = true
+                    },
+                shape = RoundedCornerShape(16.dp),
+                backgroundColor = Color.Red.copy(alpha = 0.08f),
+                borderColor = Color.Red.copy(alpha = 0.3f)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(Color.Red.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DeleteForever,
+                            contentDescription = "حذف الحساب",
+                            tint = Color.Red,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "حذف الحساب وكافة البيانات نهائياً",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                        Text(
+                            text = "محو شامل للمحادثات، المنشورات، ومفاتيح التشفير (GDPR)",
+                            color = Color.Red.copy(alpha = 0.7f),
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Logout Action Card with correct icon
             GlassCard(
@@ -344,7 +572,7 @@ fun SettingsScreen(
                         onLogoutClick()
                     },
                 shape = RoundedCornerShape(16.dp),
-                backgroundColor = Color.Red.copy(alpha = 0.12f)
+                backgroundColor = Color.White.copy(alpha = 0.06f)
             ) {
                 Row(
                     modifier = Modifier
@@ -356,13 +584,13 @@ fun SettingsScreen(
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.Logout,
                         contentDescription = "تسجيل الخروج",
-                        tint = Color.Red,
+                        tint = Color.White.copy(alpha = 0.8f),
                         modifier = Modifier.size(22.dp)
                     )
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
                         text = "تسجيل الخروج من الحساب",
-                        color = Color.Red,
+                        color = Color.White.copy(alpha = 0.8f),
                         fontWeight = FontWeight.Bold,
                         fontSize = 15.sp
                     )
@@ -571,7 +799,7 @@ fun SetChatPinModal(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.Backspace,
+                                            imageVector = Icons.AutoMirrored.Filled.Backspace,
                                             contentDescription = "Delete",
                                             tint = Color.LightGray,
                                             modifier = Modifier.size(20.dp)

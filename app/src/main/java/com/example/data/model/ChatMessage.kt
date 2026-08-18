@@ -17,7 +17,8 @@ data class ChatMessage(
     val mediaUrl: String? = null,
     val reaction: String? = null,
     val deliveryStatus: String = "read", // "sending", "sent", "delivered", "read"
-    val isRead: Boolean = true
+    val isRead: Boolean = true,
+    val isSenderVerified: Boolean = false
 )
 
 @Entity(tableName = "conversations")
@@ -28,5 +29,11 @@ data class Conversation(
     val lastMessage: String,
     val lastTimestamp: Long = System.currentTimeMillis(),
     val unreadCount: Int = 0,
-    val isPinRequired: Boolean = true
+    val isPinRequired: Boolean = true,
+    val isMessageRequest: Boolean = false,
+    val requestStatus: String = "accepted", // "accepted", "pending", "ignored", "blocked"
+    val isBlocked: Boolean = false,
+    val targetUserId: String = "",
+    val isContactVerified: Boolean = true,
+    val isVerified: Boolean = true
 )

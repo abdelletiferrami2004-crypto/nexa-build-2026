@@ -113,6 +113,16 @@ class MajarrahRepository(private val dao: MajarrahDao) {
         dao.clearCart()
     }
 
+    suspend fun deleteAccountAndAllDataGdpr(userId: String) {
+        dao.deleteAllProfiles()
+        dao.deleteAllPosts()
+        dao.deleteAllConversations()
+        dao.deleteAllMessages()
+        dao.clearCart()
+        dao.deleteAllProducts()
+        FirebaseManager.deleteUserCloudData(userId)
+    }
+
     suspend fun populateInitialDataIfEmpty() {
         // Pre-populate Profile if null
         val defaultProfile = UserProfile(
@@ -128,7 +138,11 @@ class MajarrahRepository(private val dao: MajarrahDao) {
             postsCount = 18,
             followersCount = 1_250_000,
             totalViewsCount = 1_450_000L,
-            points = 890
+            points = 890,
+            isVerified = true,
+            verificationBadgeCategory = "صانع محتوى موثق",
+            isTwoFactorEnabled = true,
+            twoFactorMethod = "authenticator"
         )
         dao.insertOrUpdateProfile(defaultProfile)
 
@@ -213,7 +227,8 @@ class MajarrahRepository(private val dao: MajarrahDao) {
                 commentsCount = 28,
                 isLiked = true,
                 taggedProductId = 1,
-                isTeenSafe = true
+                isTeenSafe = true,
+                isAuthorVerified = true
             ),
             Post(
                 id = 2,
@@ -223,7 +238,8 @@ class MajarrahRepository(private val dao: MajarrahDao) {
                 commentsCount = 12,
                 isLiked = false,
                 taggedProductId = 3,
-                isTeenSafe = true
+                isTeenSafe = true,
+                isAuthorVerified = false
             ),
             Post(
                 id = 3,
@@ -232,7 +248,8 @@ class MajarrahRepository(private val dao: MajarrahDao) {
                 likesCount = 310,
                 commentsCount = 45,
                 isLiked = true,
-                isTeenSafe = true
+                isTeenSafe = true,
+                isAuthorVerified = true
             )
         )
         dao.insertPosts(samplePosts)
@@ -247,7 +264,8 @@ class MajarrahRepository(private val dao: MajarrahDao) {
                 lastMessage = "أهلاً بك! أنا مساعدك الذكي المدعوم بـ Gemini 3.5 Flash. كيف يمكنني مساعدتك اليوم؟",
                 lastTimestamp = now,
                 unreadCount = 1,
-                isPinRequired = false
+                isPinRequired = false,
+                isContactVerified = true
             ),
             Conversation(
                 id = "conv_1",
@@ -256,7 +274,8 @@ class MajarrahRepository(private val dao: MajarrahDao) {
                 lastMessage = "هل استلمت حقيبة البرمجة الذكية اليوم؟",
                 lastTimestamp = now - (1000 * 60 * 5),
                 unreadCount = 2,
-                isPinRequired = false
+                isPinRequired = false,
+                isContactVerified = true
             ),
             Conversation(
                 id = "conv_2",
@@ -265,7 +284,8 @@ class MajarrahRepository(private val dao: MajarrahDao) {
                 lastMessage = "🎙️ تسجيل صوتي (0:24)",
                 lastTimestamp = now - (1000 * 60 * 45),
                 unreadCount = 1,
-                isPinRequired = false
+                isPinRequired = false,
+                isContactVerified = true
             ),
             Conversation(
                 id = "conv_3",
@@ -274,7 +294,8 @@ class MajarrahRepository(private val dao: MajarrahDao) {
                 lastMessage = "📷 صورة مرفقة: تصميم النيون الجديد مذهل!",
                 lastTimestamp = now - (1000 * 60 * 120),
                 unreadCount = 0,
-                isPinRequired = false
+                isPinRequired = false,
+                isContactVerified = true
             ),
             Conversation(
                 id = "conv_4",
@@ -283,7 +304,21 @@ class MajarrahRepository(private val dao: MajarrahDao) {
                 lastMessage = "ما رأيك في تجربة التسوق الجديدة بالألوان النيون؟",
                 lastTimestamp = now - (1000 * 60 * 360),
                 unreadCount = 0,
-                isPinRequired = false
+                isPinRequired = false,
+                isContactVerified = false
+            ),
+            Conversation(
+                id = "conv_req_1",
+                contactName = "خالد الدوسري",
+                contactAvatar = "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=150&auto=format&fit=crop",
+                lastMessage = "السلام عليكم، أود الاستفسار عن كود البرمجة الذكي الذي قمت بمشاركته؟",
+                lastTimestamp = now - (1000 * 60 * 30),
+                unreadCount = 1,
+                isPinRequired = false,
+                isMessageRequest = true,
+                requestStatus = "pending",
+                targetUserId = "user_207",
+                isContactVerified = false
             ),
             Conversation(
                 id = "conv_5",
@@ -292,10 +327,30 @@ class MajarrahRepository(private val dao: MajarrahDao) {
                 lastMessage = "تم تفعيل التشفير التام 256-bit لحسابك بنجاح.",
                 lastTimestamp = now - (1000 * 60 * 60 * 24),
                 unreadCount = 0,
-                isPinRequired = false
+                isPinRequired = false,
+                isMessageRequest = false,
+                requestStatus = "accepted",
+                isContactVerified = true
             )
         )
         dao.insertConversations(sampleConversations)
+
+        val sampleMessagesReq = listOf(
+            ChatMessage(
+                id = 201,
+                conversationId = "conv_req_1",
+                senderName = "خالد الدوسري",
+                senderAvatar = "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=150&auto=format&fit=crop",
+                text = "السلام عليكم، أود الاستفسار عن كود البرمجة الذكي الذي قمت بمشاركته في المجتمع؟",
+                timestamp = now - (1000 * 60 * 30),
+                isFromUser = false,
+                isEncrypted = true,
+                mediaType = "text",
+                deliveryStatus = "delivered",
+                isRead = false
+            )
+        )
+        dao.insertMessages(sampleMessagesReq)
 
         val sampleMessagesAi = listOf(
             ChatMessage(

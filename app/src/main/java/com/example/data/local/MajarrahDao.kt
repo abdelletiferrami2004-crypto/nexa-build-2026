@@ -77,4 +77,20 @@ interface MajarrahDao {
 
     @Query("DELETE FROM cart_items")
     suspend fun clearCart()
+
+    // GDPR Right to Erasure / Total Data Deletion
+    @Query("DELETE FROM user_profile")
+    suspend fun deleteAllProfiles()
+
+    @Query("DELETE FROM posts")
+    suspend fun deleteAllPosts()
+
+    @Query("DELETE FROM conversations")
+    suspend fun deleteAllConversations()
+
+    @Query("DELETE FROM chat_messages")
+    suspend fun deleteAllMessages()
+
+    @Query("DELETE FROM products")
+    suspend fun deleteAllProducts()
 }

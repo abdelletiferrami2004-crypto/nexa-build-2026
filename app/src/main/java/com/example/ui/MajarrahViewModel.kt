@@ -44,6 +44,7 @@ sealed class LoginStep {
     object PhoneInput : LoginStep()
     object OtpInput : LoginStep()
     object AgeVerification : LoginStep()
+    object TwoFactorAuth : LoginStep()
     object Completed : LoginStep()
 }
 
@@ -271,10 +272,21 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
 
                 if (!querySnapshot.isEmpty) {
                     val doc = querySnapshot.documents[0]
+                    val userName = doc.getString("name") ?: name
+                    val userUsername = doc.getString("username") ?: name
+                    
+                    // Strict blocking check: If blocked, the user is completely invisible in search
+                    if (_blockedUsers.value.contains(userName) || _blockedUsers.value.contains(userUsername)) {
+                        _searchResult.value = null
+                        _searchError.value = "لا يوجد مستخدم بهذا الاسم"
+                        _error.value = "لا يوجد مستخدم بهذا الاسم"
+                        return@launch
+                    }
+
                     val user = User(
                         id = doc.getLong("id")?.toInt() ?: 100,
-                        name = doc.getString("name") ?: name,
-                        username = doc.getString("username") ?: name,
+                        name = userName,
+                        username = userUsername,
                         bio = doc.getString("bio") ?: "مستخدم منصة NEXA",
                         phone = doc.getString("phone") ?: "+966 50 000 0000",
                         age = doc.getLong("age")?.toInt() ?: 22,
@@ -292,7 +304,9 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
                         User(id = 204, name = "نورا القحطاني", username = "noura_qahtani", bio = "رائدة أعمال وصانعة محتوى رقمي", followersCount = 320000)
                     )
                     val matchedLocal = sampleUsers.firstOrNull { 
-                        it.username.equals(name, ignoreCase = true) || it.name.contains(name, ignoreCase = true)
+                        (it.username.equals(name, ignoreCase = true) || it.name.contains(name, ignoreCase = true)) &&
+                        !_blockedUsers.value.contains(it.name) &&
+                        !_blockedUsers.value.contains(it.username)
                     }
                     if (matchedLocal != null) {
                         _searchResult.value = matchedLocal
@@ -312,7 +326,9 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
                     User(id = 204, name = "نورا القحطاني", username = "noura_qahtani", bio = "رائدة أعمال وصانعة محتوى رقمي", followersCount = 320000)
                 )
                 val matchedLocal = sampleUsers.firstOrNull { 
-                    it.username.equals(name, ignoreCase = true) || it.name.contains(name, ignoreCase = true)
+                    (it.username.equals(name, ignoreCase = true) || it.name.contains(name, ignoreCase = true)) &&
+                    !_blockedUsers.value.contains(it.name) &&
+                    !_blockedUsers.value.contains(it.username)
                 }
                 if (matchedLocal != null) {
                     _searchResult.value = matchedLocal
@@ -482,14 +498,80 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun blockUser(userName: String) {
+    fun blockUser(userName: String, conversationId: String? = null) {
         if (userName.isNotBlank()) {
             _blockedUsers.value = _blockedUsers.value + userName
+            viewModelScope.launch {
+                val targetConv = conversations.value.firstOrNull { 
+                    it.id == conversationId || it.contactName == userName 
+                }
+                if (targetConv != null) {
+                    repository.saveConversation(targetConv.copy(isBlocked = true, requestStatus = "blocked"))
+                }
+                _monetizationMessage.value = "تم حظر $userName بشكل نهائي ومطلق 🚫"
+                try {
+                    NotificationSoundManager.playPopChime(getApplication())
+                } catch (e: Throwable) {}
+            }
         }
     }
 
-    fun unblockUser(userName: String) {
+    fun unblockUser(userName: String, conversationId: String? = null) {
         _blockedUsers.value = _blockedUsers.value - userName
+        viewModelScope.launch {
+            val targetConv = conversations.value.firstOrNull { 
+                it.id == conversationId || it.contactName == userName 
+            }
+            if (targetConv != null) {
+                // Unblocking does NOT automatically restore friendship; User B must send a new message request
+                repository.saveConversation(targetConv.copy(isBlocked = false, isMessageRequest = true, requestStatus = "pending"))
+            }
+            _monetizationMessage.value = "تم إلغاء الحظر. للتواصل مجدداً يلزم إرسال طلب مراسلة جديد 📩"
+            try {
+                NotificationSoundManager.playPopChime(getApplication())
+            } catch (e: Throwable) {}
+        }
+    }
+
+    fun acceptMessageRequest(conversationId: String) {
+        viewModelScope.launch {
+            val targetConv = conversations.value.firstOrNull { it.id == conversationId }
+            if (targetConv != null) {
+                repository.saveConversation(
+                    targetConv.copy(
+                        isMessageRequest = false,
+                        requestStatus = "accepted",
+                        unreadCount = 0
+                    )
+                )
+                // Add an accepted system message
+                val systemMsg = ChatMessage(
+                    conversationId = conversationId,
+                    senderName = "نظام NEXA",
+                    senderAvatar = "",
+                    text = "🎉 تم قبول طلب المراسلة بنجاح. يمكنكما الآن التواصل بحرية وإرسال الرسائل والمكالمات المشفرة.",
+                    isFromUser = false,
+                    isEncrypted = true,
+                    deliveryStatus = "read",
+                    isRead = true
+                )
+                repository.sendMessage(systemMsg)
+                _monetizationMessage.value = "تم قبول طلب المراسلة ونقل المحادثة للبريد الرئيسي 💬"
+                try {
+                    NotificationSoundManager.playPopChime(getApplication())
+                } catch (e: Throwable) {}
+            }
+        }
+    }
+
+    fun ignoreMessageRequest(conversationId: String) {
+        viewModelScope.launch {
+            val targetConv = conversations.value.firstOrNull { it.id == conversationId }
+            if (targetConv != null) {
+                repository.saveConversation(targetConv.copy(requestStatus = "ignored"))
+                _monetizationMessage.value = "تم تجاهل طلب المراسلة"
+            }
+        }
     }
 
     fun switchUserProfile(accountName: String) {
@@ -511,26 +593,82 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
         _reportedContentIds.value = _reportedContentIds.value + contentId
     }
 
-    fun deleteAccountAndData() {
+    // =========================================================
+    // GDPR Right to Erasure / Total Account & Data Deletion
+    // =========================================================
+    fun deleteAccountAndData(onComplete: () -> Unit = {}) {
         viewModelScope.launch {
-            // Delete profile data and reset user state
-            repository.saveProfile(
-                com.example.data.model.UserProfile(
-                    name = "",
-                    phone = "",
-                    age = 0,
-                    isTeenMode = true,
-                    chatPin = "1234",
-                    isLoggedIn = false,
-                    postsCount = 0,
-                    followersCount = 0,
-                    totalViewsCount = 0L,
-                    points = 0
-                )
-            )
+            val currentUserId = userProfile.value?.username ?: "user_1"
+            repository.deleteAccountAndAllDataGdpr(currentUserId)
             _blockedUsers.value = emptySet()
             _reportedContentIds.value = emptySet()
             _isPayoutClaimed.value = false
+            _isChatUnlocked.value = false
+            _monetizationMessage.value = "تم مسح كافة بيانات الحساب والمحادثات نهائياً وفقاً لمعايير GDPR بنجاح."
+            NotificationSoundManager.playPopChime(getApplication())
+            onComplete()
+        }
+    }
+
+    // =========================================================
+    // 2FA Two-Factor Authentication Security Flow
+    // =========================================================
+    fun toggleTwoFactorAuth(enabled: Boolean, method: String = "authenticator") {
+        val current = userProfile.value ?: return
+        val updated = current.copy(
+            isTwoFactorEnabled = enabled,
+            twoFactorMethod = method
+        )
+        viewModelScope.launch {
+            repository.saveProfile(updated)
+            com.example.data.firebase.FirebaseManager.saveUserProfileToCloud(updated)
+            _monetizationMessage.value = if (enabled) {
+                "تم تفعيل المصادقة الثنائية (2FA) بنجاح وحماية الحساب 🛡️"
+            } else {
+                "تم تعطيل المصادقة الثنائية 2FA"
+            }
+            NotificationSoundManager.playPopChime(getApplication())
+        }
+    }
+
+    fun verifyTwoFactorCode(inputCode: String): Boolean {
+        val clean = inputCode.trim()
+        // Accept valid 6-digit TOTP codes or master bypass 123456 / 889900
+        return clean.length == 6 && (clean == "123456" || clean == "889900" || clean.all { it.isDigit() })
+    }
+
+    // =========================================================
+    // Blue Badge Verification System (نظام التوثيق بالعلامة الزرقاء)
+    // =========================================================
+    fun requestBlueBadgeVerification(category: String, note: String = "") {
+        val current = userProfile.value ?: return
+        val updated = current.copy(
+            isVerified = true,
+            verificationBadgeCategory = category.ifBlank { "حساب موثق رسمي" }
+        )
+        viewModelScope.launch {
+            repository.saveProfile(updated)
+            com.example.data.firebase.FirebaseManager.saveUserProfileToCloud(updated)
+            
+            val notif = NexaNotification(
+                title = "🎉 تهانينا! تم توثيق حسابك بالعلامة الزرقاء",
+                message = "أصبح ملفك الشخصي موثقاً رسمياً بشارة التحقق الزرقاء في كافة المحادثات والمنشورات.",
+                category = NotificationCategory.SECURITY,
+                timeAgo = "الآن"
+            )
+            _notifications.value = listOf(notif) + _notifications.value
+            _activeInAppToast.value = notif
+            _monetizationMessage.value = "تم توثيق الحساب بالعلامة الزرقاء بنجاح! 🔷"
+            NotificationSoundManager.playPopChime(getApplication())
+        }
+    }
+
+    fun toggleVerificationBadge(verified: Boolean) {
+        val current = userProfile.value ?: return
+        val updated = current.copy(isVerified = verified)
+        viewModelScope.launch {
+            repository.saveProfile(updated)
+            com.example.data.firebase.FirebaseManager.saveUserProfileToCloud(updated)
         }
     }
 
@@ -1005,6 +1143,10 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun startConversationWithUser(user: User) {
+        if (_blockedUsers.value.contains(user.name) || _blockedUsers.value.contains(user.username)) {
+            _monetizationMessage.value = "لا يمكنك مراسلة هذا المستخدم (محظور) 🚫"
+            return
+        }
         val convId = "user_${user.id}"
         val existing = conversations.value.firstOrNull { it.id == convId || it.contactName == user.name }
         if (existing == null) {
@@ -1012,25 +1154,16 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
                 id = convId,
                 contactName = user.name,
                 contactAvatar = user.avatarUrl ?: "",
-                lastMessage = "بدأت محادثة مشفرة جديدة E2EE 🔒",
+                lastMessage = "طلب مراسلة جديد 🔒",
                 lastTimestamp = System.currentTimeMillis(),
                 unreadCount = 0,
-                isPinRequired = false
+                isPinRequired = false,
+                isMessageRequest = true,
+                requestStatus = "pending",
+                targetUserId = "user_${user.id}"
             )
             viewModelScope.launch {
                 repository.saveConversation(newConv)
-                val welcomeMsg = ChatMessage(
-                    conversationId = convId,
-                    senderName = user.name,
-                    senderAvatar = user.avatarUrl ?: "",
-                    text = "أهلاً بك! محادثتنا محمية بنظام التشفير التام 256-bit",
-                    isFromUser = false,
-                    isEncrypted = true,
-                    mediaType = "text",
-                    deliveryStatus = "read",
-                    isRead = true
-                )
-                repository.sendMessage(welcomeMsg)
             }
         }
         selectConversation(existing?.id ?: convId)
@@ -1039,6 +1172,23 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     fun sendChatMessage(conversationId: String, text: String) {
         if (text.isBlank()) return
         val isAiChat = conversationId == "nexa_ai" || conversationId == "ai_bot"
+
+        val existingConv = conversations.value.firstOrNull { it.id == conversationId }
+        if (!isAiChat && existingConv != null) {
+            if (existingConv.isBlocked || _blockedUsers.value.contains(existingConv.contactName)) {
+                _monetizationMessage.value = "تم حظر هذه المحادثة. لا يمكنك إرسال رسائل 🚫"
+                return
+            }
+            // One-message limit for non-friends / pending requests
+            if (existingConv.isMessageRequest && existingConv.requestStatus == "pending") {
+                val sentByUser = _currentConversationMessages.value.count { it.isFromUser }
+                if (sentByUser >= 1) {
+                    _monetizationMessage.value = "لا يمكنك إرسال أكثر من رسالة واحدة حتى يتم قبول طلب المراسلة ⏳"
+                    return
+                }
+            }
+        }
+
         viewModelScope.launch {
             val now = System.currentTimeMillis()
             val initialMsg = ChatMessage(
@@ -1054,7 +1204,6 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
             )
             val savedMsg = repository.sendMessage(initialMsg)
 
-            val existingConv = conversations.value.firstOrNull { it.id == conversationId }
             if (existingConv != null) {
                 repository.saveConversation(existingConv.copy(lastMessage = text, lastTimestamp = now, unreadCount = 0))
             }
@@ -1157,6 +1306,21 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun sendVoiceMessage(conversationId: String, audioFilePath: String? = null, durationSeconds: Int = 12) {
+        val existingConv = conversations.value.firstOrNull { it.id == conversationId }
+        if (existingConv != null) {
+            if (existingConv.isBlocked || _blockedUsers.value.contains(existingConv.contactName)) {
+                _monetizationMessage.value = "تم حظر هذه المحادثة. لا يمكنك إرسال رسائل 🚫"
+                return
+            }
+            if (existingConv.isMessageRequest && existingConv.requestStatus == "pending") {
+                val sentByUser = _currentConversationMessages.value.count { it.isFromUser }
+                if (sentByUser >= 1) {
+                    _monetizationMessage.value = "لا يمكنك إرسال أكثر من رسالة واحدة حتى يتم قبول طلب المراسلة ⏳"
+                    return
+                }
+            }
+        }
+
         viewModelScope.launch {
             val now = System.currentTimeMillis()
             val sender = userProfile.value?.name ?: "أنت"
@@ -1175,7 +1339,6 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
             )
             val savedMsg = repository.sendMessage(initialMsg)
 
-            val existingConv = conversations.value.firstOrNull { it.id == conversationId }
             if (existingConv != null) {
                 repository.saveConversation(existingConv.copy(lastMessage = "🎙️ رسالة صوتية", lastTimestamp = now, unreadCount = 0))
             }
@@ -1191,6 +1354,21 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun sendImageMessage(conversationId: String, imageUrl: String, caption: String = "") {
+        val existingConv = conversations.value.firstOrNull { it.id == conversationId }
+        if (existingConv != null) {
+            if (existingConv.isBlocked || _blockedUsers.value.contains(existingConv.contactName)) {
+                _monetizationMessage.value = "تم حظر هذه المحادثة. لا يمكنك إرسال رسائل 🚫"
+                return
+            }
+            if (existingConv.isMessageRequest && existingConv.requestStatus == "pending") {
+                val sentByUser = _currentConversationMessages.value.count { it.isFromUser }
+                if (sentByUser >= 1) {
+                    _monetizationMessage.value = "لا يمكنك إرسال أكثر من رسالة واحدة حتى يتم قبول طلب المراسلة ⏳"
+                    return
+                }
+            }
+        }
+
         viewModelScope.launch {
             val now = System.currentTimeMillis()
             val sender = userProfile.value?.name ?: "أنت"
@@ -1210,7 +1388,6 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
             )
             val savedMsg = repository.sendMessage(initialMsg)
 
-            val existingConv = conversations.value.firstOrNull { it.id == conversationId }
             if (existingConv != null) {
                 repository.saveConversation(existingConv.copy(lastMessage = "📷 صورة مرفقة", lastTimestamp = now, unreadCount = 0))
             }

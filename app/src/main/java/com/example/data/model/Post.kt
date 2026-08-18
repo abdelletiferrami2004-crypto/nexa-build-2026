@@ -15,5 +15,6 @@ data class Post(
     val commentsCount: Int = 5,
     val isLiked: Boolean = false,
     val taggedProductId: Int? = null,
-    val isTeenSafe: Boolean = true
+    val isTeenSafe: Boolean = true,
+    val isAuthorVerified: Boolean = false
 )

@@ -66,6 +66,7 @@ import androidx.compose.ui.unit.sp
 import com.example.data.model.Post
 import com.example.data.model.StoryItem
 import com.example.ui.MajarrahViewModel
+import com.example.ui.components.BlueVerificationBadge
 import com.example.ui.components.GamificationRewardsModal
 import com.example.ui.components.GlassCard
 import com.example.ui.components.InAppNotificationToast
@@ -627,12 +628,18 @@ fun PostCardItem(
             }
             Spacer(modifier = Modifier.width(10.dp))
             Column {
-                Text(
-                    text = post.authorName,
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = post.authorName,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                    if (post.isAuthorVerified) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        BlueVerificationBadge(size = 14.dp)
+                    }
+                }
                 Text(
                     text = "منذ قليل",
                     color = Color.Gray,

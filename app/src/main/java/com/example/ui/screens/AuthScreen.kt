@@ -272,6 +272,13 @@ fun AuthScreen(
             ) {
                 Box(modifier = Modifier.padding(20.dp)) {
                     when (step) {
+                        is LoginStep.TwoFactorAuth -> {
+                            TwoFactorAuthStepView(
+                                viewModel = viewModel,
+                                onSuccess = onAuthSuccess,
+                                onBack = { viewModel.navigateToStep(LoginStep.ExistingLogin) }
+                            )
+                        }
                         is LoginStep.Welcome, is LoginStep.Completed, is LoginStep.ExistingLogin -> {
                             ModernTabbedAuthView(
                                 viewModel = viewModel,
@@ -1701,8 +1708,13 @@ fun ModernTabbedAuthView(
             // Main Login Button
             Button(
                 onClick = {
-                    viewModel.completeProfileRegistration()
-                    onAuthSuccess()
+                    val currentProfile = viewModel.userProfile.value
+                    if (currentProfile?.isTwoFactorEnabled == true) {
+                        viewModel.navigateToStep(LoginStep.TwoFactorAuth)
+                    } else {
+                        viewModel.completeProfileRegistration()
+                        onAuthSuccess()
+                    }
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = NeonPurple),
                 shape = RoundedCornerShape(14.dp),
@@ -2648,5 +2660,156 @@ fun ModernTabbedAuthView(
         }
     }
 }
+
+// =========================================================
+// 9⃣ Two-Factor Authentication (2FA) Step View
+// =========================================================
+@Composable
+fun TwoFactorAuthStepView(
+    viewModel: MajarrahViewModel,
+    onSuccess: () -> Unit,
+    onBack: () -> Unit
+) {
+    var codeInput by remember { mutableStateOf("") }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var isVerifying by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .size(60.dp)
+                .clip(CircleShape)
+                .background(EncryptedGreen.copy(alpha = 0.2f))
+                .border(1.5.dp, EncryptedGreen, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Shield,
+                contentDescription = null,
+                tint = EncryptedGreen,
+                modifier = Modifier.size(30.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        Text(
+            text = "المصادقة الثنائية (2FA)",
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            fontSize = 17.sp
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = "تم تفعيل حماية 2FA لحسابك. أدخل رمز الأمان المكون من 6 أرقام لتأكيد الهوية.",
+            color = Color.LightGray,
+            fontSize = 11.sp,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(18.dp))
+
+        OutlinedTextField(
+            value = codeInput,
+            onValueChange = {
+                if (it.length <= 6 && it.all { char -> char.isDigit() }) {
+                    codeInput = it
+                    errorMessage = null
+                }
+            },
+            label = { Text("رمز التحقق (6 أرقام)", color = EncryptedGreen) },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = EncryptedGreen,
+                unfocusedBorderColor = Color.White.copy(alpha = 0.3f),
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White
+            ),
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        if (errorMessage != null) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = errorMessage!!,
+                color = NeonPink,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Quick test helper badge
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .background(EncryptedGreen.copy(alpha = 0.12f))
+                .border(1.dp, EncryptedGreen.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                .clickable { codeInput = "123456" }
+                .padding(8.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "💡 رمز تجريبي سريع: 123456 أو 889900 (انقر للملء)",
+                color = EncryptedGreen,
+                fontSize = 11.sp
+            )
+        }
+
+        Spacer(modifier = Modifier.height(18.dp))
+
+        Button(
+            onClick = {
+                if (codeInput.length < 6) {
+                    errorMessage = "يرجى إدخال رمز التحقق كاملاً (6 أرقام)"
+                    return@Button
+                }
+                isVerifying = true
+                val isValid = viewModel.verifyTwoFactorCode(codeInput)
+                isVerifying = false
+                if (isValid) {
+                    onSuccess()
+                } else {
+                    errorMessage = "رمز التحقق غير صحيح، يرجى المحاولة مجدداً"
+                }
+            },
+            enabled = codeInput.length == 6 && !isVerifying,
+            colors = ButtonDefaults.buttonColors(containerColor = EncryptedGreen),
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+        ) {
+            if (isVerifying) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    color = BackgroundDark,
+                    strokeWidth = 2.dp
+                )
+            } else {
+                Text(
+                    text = "تأكيد الدخول الآمن",
+                    color = BackgroundDark,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 14.sp
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        TextButton(onClick = onBack) {
+            Text("العودة لتسجيل الدخول", color = Color.Gray, fontSize = 12.sp)
+        }
+    }
+}
+
 
 

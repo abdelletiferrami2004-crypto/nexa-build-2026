@@ -26,9 +26,14 @@ data class UserProfile(
     val claimedDailyRewardDays: Int = 3,
     val lastDailyClaimTimestamp: Long = 0L,
     val isE2eEncryptionEnabled: Boolean = true,
- val bio: String ="عاشق للتقنية والابتكار ومصمم محتوى في منصة NEXA",
+    val bio: String = "عاشق للتقنية والابتكار ومصمم محتوى في منصة NEXA",
     val username: String = "abdulaziz_majed",
-    val isContactsSynced: Boolean = false
+    val isContactsSynced: Boolean = false,
+    val isVerified: Boolean = true, // Blue Badge Verification
+    val verificationBadgeCategory: String = "صانع محتوى موثق",
+    val isTwoFactorEnabled: Boolean = false, // 2FA Security
+    val twoFactorMethod: String = "authenticator", // "sms", "authenticator", "biometric"
+    val twoFactorSecret: String = "NEXA-2FA-SECURE-8891"
 )
 
 typealias User = UserProfile

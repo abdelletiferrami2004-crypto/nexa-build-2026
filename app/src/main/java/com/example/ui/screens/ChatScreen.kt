@@ -9,6 +9,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -35,11 +36,16 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AddComment
 import androidx.compose.material.icons.filled.AddPhotoAlternate
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.ThumbUp
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CallEnd
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Diamond
@@ -48,9 +54,15 @@ import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.MarkEmailUnread
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.MoreVert
@@ -108,6 +120,9 @@ import com.example.data.model.User
 import com.example.ui.MajarrahViewModel
 import com.example.ui.components.AdMobBannerSpace
 import com.example.ui.components.AiToolboxModal
+import com.example.ui.components.BlueVerificationBadge
+import com.example.ui.components.ConversationDetailsModal
+import com.example.ui.components.MessengerActiveContactsBar
 import com.example.ui.components.NexaVipSubscriptionModal
 import com.example.ui.components.PinLockDialog
 import com.example.ui.components.VoiceTutorModal
@@ -298,22 +313,36 @@ fun ChatsListScreen(
 ) {
     val isAdWatching by viewModel.isAdWatching.collectAsState()
     val adWatchProgress by viewModel.adWatchProgress.collectAsState()
+    val userProfile by viewModel.userProfile.collectAsState()
+    val blockedUsers by viewModel.blockedUsers.collectAsState()
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedFilterCategory by remember { mutableStateOf("all") }
     var showMoreMenu by remember { mutableStateOf(false) }
 
-    val filteredConversations = remember(conversations, searchQuery, selectedFilterCategory) {
+    val pendingRequestsCount = remember(conversations, blockedUsers) {
+        conversations.count { it.isMessageRequest && it.requestStatus == "pending" && !it.isBlocked && !blockedUsers.contains(it.contactName) }
+    }
+
+    val filteredConversations = remember(conversations, searchQuery, selectedFilterCategory, blockedUsers) {
         conversations.filter { conv ->
+            // Filter out AI conversation from list as it is pinned at top
+            if (conv.id == "ai_bot" || conv.id == "nexa_ai") return@filter false
+
+            // Strict blocking filter
+            val isBlocked = conv.isBlocked || blockedUsers.contains(conv.contactName)
+            if (isBlocked && selectedFilterCategory != "blocked") return@filter false
+
             val matchesQuery = searchQuery.isBlank() ||
                     conv.contactName.contains(searchQuery, ignoreCase = true) ||
                     conv.lastMessage.contains(searchQuery, ignoreCase = true)
 
             val matchesCategory = when (selectedFilterCategory) {
-                "unread" -> conv.unreadCount > 0
-                "favorites" -> conv.id == "conv_1" || conv.id == "conv_3"
-                "groups" -> conv.contactName.contains("فريق") || conv.contactName.contains("مجموعة")
-                else -> true
+                "requests" -> conv.isMessageRequest && conv.requestStatus == "pending"
+                "unread" -> conv.unreadCount > 0 && (!conv.isMessageRequest || conv.requestStatus == "accepted")
+                "favorites" -> (conv.id == "conv_1" || conv.id == "conv_3") && (!conv.isMessageRequest || conv.requestStatus == "accepted")
+                "groups" -> (conv.contactName.contains("فريق") || conv.contactName.contains("مجموعة")) && (!conv.isMessageRequest || conv.requestStatus == "accepted")
+                else -> !conv.isMessageRequest || conv.requestStatus == "accepted" // "all" shows main accepted inbox
             }
 
             matchesQuery && matchesCategory
@@ -583,7 +612,19 @@ fun ChatsListScreen(
                 }
             }
 
-            // 4. CATEGORY TABS (الكل, غير المقروءة, المفضلة, المجموعات)
+            // 4. MESSENGER STORIES & ACTIVE CONTACTS BAR (نشط الآن / الملاحظات)
+            MessengerActiveContactsBar(
+                userProfile = userProfile,
+                onAddNoteOrStory = { onOpenNewChat() },
+                onSelectActiveUser = { targetConvId ->
+                    onSelectConversation(targetConvId)
+                },
+                onOpenAi = onOpenAiChat
+            )
+
+            Spacer(modifier = Modifier.height(2.dp))
+
+            // 5. CATEGORY TABS (الكل, طلبات المراسلة, غير المقروءة, المفضلة, المجموعات)
             LazyRow(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -598,7 +639,14 @@ fun ChatsListScreen(
                     )
                 }
                 item {
-                    val unreadCount = conversations.count { it.unreadCount > 0 }
+                    ChatCategoryTabChip(
+                        title = "طلبات المراسلة ${if (pendingRequestsCount > 0) "($pendingRequestsCount)" else ""}",
+                        isSelected = selectedFilterCategory == "requests",
+                        onClick = { selectedFilterCategory = "requests" }
+                    )
+                }
+                item {
+                    val unreadCount = conversations.count { it.unreadCount > 0 && (!it.isMessageRequest || it.requestStatus == "accepted") }
                     ChatCategoryTabChip(
                         title = "غير مقروءة ${if (unreadCount > 0) "($unreadCount)" else ""}",
                         isSelected = selectedFilterCategory == "unread",
@@ -908,14 +956,23 @@ fun ConversationListItem(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = conversation.contactName,
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Row(
+                    modifier = Modifier.weight(1f, fill = false),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = conversation.contactName,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (conversation.isVerified) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        BlueVerificationBadge(size = 14.dp)
+                    }
+                }
 
                 Text(
                     text = formattedTime,
@@ -1002,11 +1059,21 @@ fun DirectChatScreen(
     val isAdWatching by viewModel.isAdWatching.collectAsState()
     val adWatchProgress by viewModel.adWatchProgress.collectAsState()
 
+    // Conversations, Blocking & Message Request States
+    val conversations by viewModel.conversations.collectAsState()
+    val blockedUsers by viewModel.blockedUsers.collectAsState()
+    val currentConv = remember(conversations, conversationId) {
+        conversations.firstOrNull { it.id == conversationId }
+    }
+    val isBlocked = (currentConv?.isBlocked == true) || blockedUsers.contains(contactName)
+    val isMessageRequest = (currentConv?.isMessageRequest == true) && currentConv.requestStatus == "pending"
+    val userSentMessagesCount = remember(messages) { messages.count { it.isFromUser } }
+
     // Real-Time Online & Typing Status
     val peerOnlineMap by viewModel.peerOnlineState.collectAsState()
     val peerTypingMap by viewModel.peerTypingState.collectAsState()
-    val isPeerOnline = peerOnlineMap[conversationId] ?: true
-    val isPeerTyping = (peerTypingMap[conversationId] == true) || (isAiChat && isAiThinking)
+    val isPeerOnline = (!isBlocked) && (peerOnlineMap[conversationId] ?: true)
+    val isPeerTyping = (!isBlocked) && ((peerTypingMap[conversationId] == true) || (isAiChat && isAiThinking))
 
     // Real Audio Recording State
     val isRecordingAudio by com.example.util.AudioRecordManager.isRecording.collectAsState()
@@ -1025,6 +1092,9 @@ fun DirectChatScreen(
     var showMoreMenu by remember { mutableStateOf(false) }
     var showPhotoMenu by remember { mutableStateOf(false) }
     var selectedImageForZoom by remember { mutableStateOf<String?>(null) }
+    var showConversationDetailsModal by remember { mutableStateOf(false) }
+    var currentQuickEmoji by remember { mutableStateOf("👍") }
+    var customNickname by remember { mutableStateOf("") }
 
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -1088,212 +1158,248 @@ fun DirectChatScreen(
             )
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // 1. TOP APP BAR (Contact Details & Call Actions)
+            // 1. MODERN MESSENGER CHAT APP BAR (Contact Details, Active Now, Calls & Info)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFF0B111E).copy(alpha = 0.96f))
+                    .background(Color(0xFF0B111E).copy(alpha = 0.98f))
                     .border(
                         width = 1.dp,
-                        color = Color.White.copy(alpha = 0.07f),
-                        shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp)
+                        color = Color.White.copy(alpha = 0.08f),
+                        shape = RoundedCornerShape(bottomStart = 18.dp, bottomEnd = 18.dp)
                     )
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Back Button + Avatar + Name & Online status
+                // Back Button + (Avatar + Name & Active Now) - Clickable to open Profile Details Modal
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.weight(1f)
                 ) {
                     IconButton(
                         onClick = onBackToChatsList,
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier.size(38.dp)
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
                             tint = Color.White,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(22.dp)
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
 
-                    // Contact Avatar
-                    Box(modifier = Modifier.size(38.dp)) {
-                        if (isAiChat) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .clip(CircleShape)
-                                    .background(Brush.linearGradient(listOf(NeonCyan, NeonPurple)))
-                                    .border(1.5.dp, NeonCyan, CircleShape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.AutoAwesome,
-                                    contentDescription = "AI",
-                                    tint = BackgroundDark,
-                                    modifier = Modifier.size(20.dp)
+                    // Contact Avatar + Online Dot + Info Trigger
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { showConversationDetailsModal = true }
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                    ) {
+                        Box(modifier = Modifier.size(40.dp)) {
+                            if (isBlocked) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF33161C))
+                                        .border(1.5.dp, Color(0xFFEF4444).copy(alpha = 0.6f), CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Block,
+                                        contentDescription = "Blocked",
+                                        tint = Color(0xFFEF4444),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            } else if (isAiChat) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(CircleShape)
+                                        .background(Brush.linearGradient(listOf(NeonCyan, NeonPurple)))
+                                        .border(1.5.dp, NeonCyan, CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.AutoAwesome,
+                                        contentDescription = "AI",
+                                        tint = BackgroundDark,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                            } else if (contactAvatar.isNotBlank()) {
+                                AsyncImage(
+                                    model = contactAvatar,
+                                    contentDescription = contactName,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(CircleShape)
+                                        .border(1.5.dp, NeonCyan.copy(alpha = 0.6f), CircleShape)
                                 )
-                            }
-                        } else if (contactAvatar.isNotBlank()) {
-                            AsyncImage(
-                                model = contactAvatar,
-                                contentDescription = contactName,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .clip(CircleShape)
-                                    .border(1.5.dp, NeonCyan.copy(alpha = 0.5f), CircleShape)
-                            )
-                        } else {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .clip(CircleShape)
-                                    .background(
-                                        Brush.linearGradient(
-                                            listOf(
-                                                Color(0xFF2563EB),
-                                                Color(0xFF7C3AED)
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(CircleShape)
+                                        .background(
+                                            Brush.linearGradient(
+                                                listOf(
+                                                    Color(0xFF2563EB),
+                                                    Color(0xFF7C3AED)
+                                                )
                                             )
-                                        )
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = contactName.take(1),
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 16.sp
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = contactName.take(1),
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 16.sp
+                                    )
+                                }
+                            }
+
+                            // Green Active Now badge (Hidden if Blocked)
+                            if (!isBlocked && (isPeerOnline || isAiChat)) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(11.dp)
+                                        .align(Alignment.BottomEnd)
+                                        .clip(CircleShape)
+                                        .background(EncryptedGreen)
+                                        .border(1.5.dp, BackgroundDark, CircleShape)
                                 )
                             }
                         }
 
-                        // Online green badge
-                        if (isPeerOnline) {
-                            Box(
-                                modifier = Modifier
-                                    .size(9.dp)
-                                    .align(Alignment.BottomEnd)
-                                    .clip(CircleShape)
-                                    .background(EncryptedGreen)
-                                    .border(1.dp, BackgroundDark, CircleShape)
-                            )
-                        }
-                    }
+                        Spacer(modifier = Modifier.width(8.dp))
 
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = contactName,
-                                style = MaterialTheme.typography.titleSmall,
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            if (isAiChat && isVipMember) {
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Icon(
-                                    imageVector = Icons.Default.Diamond,
-                                    contentDescription = "VIP",
-                                    tint = NeonAmber,
-                                    modifier = Modifier.size(13.dp)
-                                )
-                            }
-                        }
-                        if (isPeerTyping) {
+                        Column {
+                            val displayName = if (customNickname.isNotBlank()) customNickname else contactName
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.GraphicEq,
-                                    contentDescription = null,
-                                    tint = NeonCyan,
-                                    modifier = Modifier.size(11.dp)
-                                )
-                                Spacer(modifier = Modifier.width(3.dp))
                                 Text(
-                                    text = "يكتب الآن...",
+                                    text = if (isBlocked) "$displayName (محظور)" else displayName,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = if (isBlocked) Color.Gray else Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                if (isAiChat && isVipMember) {
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Icon(
+                                        imageVector = Icons.Default.Diamond,
+                                        contentDescription = "VIP",
+                                        tint = NeonAmber,
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                } else if (!isAiChat && !isBlocked) {
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    BlueVerificationBadge(size = 14.dp)
+                                }
+                            }
+                            if (isBlocked) {
+                                Text(
+                                    text = "حساب محظور • غير متاح",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color(0xFFEF4444).copy(alpha = 0.8f),
+                                    fontSize = 10.sp
+                                )
+                            } else if (isPeerTyping) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.GraphicEq,
+                                        contentDescription = null,
+                                        tint = NeonCyan,
+                                        modifier = Modifier.size(11.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    Text(
+                                        text = "يكتب الآن...",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = NeonCyan,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            } else if (isAiChat) {
+                                Text(
+                                    text = "نشط الآن • NEXA AI 🔒",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = NeonCyan,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
+                                    fontSize = 10.sp
+                                )
+                            } else if (isPeerOnline) {
+                                Text(
+                                    text = "نشط الآن • مشفر 🔒",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = EncryptedGreen,
+                                    fontSize = 10.sp
+                                )
+                            } else {
+                                Text(
+                                    text = "نشط منذ قليل",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color.LightGray.copy(alpha = 0.7f),
+                                    fontSize = 10.sp
                                 )
                             }
-                        } else if (isAiChat) {
-                            Text(
-                                text = "ذكاء اصطناعي فوري • E2EE",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = NeonCyan,
-                                fontSize = 10.sp
-                            )
-                        } else if (isPeerOnline) {
-                            Text(
-                                text = "متصل الآن • تشفير 256-bit",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = EncryptedGreen,
-                                fontSize = 10.sp
-                            )
-                        } else {
-                            Text(
-                                text = "آخر ظهور مؤخراً",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color.LightGray.copy(alpha = 0.7f),
-                                fontSize = 10.sp
-                            )
                         }
                     }
                 }
 
-                // Call & More Action Buttons
+                // Call & Conversation Info / Settings Action Buttons (REMOVED completely from NEXA AI & Blocked Users)
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    // Video Call Action
-                    IconButton(
-                        onClick = { onStartCall("video") },
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Videocam,
-                            contentDescription = "Video Call",
-                            tint = NeonCyan,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-
-                    // Voice Call Action
-                    IconButton(
-                        onClick = { onStartCall("audio") },
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Call,
-                            contentDescription = "Voice Call",
-                            tint = NeonPink,
-                            modifier = Modifier.size(19.dp)
-                        )
-                    }
-
-                    if (isAiChat) {
+                    if (!isAiChat && !isBlocked) {
+                        // Voice Call Action (Phone icon)
                         IconButton(
-                            onClick = onOpenAiToolbox,
+                            onClick = { onStartCall("audio") },
                             modifier = Modifier.size(36.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Build,
-                                contentDescription = "Toolbox",
-                                tint = NeonAmber,
-                                modifier = Modifier.size(18.dp)
+                                imageVector = Icons.Default.Call,
+                                contentDescription = "Voice Call",
+                                tint = NeonPink,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
+
+                        // Video Call Action (Camcorder icon)
+                        IconButton(
+                            onClick = { onStartCall("video") },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Videocam,
+                                contentDescription = "Video Call",
+                                tint = NeonCyan,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+
+                    // Conversation Info & Details Modal (Info / Settings icon)
+                    IconButton(
+                        onClick = { showConversationDetailsModal = true },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = "Conversation Details",
+                            tint = Color.White.copy(alpha = 0.9f),
+                            modifier = Modifier.size(21.dp)
+                        )
                     }
 
                     // More Menu
@@ -1305,7 +1411,7 @@ fun DirectChatScreen(
                             Icon(
                                 imageVector = Icons.Default.MoreVert,
                                 contentDescription = "More",
-                                tint = Color.White,
+                                tint = Color.LightGray,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -1322,34 +1428,40 @@ fun DirectChatScreen(
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Icon(Icons.Default.Share, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(16.dp))
                                         Spacer(modifier = Modifier.width(8.dp))
-                                        Text("تصدير المحادثة (PDF)", color = Color.White, fontSize = 12.sp)
+                                        Text("مشاركة رابط الغرفة", color = Color.White, fontSize = 13.sp)
                                     }
                                 },
                                 onClick = {
                                     showMoreMenu = false
-                                    val exportBody = messages.joinToString("\n\n-----------------------------------\n\n") { msg ->
-                                        "${msg.senderName}:\n${msg.text}"
-                                    }
-                                    com.example.util.FileExportManager.exportPdfSummary(
-                                        context = context,
-                                        documentTitle = "سجل محادثة مشفرة - $contactName",
-                                        bodyText = exportBody.ifBlank { "لا توجد رسائل سابقة في المحادثة" }
-                                    )
+                                    clipboardManager.setText(AnnotatedString("https://nexa.chat/room/$conversationId"))
                                 }
                             )
-
-                            if (isAiChat) {
+                            if (isBlocked) {
                                 DropdownMenuItem(
                                     text = {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(Icons.Default.Mic, contentDescription = null, tint = NeonPink, modifier = Modifier.size(16.dp))
+                                            Icon(Icons.Default.Check, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(16.dp))
                                             Spacer(modifier = Modifier.width(8.dp))
-                                            Text("المعلم الصوتي الذكي", color = Color.White, fontSize = 12.sp)
+                                            Text("إلغاء الحظر", color = NeonCyan, fontSize = 13.sp)
                                         }
                                     },
                                     onClick = {
                                         showMoreMenu = false
-                                        onOpenVoiceTutor()
+                                        viewModel.unblockUser(contactName, conversationId)
+                                    }
+                                )
+                            } else if (!isAiChat) {
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.Block, contentDescription = null, tint = Color(0xFFEF4444), modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("حظر المستخدم", color = Color(0xFFEF4444), fontSize = 13.sp)
+                                        }
+                                    },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        viewModel.blockUser(contactName, conversationId)
                                     }
                                 )
                             }
@@ -1358,16 +1470,59 @@ fun DirectChatScreen(
                 }
             }
 
-            // 2. COMPACT ADMOB STRIP
-            AdMobBannerSpace(
-                isVipMember = isVipMember,
-                isAdWatching = isAdWatching,
-                adWatchProgress = adWatchProgress,
-                onWatchRewardedAd = { viewModel.watchRewardedAdForCredits() },
-                onGoVip = onOpenVip,
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp),
-                compact = true
-            )
+            // Details Modal
+            if (showConversationDetailsModal) {
+                ConversationDetailsModal(
+                    contactName = if (customNickname.isNotBlank()) customNickname else contactName,
+                    contactAvatar = contactAvatar,
+                    isOnline = isPeerOnline,
+                    isAiChat = isAiChat,
+                    currentQuickEmoji = currentQuickEmoji,
+                    currentNickname = customNickname,
+                    onDismiss = { showConversationDetailsModal = false },
+                    onStartAudioCall = {
+                        showConversationDetailsModal = false
+                        onStartCall("audio")
+                    },
+                    onStartVideoCall = {
+                        showConversationDetailsModal = false
+                        onStartCall("video")
+                    },
+                    onQuickEmojiChanged = { newEmoji ->
+                        currentQuickEmoji = newEmoji
+                    },
+                    onNicknameChanged = { newNickname ->
+                        customNickname = newNickname
+                    },
+                    onDisappearingMessagesToggle = { mode ->
+                        // Disappearing messages set
+                    },
+                    onBlockUser = {
+                        viewModel.blockUser(contactName, conversationId)
+                        showConversationDetailsModal = false
+                    },
+                    onReportUser = {
+                        viewModel.reportContent("chat_$conversationId", "إبلاغ عن محادثة")
+                        showConversationDetailsModal = false
+                    },
+                    onClearChat = {
+                        // Clear chat
+                    }
+                )
+            }
+
+            // 2. COMPACT ADMOB STRIP (Completely REMOVED from NEXA AI & Blocked chats)
+            if (!isAiChat && !isBlocked) {
+                AdMobBannerSpace(
+                    isVipMember = isVipMember,
+                    isAdWatching = isAdWatching,
+                    adWatchProgress = adWatchProgress,
+                    onWatchRewardedAd = { viewModel.watchRewardedAdForCredits() },
+                    onGoVip = onOpenVip,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp),
+                    compact = true
+                )
+            }
 
             // 3. AI QUICK PROMPTS (Only in AI Chat)
             if (isAiChat) {
@@ -1455,6 +1610,92 @@ fun DirectChatScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         contentPadding = PaddingValues(top = 6.dp, bottom = 8.dp)
                     ) {
+                        // Incoming Message Request Banner
+                        if (isMessageRequest) {
+                            item {
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    colors = CardDefaults.cardColors(containerColor = Color(0xFF131D33)),
+                                    border = BorderStroke(1.dp, NeonCyan.copy(alpha = 0.5f)),
+                                    shape = RoundedCornerShape(16.dp)
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(14.dp)
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Default.MarkEmailUnread,
+                                                contentDescription = null,
+                                                tint = NeonCyan,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = "طلب مراسلة وارد",
+                                                color = Color.White,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 14.sp
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = "هذا المستخدم ليس في قائمة أصدقائك. يُسمح لغير الأصدقاء بإرسال رسالة واحدة فقط حتى تقبل الطلب.",
+                                            color = Color.LightGray,
+                                            fontSize = 11.sp,
+                                            lineHeight = 16.sp
+                                        )
+                                        Spacer(modifier = Modifier.height(10.dp))
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Button(
+                                                onClick = { viewModel.acceptMessageRequest(conversationId) },
+                                                modifier = Modifier.weight(1f),
+                                                colors = ButtonDefaults.buttonColors(containerColor = EncryptedGreen),
+                                                shape = RoundedCornerShape(10.dp)
+                                            ) {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(Icons.Default.Check, contentDescription = null, tint = BackgroundDark, modifier = Modifier.size(16.dp))
+                                                    Spacer(modifier = Modifier.width(4.dp))
+                                                    Text("قبول", color = BackgroundDark, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                                }
+                                            }
+                                            Button(
+                                                onClick = {
+                                                    viewModel.ignoreMessageRequest(conversationId)
+                                                    onBackToChatsList()
+                                                },
+                                                modifier = Modifier.weight(1f),
+                                                colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.12f)),
+                                                shape = RoundedCornerShape(10.dp)
+                                            ) {
+                                                Text("تجاهل", color = Color.White, fontSize = 12.sp)
+                                            }
+                                            Button(
+                                                onClick = {
+                                                    viewModel.blockUser(contactName, conversationId)
+                                                },
+                                                modifier = Modifier.weight(1f),
+                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444)),
+                                                shape = RoundedCornerShape(10.dp)
+                                            ) {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(Icons.Default.Block, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                                                    Spacer(modifier = Modifier.width(2.dp))
+                                                    Text("حظر", color = Color.White, fontSize = 12.sp)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         // E2EE Security Badge Divider
                         item {
                             Box(
@@ -1564,13 +1805,81 @@ fun DirectChatScreen(
                 }
             }
 
-            // 6. MODERN FLOATING INPUT DOCK WITH REAL AUDIO RECORDER
+            // 6. MODERN FLOATING INPUT DOCK WITH RESTRICTION CARDS
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 10.dp, vertical = 8.dp)
             ) {
-                if (isRecordingAudio) {
+                if (isBlocked) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1F1218)),
+                        border = BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.5f)),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Block, contentDescription = null, tint = Color(0xFFEF4444), modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "تم حظر هذا الحساب بالكامل 🚫",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(3.dp))
+                            Text(
+                                text = "لا يمكن تبادل الرسائل أو الاتصال أو رؤية حالة الاتصال والصورة الشخصية.",
+                                color = Color.LightGray,
+                                fontSize = 10.sp,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Button(
+                                onClick = { viewModel.unblockUser(contactName, conversationId) },
+                                colors = ButtonDefaults.buttonColors(containerColor = NeonCyan.copy(alpha = 0.2f)),
+                                border = BorderStroke(1.dp, NeonCyan),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text("إلغاء الحظر", color = NeonCyan, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                            }
+                        }
+                    }
+                } else if (isMessageRequest && userSentMessagesCount >= 1) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF191F30)),
+                        border = BorderStroke(1.dp, NeonAmber.copy(alpha = 0.5f)),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.HourglassTop, contentDescription = null, tint = NeonAmber, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "تم إرسال رسالتك الأولى 📩. بانتظار قبول الطرف الآخر لطلب المراسلة لتتمكن من إرسال المزيد من الرسائل والمكالمات.",
+                                color = NeonAmber,
+                                fontSize = 11.sp,
+                                lineHeight = 16.sp
+                            )
+                        }
+                    }
+                } else if (isRecordingAudio) {
                     // LIVE REAL AUDIO RECORDING BAR
                     Row(
                         modifier = Modifier
@@ -1771,37 +2080,53 @@ fun DirectChatScreen(
 
                         Spacer(modifier = Modifier.width(4.dp))
 
-                        // Send Message Button
-                        IconButton(
-                            onClick = {
-                                if (messageText.isNotBlank()) {
+                        // Send / Quick Emoji Action Button (NEXA AI has NO quick emoji button, pure clean input)
+                        if (messageText.isNotBlank()) {
+                            IconButton(
+                                onClick = {
                                     viewModel.sendChatMessage(conversationId, messageText)
                                     messageText = ""
-                                } else {
-                                    if (androidx.core.content.ContextCompat.checkSelfPermission(
-                                            context,
-                                            android.Manifest.permission.RECORD_AUDIO
-                                        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-                                    ) {
-                                        com.example.util.AudioRecordManager.startRecording(context)
-                                    } else {
-                                        audioPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
-                                    }
-                                }
-                            },
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    Brush.linearGradient(listOf(NeonCyan, NeonPurple))
+                                },
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        Brush.linearGradient(listOf(NeonCyan, Color(0xFF0084FF)))
+                                    )
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.Send,
+                                    contentDescription = "Send",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
                                 )
-                        ) {
-                            Icon(
-                                imageVector = if (messageText.isNotBlank()) Icons.AutoMirrored.Filled.Send else Icons.Default.Mic,
-                                contentDescription = "Send",
-                                tint = BackgroundDark,
-                                modifier = Modifier.size(18.dp)
-                            )
+                            }
+                        } else if (!isAiChat) {
+                            // Messenger 1-Tap Quick Emoji Send Button (Only for human chats, NOT AI)
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        Brush.linearGradient(
+                                            listOf(
+                                                Color(0xFF0084FF).copy(alpha = 0.25f),
+                                                Color(0xFF00C6FF).copy(alpha = 0.25f)
+                                            )
+                                        )
+                                    )
+                                    .border(1.dp, Color(0xFF00C6FF).copy(alpha = 0.4f), CircleShape)
+                                    .clickable {
+                                        viewModel.sendChatMessage(conversationId, currentQuickEmoji)
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = currentQuickEmoji,
+                                    fontSize = 20.sp,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
                         }
                     }
                 }
@@ -1871,61 +2196,125 @@ fun DirectChatMessageBubble(
     }
 
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
+        verticalAlignment = Alignment.Bottom
     ) {
+        // Small Sender Avatar next to incoming messages (Messenger Style)
+        if (!isUser) {
+            Box(
+                modifier = Modifier
+                    .padding(end = 6.dp, bottom = 2.dp)
+                    .size(28.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                if (isAiChat) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape)
+                            .background(Brush.linearGradient(listOf(NeonCyan, NeonPurple))),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = "AI",
+                            tint = BackgroundDark,
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
+                } else if (message.senderAvatar.isNotBlank()) {
+                    AsyncImage(
+                        model = message.senderAvatar,
+                        contentDescription = message.senderName,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape)
+                            .border(1.dp, NeonCyan.copy(alpha = 0.4f), CircleShape)
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape)
+                            .background(
+                                Brush.linearGradient(
+                                    listOf(
+                                        Color(0xFF2563EB),
+                                        Color(0xFF7C3AED)
+                                    )
+                                )
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = message.senderName.take(1),
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+            }
+        }
+
         Column(
             horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
         ) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(0.85f)
+                    .fillMaxWidth(0.82f)
                     .shadow(
-                        elevation = 6.dp,
+                        elevation = if (isUser) 4.dp else 2.dp,
                         shape = RoundedCornerShape(
-                            topStart = 16.dp,
-                            topEnd = 16.dp,
-                            bottomStart = if (isUser) 16.dp else 4.dp,
-                            bottomEnd = if (isUser) 4.dp else 16.dp
+                            topStart = 18.dp,
+                            topEnd = 18.dp,
+                            bottomStart = if (isUser) 18.dp else 4.dp,
+                            bottomEnd = if (isUser) 4.dp else 18.dp
                         ),
-                        spotColor = if (isUser) EncryptedGreen.copy(alpha = 0.4f) else NeonCyan.copy(alpha = 0.4f)
+                        spotColor = if (isUser) Color(0xFF0084FF).copy(alpha = 0.5f) else Color.Black.copy(alpha = 0.4f)
                     )
                     .clip(
                         RoundedCornerShape(
-                            topStart = 16.dp,
-                            topEnd = 16.dp,
-                            bottomStart = if (isUser) 16.dp else 4.dp,
-                            bottomEnd = if (isUser) 4.dp else 16.dp
+                            topStart = 18.dp,
+                            topEnd = 18.dp,
+                            bottomStart = if (isUser) 18.dp else 4.dp,
+                            bottomEnd = if (isUser) 4.dp else 18.dp
                         )
                     )
                     .background(
                         if (isUser) {
+                            // Vibrant Messenger Blue/Cyan Gradient
                             Brush.linearGradient(
                                 listOf(
-                                    Color(0xFF065F46).copy(alpha = 0.88f),
-                                    Color(0xFF047857).copy(alpha = 0.88f)
+                                    Color(0xFF0078FF),
+                                    Color(0xFF00B4D8)
                                 )
                             )
                         } else {
+                            // Soft Neutral Dark Gray / Slate Glassmorphic
                             Brush.linearGradient(
                                 listOf(
-                                    Color(0xFF1A1B3A).copy(alpha = 0.92f),
-                                    Color(0xFF131A33).copy(alpha = 0.92f)
+                                    Color(0xFF1E293B).copy(alpha = 0.95f),
+                                    Color(0xFF242C3D).copy(alpha = 0.95f)
                                 )
                             )
                         }
                     )
                     .border(
-                        1.dp,
-                        if (isUser) EncryptedGreen.copy(alpha = 0.5f) else NeonCyan.copy(alpha = 0.35f),
-                        RoundedCornerShape(
-                            topStart = 16.dp,
-                            topEnd = 16.dp,
-                            bottomStart = if (isUser) 16.dp else 4.dp,
-                            bottomEnd = if (isUser) 4.dp else 16.dp
+                        width = 1.dp,
+                        color = if (isUser) Color(0xFF38BDF8).copy(alpha = 0.4f) else Color.White.copy(alpha = 0.12f),
+                        shape = RoundedCornerShape(
+                            topStart = 18.dp,
+                            topEnd = 18.dp,
+                            bottomStart = if (isUser) 18.dp else 4.dp,
+                            bottomEnd = if (isUser) 4.dp else 18.dp
                         )
                     )
-                    .padding(12.dp)
+                    .padding(horizontal = 12.dp, vertical = 10.dp)
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     // Bubble Header: Sender & Action icons

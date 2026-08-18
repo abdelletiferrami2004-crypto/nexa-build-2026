@@ -274,12 +274,17 @@ object FirebaseManager {
     suspend fun saveMessageToCloud(message: ChatMessage): Boolean {
         val db = firestore ?: return false
         return try {
+            val encryptedText = if (message.isEncrypted) {
+                com.example.util.E2EEncryptionManager.encryptMessage(message.text, message.conversationId)
+            } else {
+                message.text
+            }
             val msgMap = hashMapOf(
                 "id" to message.id,
                 "conversationId" to message.conversationId,
                 "senderName" to message.senderName,
                 "senderAvatar" to message.senderAvatar,
-                "text" to message.text,
+                "text" to encryptedText,
                 "isFromUser" to message.isFromUser,
                 "isEncrypted" to message.isEncrypted,
                 "mediaType" to message.mediaType,
@@ -287,14 +292,15 @@ object FirebaseManager {
                 "reaction" to (message.reaction ?: ""),
                 "deliveryStatus" to message.deliveryStatus,
                 "isRead" to message.isRead,
-                "timestamp" to System.currentTimeMillis()
+                "timestamp" to System.currentTimeMillis(),
+                "isSenderVerified" to message.isSenderVerified
             )
             db.collection("nexa_conversations")
                 .document(message.conversationId)
                 .collection("messages")
                 .document("msg_${message.id}")
                 .set(msgMap, SetOptions.merge()).await()
-            Log.d(TAG, "Message saved to Firestore for conv ${message.conversationId}")
+            Log.d(TAG, "Message securely encrypted & saved to Firestore for conv ${message.conversationId}")
             true
         } catch (e: Exception) {
             Log.e(TAG, "Failed to save chat message to Firestore", e)
@@ -320,32 +326,52 @@ object FirebaseManager {
                 if (snapshot != null && !snapshot.isEmpty) {
                     val messages = snapshot.documents.mapNotNull { doc ->
                         try {
+                            val rawText = doc.getString("text") ?: ""
+                            val isEncrypted = doc.getBoolean("isEncrypted") ?: true
+                            val decryptedText = if (isEncrypted) {
+                                com.example.util.E2EEncryptionManager.decryptMessage(rawText, conversationId)
+                            } else {
+                                rawText
+                            }
                             ChatMessage(
                                 id = doc.getLong("id")?.toInt() ?: (doc.id.hashCode() and 0x7FFFFFFF),
                                 conversationId = doc.getString("conversationId") ?: conversationId,
                                 senderName = doc.getString("senderName") ?: "مستخدم NEXA",
                                 senderAvatar = doc.getString("senderAvatar") ?: "",
-                                text = doc.getString("text") ?: "",
+                                text = decryptedText,
                                 timestamp = doc.getLong("timestamp") ?: System.currentTimeMillis(),
                                 isFromUser = doc.getBoolean("isFromUser") ?: false,
-                                isEncrypted = doc.getBoolean("isEncrypted") ?: true,
+                                isEncrypted = isEncrypted,
                                 mediaType = doc.getString("mediaType") ?: "text",
                                 mediaUrl = doc.getString("mediaUrl")?.ifBlank { null },
                                 reaction = doc.getString("reaction")?.ifBlank { null },
                                 deliveryStatus = doc.getString("deliveryStatus") ?: "read",
-                                isRead = doc.getBoolean("isRead") ?: true
+                                isRead = doc.getBoolean("isRead") ?: true,
+                                isSenderVerified = doc.getBoolean("isSenderVerified") ?: false
                             )
                         } catch (e: Exception) {
                             null
                         }
                     }
                     if (messages.isNotEmpty()) {
-                        Log.d(TAG, "Real-time messages received for $conversationId: ${messages.size}")
+                        Log.d(TAG, "Real-time messages decrypted & received for $conversationId: ${messages.size}")
                         onMessagesUpdated(messages)
                     }
                 }
             }
 
         activeChatListeners[conversationId] = listener
+    }
+
+    suspend fun deleteUserCloudData(userId: String): Boolean {
+        val db = firestore ?: return true
+        return try {
+            db.collection("nexa_users").document(userId).delete().await()
+            Log.d(TAG, "GDPR cloud profile erased for $userId")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to erase cloud data for $userId", e)
+            false
+        }
     }
 }
