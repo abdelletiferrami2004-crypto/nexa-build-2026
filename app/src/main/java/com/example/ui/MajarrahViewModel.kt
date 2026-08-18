@@ -1173,6 +1173,15 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
         if (text.isBlank()) return
         val isAiChat = conversationId == "nexa_ai" || conversationId == "ai_bot"
 
+        // Smart Real-time Safety Check via NEXA Guard
+        val modCheck = com.example.util.NexaSafetyModerator.evaluateContent(text)
+        if (!modCheck.isAllowed) {
+            _monetizationMessage.value = "⚠️ تم حظر الرسالة بواسطة NEXA Guard: ${modCheck.reason}"
+            try {
+                NotificationSoundManager.playPopChime(getApplication())
+            } catch (_: Throwable) {}
+        }
+
         val existingConv = conversations.value.firstOrNull { it.id == conversationId }
         if (!isAiChat && existingConv != null) {
             if (existingConv.isBlocked || _blockedUsers.value.contains(existingConv.contactName)) {
@@ -1195,10 +1204,12 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
                 conversationId = conversationId,
                 senderName = userProfile.value?.name ?: "أنت",
                 senderAvatar = userProfile.value?.avatarUrl ?: "",
-                text = text,
+                text = if (!modCheck.isAllowed) modCheck.sanitizedText else text,
                 timestamp = now,
                 isFromUser = true,
                 isEncrypted = true,
+                isModerationFlagged = !modCheck.isAllowed || modCheck.safetyLevel == com.example.util.NexaSafetyModerator.SafetyLevel.WARNING_PROMOTIONAL,
+                moderationWarning = if (!modCheck.isAllowed || modCheck.safetyLevel != com.example.util.NexaSafetyModerator.SafetyLevel.SAFE) modCheck.reason else null,
                 deliveryStatus = "sent",
                 isRead = false
             )
@@ -1398,6 +1409,52 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
                 repository.updateMessageStatus(savedMsg, "delivered", false)
                 kotlinx.coroutines.delay(1200)
                 repository.updateMessageStatus(savedMsg, "read", true)
+            }
+        }
+    }
+
+    // =========================================================
+    // Instant In-Chat AI Translation & Moderation System
+    // =========================================================
+    private val _targetTranslationLanguage = MutableStateFlow(com.example.util.NexaAiTranslator.TargetLanguage.ARABIC)
+    val targetTranslationLanguage: StateFlow<com.example.util.NexaAiTranslator.TargetLanguage> = _targetTranslationLanguage.asStateFlow()
+
+    private val _isFastMediaCacheActive = MutableStateFlow(true)
+    val isFastMediaCacheActive: StateFlow<Boolean> = _isFastMediaCacheActive.asStateFlow()
+
+    private val _activeChannelMemberCount = MutableStateFlow(128450)
+    val activeChannelMemberCount: StateFlow<Int> = _activeChannelMemberCount.asStateFlow()
+
+    private val _pinnedAnnouncement = MutableStateFlow("📌 الإعلان المثبت: ميزة الترجمة الفورية بالذكاء الاصطناعي ودرع الحماية NEXA Guard مفعّلان لجميع المحادثات والقنوات 🚀")
+    val pinnedAnnouncement: StateFlow<String> = _pinnedAnnouncement.asStateFlow()
+
+    fun setTargetTranslationLanguage(lang: com.example.util.NexaAiTranslator.TargetLanguage) {
+        _targetTranslationLanguage.value = lang
+    }
+
+    fun translateChatMessage(message: ChatMessage, customTarget: com.example.util.NexaAiTranslator.TargetLanguage? = null) {
+        val target = customTarget ?: _targetTranslationLanguage.value
+        viewModelScope.launch {
+            repository.setMessageTranslating(message, true)
+            val result = com.example.util.NexaAiTranslator.translateText(message.text, target)
+            repository.updateMessageTranslation(
+                message = message,
+                translatedText = result.translatedText,
+                targetLanguage = target.code
+            )
+            _monetizationMessage.value = "تمت الترجمة الفورية عبر ذكاء NEXA 🌐 (${target.displayName})"
+            try {
+                NotificationSoundManager.playPopChime(getApplication())
+            } catch (_: Throwable) {}
+        }
+    }
+
+    fun toggleMessageTranslation(message: ChatMessage) {
+        viewModelScope.launch {
+            if (message.translatedText == null) {
+                translateChatMessage(message)
+            } else {
+                repository.toggleMessageTranslation(message)
             }
         }
     }

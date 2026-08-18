@@ -62,6 +62,31 @@ class MajarrahRepository(private val dao: MajarrahDao) {
         FirebaseManager.savePostToCloud(updated)
     }
 
+    suspend fun updateMessageTranslation(
+        message: ChatMessage,
+        translatedText: String,
+        targetLanguage: String
+    ) {
+        val updated = message.copy(
+            translatedText = translatedText,
+            translatedLanguage = targetLanguage,
+            showTranslation = true,
+            isTranslating = false
+        )
+        dao.insertMessage(updated)
+        FirebaseManager.saveMessageToCloud(updated)
+    }
+
+    suspend fun toggleMessageTranslation(message: ChatMessage) {
+        val updated = message.copy(showTranslation = !message.showTranslation)
+        dao.insertMessage(updated)
+    }
+
+    suspend fun setMessageTranslating(message: ChatMessage, isTranslating: Boolean) {
+        val updated = message.copy(isTranslating = isTranslating)
+        dao.insertMessage(updated)
+    }
+
     suspend fun saveConversation(conversation: Conversation) {
         dao.insertConversation(conversation)
     }
@@ -299,11 +324,26 @@ class MajarrahRepository(private val dao: MajarrahDao) {
         val now = System.currentTimeMillis()
         val sampleConversations = listOf(
             Conversation(
+                id = "group_ai_community",
+                contactName = "مجتمع الذكاء الاصطناعي العربي 🚀",
+                contactAvatar = "https://images.unsplash.com/photo-1620712943543-bcc4688e7485?w=150&auto=format&fit=crop",
+                lastMessage = "✨ د. أحمد: Welcome everyone! Welcome to the new AI neural network discussion channel.",
+                lastTimestamp = now,
+                unreadCount = 3,
+                isPinRequired = false,
+                isContactVerified = true,
+                isGroup = true,
+                isChannel = true,
+                memberCount = 128450,
+                pinnedMessage = "📌 الإعلان المثبت: تم إطلاق ميزة الترجمة الفورية والدرع الأمني NEXA Guard لجميع الأعضاء!",
+                groupChannelDescription = "القناة الرسمية لأبحاث ونماذج الذكاء الاصطناعي وتقنيات Gemini و Kotlin في منصة مجرة."
+            ),
+            Conversation(
                 id = "ai_bot",
                 contactName = "ذكاء NEXA AI",
                 contactAvatar = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop",
                 lastMessage = "أهلاً بك! أنا مساعدك الذكي المدعوم بـ Gemini 3.5 Flash. كيف يمكنني مساعدتك اليوم؟",
-                lastTimestamp = now,
+                lastTimestamp = now - (1000 * 60 * 2),
                 unreadCount = 1,
                 isPinRequired = false,
                 isContactVerified = true
@@ -312,7 +352,7 @@ class MajarrahRepository(private val dao: MajarrahDao) {
                 id = "conv_1",
                 contactName = "نورا القحطاني",
                 contactAvatar = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop",
-                lastMessage = "هل استلمت حقيبة البرمجة الذكية اليوم؟",
+                lastMessage = "Hello! I love this new neon interface, let's build something amazing together!",
                 lastTimestamp = now - (1000 * 60 * 5),
                 unreadCount = 2,
                 isPinRequired = false,
@@ -322,7 +362,7 @@ class MajarrahRepository(private val dao: MajarrahDao) {
                 id = "conv_2",
                 contactName = "فيصل العتيبي",
                 contactAvatar = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop",
-                lastMessage = "🎙️ تسجيل صوتي (0:24)",
+                lastMessage = "Bonjour ! Le nouveau système de sécurité est vraiment impressionnant.",
                 lastTimestamp = now - (1000 * 60 * 45),
                 unreadCount = 1,
                 isPinRequired = false,
@@ -365,7 +405,7 @@ class MajarrahRepository(private val dao: MajarrahDao) {
                 id = "conv_5",
                 contactName = "فريق دعم مجرة الذكي",
                 contactAvatar = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop",
-                lastMessage = "تم تفعيل التشفير التام 256-bit لحسابك بنجاح.",
+                lastMessage = "تم تفعيل التشفير التام 256-bit ونظام الحماية الاستباقية بنجاح.",
                 lastTimestamp = now - (1000 * 60 * 60 * 24),
                 unreadCount = 0,
                 isPinRequired = false,
@@ -375,6 +415,64 @@ class MajarrahRepository(private val dao: MajarrahDao) {
             )
         )
         dao.insertConversations(sampleConversations)
+
+        // Seed Group Community Messages
+        val sampleGroupMessages = listOf(
+            ChatMessage(
+                id = 301,
+                conversationId = "group_ai_community",
+                senderName = "د. أحمد (مؤسس القناة)",
+                senderAvatar = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop",
+                text = "Welcome everyone to our AI Community channel! We are testing the new instant multilingual translation. Click 'Translate' on any message to see the magic ✨",
+                timestamp = now - (1000 * 60 * 40),
+                isFromUser = false,
+                isEncrypted = true,
+                isGroupMessage = true,
+                senderRole = "admin",
+                isSenderVerified = true
+            ),
+            ChatMessage(
+                id = 302,
+                conversationId = "group_ai_community",
+                senderName = "سفيان (باريس)",
+                senderAvatar = "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=150&auto=format&fit=crop",
+                text = "Bonjour à tous les développeurs ! Les performances du cache mémoire en groupe sont ultra fluides.",
+                timestamp = now - (1000 * 60 * 25),
+                isFromUser = false,
+                isEncrypted = true,
+                isGroupMessage = true,
+                senderRole = "creator",
+                isSenderVerified = true
+            ),
+            ChatMessage(
+                id = 303,
+                conversationId = "group_ai_community",
+                senderName = "نظام الأمان NEXA Guard",
+                senderAvatar = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop",
+                text = "🛡️ [NEXA Guard System]: تم فحص وتأمين 1,420 رسالة في هذه القناة تلقائياً ضد الروابط الاحتيالية والبريد العشوائي.",
+                timestamp = now - (1000 * 60 * 15),
+                isFromUser = false,
+                isEncrypted = true,
+                isGroupMessage = true,
+                senderRole = "bot",
+                isSenderVerified = true
+            ),
+            ChatMessage(
+                id = 304,
+                conversationId = "group_ai_community",
+                senderName = "مستخدم غير موثق",
+                senderAvatar = "",
+                text = "Check this suspicious link: https://free-crypto-giveaway.xyz/claim",
+                timestamp = now - (1000 * 60 * 5),
+                isFromUser = false,
+                isEncrypted = true,
+                isGroupMessage = true,
+                isModerationFlagged = true,
+                moderationWarning = "⚠️ رابط احتيالي مشبوه - تم حظر المحتوى تلقائياً بواسطة درع NEXA Guard",
+                senderRole = "member"
+            )
+        )
+        dao.insertMessages(sampleGroupMessages)
 
         val sampleMessagesReq = listOf(
             ChatMessage(
@@ -399,7 +497,7 @@ class MajarrahRepository(private val dao: MajarrahDao) {
                 conversationId = "ai_bot",
                 senderName = "ذكاء NEXA AI",
                 senderAvatar = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop",
-                text = "مرحباً بك! أنا مساعدك الذكي المتقدم المدعوم بنموذج Gemini 3.5 Flash ⚡. يمكنك سؤالي عن أي شيء، تحليل الصور، استكشاف المنتجات، أو الترجمة والمحادثة الحية!",
+                text = "مرحباً بك! أنا مساعدك الذكي المتقدم المدعوم بنموذج Gemini 3.5 Flash ⚡. يمكنك سؤالي عن أي شيء، تحليل الصور، الترجمة الفورية بين العربية والإنجليزية والفرنسية، أو إجراء محادثات مشفرة ذكية!",
                 timestamp = now - (1000 * 60 * 10),
                 isFromUser = false,
                 isEncrypted = true,
@@ -416,7 +514,7 @@ class MajarrahRepository(private val dao: MajarrahDao) {
                 conversationId = "conv_1",
                 senderName = "نورا القحطاني",
                 senderAvatar = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop",
-                text = "مرحباً! كيف حالك يا صديقي؟",
+                text = "Hello! I love this new neon interface, let's build something amazing together!",
                 timestamp = now - (1000 * 60 * 30),
                 isFromUser = false,
                 isEncrypted = true,
@@ -427,7 +525,7 @@ class MajarrahRepository(private val dao: MajarrahDao) {
                 conversationId = "conv_1",
                 senderName = "سارة النمر",
                 senderAvatar = "",
-                text = "أهلاً نورا! كل شيء رائع، استكشفت مزايا التشفير والمحادثات الجديدة في تطبيق NEXA.",
+                text = "أهلاً نورا! كل شيء رائع، استكشفت مزايا التشفير والمحادثات والترجمة الفورية الجديدة في تطبيق NEXA.",
                 timestamp = now - (1000 * 60 * 25),
                 isFromUser = true,
                 isEncrypted = true,
@@ -438,7 +536,7 @@ class MajarrahRepository(private val dao: MajarrahDao) {
                 conversationId = "conv_1",
                 senderName = "نورا القحطاني",
                 senderAvatar = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop",
-                text = "هل استلمت حقيبة البرمجة الذكية اليوم؟",
+                text = "Can you share the file for the new holographic watch?",
                 timestamp = now - (1000 * 60 * 5),
                 isFromUser = false,
                 isEncrypted = true,

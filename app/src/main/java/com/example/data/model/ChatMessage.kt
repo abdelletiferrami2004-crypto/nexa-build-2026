@@ -18,7 +18,15 @@ data class ChatMessage(
     val reaction: String? = null,
     val deliveryStatus: String = "read", // "sending", "sent", "delivered", "read"
     val isRead: Boolean = true,
-    val isSenderVerified: Boolean = false
+    val isSenderVerified: Boolean = false,
+    val translatedText: String? = null,
+    val translatedLanguage: String? = null, // "ar", "en", "fr"
+    val isTranslating: Boolean = false,
+    val showTranslation: Boolean = false,
+    val isModerationFlagged: Boolean = false,
+    val moderationWarning: String? = null,
+    val isGroupMessage: Boolean = false,
+    val senderRole: String = "member" // "owner", "admin", "creator", "bot", "member"
 )
 
 @Entity(tableName = "conversations")
@@ -35,5 +43,11 @@ data class Conversation(
     val isBlocked: Boolean = false,
     val targetUserId: String = "",
     val isContactVerified: Boolean = true,
-    val isVerified: Boolean = true
+    val isVerified: Boolean = true,
+    val isGroup: Boolean = false,
+    val memberCount: Int = 1,
+    val pinnedMessage: String? = null,
+    val groupChannelDescription: String? = null,
+    val isChannel: Boolean = false,
+    val isFastCached: Boolean = true
 )

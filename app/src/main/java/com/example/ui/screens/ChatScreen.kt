@@ -77,6 +77,15 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.VideocamOff
+import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.GppGood
+import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material.icons.filled.Loop
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -1553,6 +1562,52 @@ fun DirectChatScreen(
                         }
                     }
                 }
+            } else if (conversationId == "channel_ai_global" || conversationId.startsWith("channel_") || conversationId.startsWith("group_")) {
+                // Fast Caching & Large Group Announcement Strip
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 10.dp, vertical = 2.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFF0F172A).copy(alpha = 0.9f))
+                        .border(1.dp, NeonCyan.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                        Icon(
+                            imageVector = Icons.Default.FlashOn,
+                            contentDescription = null,
+                            tint = NeonAmber,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "ذاكرة فورية فائقة السرعة • 128.4K مشترك ⚡",
+                            color = Color.LightGray,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.GppGood,
+                            contentDescription = null,
+                            tint = EncryptedGreen,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(2.dp))
+                        Text(
+                            text = "NEXA Guard",
+                            color = EncryptedGreen,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
             }
 
             // 4. CHAT MESSAGES CANVAS (MAXIMIZED AREA)
@@ -1742,6 +1797,12 @@ fun DirectChatScreen(
                                 },
                                 onImageClick = { imgUrl ->
                                     selectedImageForZoom = imgUrl
+                                },
+                                onTranslateText = { targetLang ->
+                                    viewModel.translateChatMessage(msg, targetLang)
+                                },
+                                onToggleTranslationDisplay = {
+                                    viewModel.toggleMessageTranslation(msg)
                                 }
                             )
                         }
@@ -2175,11 +2236,14 @@ fun DirectChatMessageBubble(
     isVip: Boolean = false,
     onReactionSelect: ((String) -> Unit)? = null,
     onCopyText: ((String) -> Unit)? = null,
-    onImageClick: ((String) -> Unit)? = null
+    onImageClick: ((String) -> Unit)? = null,
+    onTranslateText: ((com.example.util.NexaAiTranslator.TargetLanguage) -> Unit)? = null,
+    onToggleTranslationDisplay: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val isUser = message.isFromUser
     var showReactionMenu by remember { mutableStateOf(false) }
+    var showTranslateMenu by remember { mutableStateOf(false) }
 
     val playingMessageId by com.example.util.AudioPlaybackManager.currentPlayingMessageId.collectAsState()
     val isPlayingAudio by com.example.util.AudioPlaybackManager.isPlaying.collectAsState()
@@ -2266,7 +2330,7 @@ fun DirectChatMessageBubble(
         ) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(0.82f)
+                    .fillMaxWidth(0.85f)
                     .shadow(
                         elevation = if (isUser) 4.dp else 2.dp,
                         shape = RoundedCornerShape(
@@ -2339,12 +2403,78 @@ fun DirectChatMessageBubble(
                                     modifier = Modifier.size(12.dp)
                                 )
                             }
+                            // Group sender badge
+                            if (!isUser && message.senderName.contains("مشرف")) {
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(NeonAmber.copy(alpha = 0.2f))
+                                        .padding(horizontal = 4.dp, vertical = 1.dp)
+                                ) {
+                                    Text("👑 مشرف", color = NeonAmber, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
                         }
 
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
+                            // Instant In-Chat AI Translate Button
+                            if (message.mediaType == "text" && message.text.isNotBlank()) {
+                                Box {
+                                    IconButton(
+                                        onClick = { showTranslateMenu = true },
+                                        modifier = Modifier.size(20.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Translate,
+                                            contentDescription = "Translate",
+                                            tint = if (message.translatedText != null) NeonCyan else Color.LightGray.copy(alpha = 0.75f),
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+
+                                    DropdownMenu(
+                                        expanded = showTranslateMenu,
+                                        onDismissRequest = { showTranslateMenu = false },
+                                        modifier = Modifier
+                                            .background(Color(0xFF13192B))
+                                            .border(1.dp, NeonCyan.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                                    ) {
+                                        Text(
+                                            text = "ترجمة ذكية فورية عبر NEXA AI 🌐",
+                                            color = NeonCyan,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("🇸🇦 إلى العربية (Arabic)", color = Color.White, fontSize = 12.sp) },
+                                            onClick = {
+                                                showTranslateMenu = false
+                                                onTranslateText?.invoke(com.example.util.NexaAiTranslator.TargetLanguage.ARABIC)
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("🇬🇧 إلى الإنجليزية (English)", color = Color.White, fontSize = 12.sp) },
+                                            onClick = {
+                                                showTranslateMenu = false
+                                                onTranslateText?.invoke(com.example.util.NexaAiTranslator.TargetLanguage.ENGLISH)
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("🇫🇷 إلى الفرنسية (Français)", color = Color.White, fontSize = 12.sp) },
+                                            onClick = {
+                                                showTranslateMenu = false
+                                                onTranslateText?.invoke(com.example.util.NexaAiTranslator.TargetLanguage.FRENCH)
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
                             // Reaction button
                             Box {
                                 Icon(
@@ -2391,7 +2521,7 @@ fun DirectChatMessageBubble(
                                 tint = Color.LightGray.copy(alpha = 0.7f),
                                 modifier = Modifier
                                     .size(14.dp)
-                                    .clickable { onCopyText?.invoke(message.text) }
+                                    .clickable { onCopyText?.invoke(if (message.showTranslation && message.translatedText != null) message.translatedText ?: message.text else message.text) }
                             )
 
                             // AI-specific Speech Synthesis
@@ -2403,7 +2533,8 @@ fun DirectChatMessageBubble(
                                     modifier = Modifier
                                         .size(14.dp)
                                         .clickable {
-                                            com.example.util.SpeechAndTtsManager.speak(message.text, context)
+                                            val textToSpeak = if (message.showTranslation && message.translatedText != null) message.translatedText ?: message.text else message.text
+                                            com.example.util.SpeechAndTtsManager.speak(textToSpeak, context)
                                         }
                                 )
                             }
@@ -2411,6 +2542,37 @@ fun DirectChatMessageBubble(
                     }
 
                     Spacer(modifier = Modifier.height(4.dp))
+
+                    // SMART CONTENT MODERATION / NEXA GUARD WARNING CARD
+                    if (message.isModerationFlagged) {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF2A141A)),
+                            border = BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.7f)),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Warning,
+                                    contentDescription = "Warning",
+                                    tint = Color(0xFFEF4444),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "درع الحماية NEXA Guard: ${message.moderationWarning ?: "تم حجب أو فحص هذا المحتوى لحمايتك 🛡️"}",
+                                    color = Color(0xFFFCA5A5),
+                                    fontSize = 10.sp,
+                                    lineHeight = 14.sp
+                                )
+                            }
+                        }
+                    }
 
                     // MEDIA: Image Attached
                     if (message.mediaType == "image" || !message.mediaUrl.isNullOrBlank()) {
@@ -2504,13 +2666,100 @@ fun DirectChatMessageBubble(
                         Spacer(modifier = Modifier.height(4.dp))
                     }
 
-                    // Message text
+                    // MESSAGE TEXT OR TRANSLATED TEXT DISPLAY
+                    val isDisplayingTranslation = message.showTranslation && !message.translatedText.isNullOrBlank()
+                    val activeDisplayText = if (isDisplayingTranslation) message.translatedText ?: message.text else message.text
+
                     Text(
-                        text = message.text,
+                        text = activeDisplayText,
                         color = Color.White,
                         fontSize = 13.sp,
                         lineHeight = 18.sp
                     )
+
+                    // TRANSLATION STATUS & TOGGLE BAR
+                    if (message.isTranslating) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(NeonCyan.copy(alpha = 0.15f))
+                                .border(1.dp, NeonCyan.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Loop,
+                                contentDescription = "Translating",
+                                tint = NeonCyan,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "جاري الترجمة الفورية عبر ذكاء NEXA...",
+                                color = NeonCyan,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    } else if (message.translatedText != null) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color.White.copy(alpha = 0.08f))
+                                .border(1.dp, NeonCyan.copy(alpha = 0.25f), RoundedCornerShape(8.dp))
+                                .padding(horizontal = 8.dp, vertical = 3.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Language,
+                                    contentDescription = "Translated",
+                                    tint = NeonCyan,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = if (isDisplayingTranslation) "مترجم بواسطة NEXA AI (${message.translatedLanguage ?: "ar"})" else "الترجمة متوفرة",
+                                    color = NeonCyan,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Text(
+                                text = if (isDisplayingTranslation) "عرض النص الأصلي ↩️" else "عرض الترجمة 🌐",
+                                color = Color.White,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .clickable { onToggleTranslationDisplay?.invoke() }
+                                    .padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
+                    } else if (!isUser && message.mediaType == "text" && message.text.isNotBlank()) {
+                        // Quick 1-Tap Translate Pill under received foreign messages
+                        Spacer(modifier = Modifier.height(3.dp))
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color.White.copy(alpha = 0.06f))
+                                .border(0.8.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(6.dp))
+                                .clickable {
+                                    onTranslateText?.invoke(com.example.util.NexaAiTranslator.TargetLanguage.ARABIC)
+                                }
+                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Translate, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(11.dp))
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text("ترجمة فورية 🌐", color = NeonCyan, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
 
                     Spacer(modifier = Modifier.height(4.dp))
 
