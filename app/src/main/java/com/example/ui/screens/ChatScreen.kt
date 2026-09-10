@@ -51,6 +51,9 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Diamond
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.OpenInFull
+import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.GraphicEq
@@ -99,6 +102,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -127,6 +131,7 @@ import com.example.data.model.ChatMessage
 import com.example.data.model.Conversation
 import com.example.data.model.User
 import com.example.ui.MajarrahViewModel
+import com.example.util.FileExportManager
 import com.example.ui.components.AdMobBannerSpace
 import com.example.ui.components.AiToolboxModal
 import com.example.ui.components.BlueVerificationBadge
@@ -199,12 +204,19 @@ fun ChatScreen(
         return
     }
 
-    // VIP Subscription Modal
+    // Paywall & VIP Subscription Modal (Nexa AI Pro)
+    val showPaywallModal by viewModel.showPaywallModal.collectAsState()
+    if (showPaywallModal) {
+        NexaProPaywallScreen(
+            viewModel = viewModel,
+            onBackClick = { viewModel.dismissPaywallModal() }
+        )
+    }
+
     if (showVipModal) {
-        NexaVipSubscriptionModal(
-            isCurrentlyVip = isVipMember,
-            onSubscribe = { tier -> viewModel.activateVipSubscription(tier) },
-            onDismiss = { showVipModal = false }
+        NexaProPaywallScreen(
+            viewModel = viewModel,
+            onBackClick = { showVipModal = false }
         )
     }
 
@@ -1097,13 +1109,37 @@ fun DirectChatScreen(
         }
     }
 
+    val isNexaProSubscriber by viewModel.isNexaProSubscriber.collectAsState()
+    val dailyAiGenerationsUsed by viewModel.dailyAiGenerationsUsed.collectAsState()
+    val remainingFreeGenerations by viewModel.remainingFreeGenerations.collectAsState()
+    val isGeneratingAiMedia by viewModel.isGeneratingAiMedia.collectAsState()
+
     var messageText by remember { mutableStateOf("") }
     var showMoreMenu by remember { mutableStateOf(false) }
     var showPhotoMenu by remember { mutableStateOf(false) }
     var selectedImageForZoom by remember { mutableStateOf<String?>(null) }
     var showConversationDetailsModal by remember { mutableStateOf(false) }
+    var showAiCreationModal by remember { mutableStateOf(false) }
+    var aiCreationInitialType by remember { mutableStateOf("image") }
+    var selectedVideoForPlay by remember { mutableStateOf<String?>(null) }
+    var selectedVideoPrompt by remember { mutableStateOf("") }
+    var selectedVideoDuration by remember { mutableIntStateOf(6) }
     var currentQuickEmoji by remember { mutableStateOf("👍") }
     var customNickname by remember { mutableStateOf("") }
+
+    val handleOpenMediaStudio: (String) -> Unit = { initialType ->
+        if (!isNexaProSubscriber && remainingFreeGenerations <= 0) {
+            viewModel.triggerPaywallModal()
+            android.widget.Toast.makeText(
+                context,
+                "استنفدت الحد اليومي المجاني (3/3 توليدات). الرجاء الاشتراك في Nexa AI Pro للوصول غير المحدود 🚀",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+        } else {
+            aiCreationInitialType = initialType
+            showAiCreationModal = true
+        }
+    }
 
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -1151,6 +1187,46 @@ fun DirectChatScreen(
                 )
             }
         }
+    }
+
+    // AI Media Creation Studio Modal (Imagen 3 & Veo 3.1)
+    if (showAiCreationModal) {
+        NexaAiMediaCreationDialog(
+            isNexaPro = isNexaProSubscriber,
+            remainingGenerations = remainingFreeGenerations,
+            initialMediaType = aiCreationInitialType,
+            onDismiss = { showAiCreationModal = false },
+            onUpgradeToPro = {
+                showAiCreationModal = false
+                viewModel.triggerPaywallModal()
+            },
+            onGenerate = { prompt, mediaType, aspectRatio ->
+                showAiCreationModal = false
+                viewModel.generateAiMediaInChat(
+                    conversationId = conversationId,
+                    prompt = prompt,
+                    mediaType = mediaType,
+                    aspectRatio = aspectRatio
+                )
+            }
+        )
+    }
+
+    if (selectedVideoForPlay != null) {
+        NexaVideoPlayerDialog(
+            videoUrl = selectedVideoForPlay!!,
+            prompt = selectedVideoPrompt,
+            durationSec = selectedVideoDuration,
+            onDismiss = { selectedVideoForPlay = null },
+            onDownload = {
+                FileExportManager.downloadMedia(
+                    context = context,
+                    mediaUrl = selectedVideoForPlay!!,
+                    prompt = selectedVideoPrompt.ifBlank { "NEXA_Veo31_Video" },
+                    isVideo = true
+                )
+            }
+        )
     }
 
     Box(
@@ -1542,18 +1618,25 @@ fun DirectChatScreen(
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     item {
+                        AiQuickPromptChip(text = "🎨 توليد صورة Imagen 3", icon = Icons.Default.AutoAwesome) {
+                            aiCreationInitialType = "image"
+                            showAiCreationModal = true
+                        }
+                    }
+                    item {
+                        AiQuickPromptChip(text = "🎬 توليد فيديو Veo 3.1", icon = Icons.Default.Videocam) {
+                            aiCreationInitialType = "video"
+                            showAiCreationModal = true
+                        }
+                    }
+                    item {
                         AiQuickPromptChip(text = "💡 أفكار إبداعية", icon = Icons.Default.Lightbulb) {
-                            messageText = "اقترح لي 3 أفكار إبداعية لمشروع تقني جديد"
+                            messageText = "اقترح لي 3 أفكار إبداعية لمشروع تقني ريادي"
                         }
                     }
                     item {
-                        AiQuickPromptChip(text = "🎨 توليد صورة", icon = Icons.Default.Image) {
-                            messageText = "صمم صورة ثلاثية الأبعاد خيالية لمدينة ذكية عام 2030"
-                        }
-                    }
-                    item {
-                        AiQuickPromptChip(text = "🧠 تحليل ذكي", icon = Icons.Default.Psychology) {
-                            messageText = "اشرح لي باختصار كيف تعمل خوارزميات التشفير E2EE"
+                        AiQuickPromptChip(text = "🧠 تحليل ذكي E2EE", icon = Icons.Default.Psychology) {
+                            messageText = "اشرح لي باختصار كيف تعمل خوارزميات التشفير E2EE في NEXA"
                         }
                     }
                     item {
@@ -1784,7 +1867,7 @@ fun DirectChatScreen(
                             }
                         }
 
-                        items(messages) { msg ->
+                        items(messages, key = { it.id.toString() + "_" + it.timestamp }) { msg ->
                             DirectChatMessageBubble(
                                 message = msg,
                                 isAiChat = isAiChat,
@@ -1797,6 +1880,11 @@ fun DirectChatScreen(
                                 },
                                 onImageClick = { imgUrl ->
                                     selectedImageForZoom = imgUrl
+                                },
+                                onVideoPlay = { vUrl, prompt ->
+                                    selectedVideoForPlay = vUrl
+                                    selectedVideoPrompt = prompt
+                                    selectedVideoDuration = 6
                                 },
                                 onTranslateText = { targetLang ->
                                     viewModel.translateChatMessage(msg, targetLang)
@@ -1834,6 +1922,49 @@ fun DirectChatScreen(
                                                 fontSize = 11.sp,
                                                 fontWeight = FontWeight.Medium
                                             )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if (isGeneratingAiMedia) {
+                            item {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.Start
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .background(
+                                                Brush.horizontalGradient(
+                                                    listOf(Color(0xFF1F1235), Color(0xFF101935))
+                                                )
+                                            )
+                                            .border(1.dp, NeonPurple.copy(alpha = 0.6f), RoundedCornerShape(16.dp))
+                                            .padding(horizontal = 14.dp, vertical = 10.dp)
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            androidx.compose.material3.CircularProgressIndicator(
+                                                modifier = Modifier.size(18.dp),
+                                                strokeWidth = 2.dp,
+                                                color = NeonCyan
+                                            )
+                                            Spacer(modifier = Modifier.width(10.dp))
+                                            Column {
+                                                Text(
+                                                    text = "✨ جاري توليد الوسائط بواسطة محرك NEXA AI...",
+                                                    color = NeonCyan,
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                Text(
+                                                    text = "معالجة فورية فائقة الدقة عبر Imagen 3 / Veo 3.1 ⚡",
+                                                    color = Color.LightGray,
+                                                    fontSize = 10.sp
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -2028,6 +2159,117 @@ fun DirectChatScreen(
                         }
                     }
                 } else {
+                    // Dedicated AI Generation Bar: "إنشاء صورة (Imagen 3)" & "إنشاء فيديو (Veo 3.1)"
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Create Image Button
+                        Row(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(Color(0xFF131F35).copy(alpha = 0.92f))
+                                .border(1.dp, NeonCyan.copy(alpha = 0.55f), RoundedCornerShape(14.dp))
+                                .clickable { handleOpenMediaStudio("image") }
+                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                tint = NeonCyan,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "إنشاء صورة (Imagen 3)",
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        // Create Video Button
+                        Row(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(Color(0xFF221334).copy(alpha = 0.92f))
+                                .border(1.dp, NeonPurple.copy(alpha = 0.55f), RoundedCornerShape(14.dp))
+                                .clickable { handleOpenMediaStudio("video") }
+                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Videocam,
+                                contentDescription = null,
+                                tint = NeonPurple,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "إنشاء فيديو (Veo 3.1)",
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        // Quota / Pro Badge
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isNexaProSubscriber) NeonAmber.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.08f))
+                                .border(1.dp, if (isNexaProSubscriber) NeonAmber else Color.White.copy(alpha = 0.2f), RoundedCornerShape(10.dp))
+                                .clickable {
+                                    if (!isNexaProSubscriber) viewModel.triggerPaywallModal()
+                                }
+                                .padding(horizontal = 7.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = if (isNexaProSubscriber) "PRO 👑" else "$remainingFreeGenerations/3 مجاني",
+                                color = if (isNexaProSubscriber) NeonAmber else if (remainingFreeGenerations > 0) NeonCyan else Color(0xFFEF4444),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    // Glassmorphic Quick Replies Bar
+                    LazyRow(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        val quickReplies = listOf("👍 تمام", "❤️ شكراً", "🔥 رائع", "👋 مرحباً", "⏳ لحظة", "✨ ممتاز")
+                        items(quickReplies) { reply ->
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(Color(0xFF131B2E).copy(alpha = 0.85f))
+                                    .border(1.dp, NeonCyan.copy(alpha = 0.3f), RoundedCornerShape(16.dp))
+                                    .clickable {
+                                        viewModel.sendChatMessage(conversationId, reply)
+                                    }
+                                    .padding(horizontal = 10.dp, vertical = 5.dp)
+                            ) {
+                                Text(
+                                    text = reply,
+                                    color = Color.White,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -2062,6 +2304,32 @@ fun DirectChatScreen(
                                 DropdownMenuItem(
                                     text = {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("🎨 إنشاء صورة AI (Imagen 3)", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    },
+                                    onClick = {
+                                        showPhotoMenu = false
+                                        handleOpenMediaStudio("image")
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.Videocam, contentDescription = null, tint = NeonPurple, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("🎬 إنشاء فيديو AI (Veo 3.1)", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    },
+                                    onClick = {
+                                        showPhotoMenu = false
+                                        handleOpenMediaStudio("video")
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
                                             Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(16.dp))
                                             Spacer(modifier = Modifier.width(8.dp))
                                             Text("معرض الصور", color = Color.White, fontSize = 12.sp)
@@ -2086,6 +2354,21 @@ fun DirectChatScreen(
                                     }
                                 )
                             }
+                        }
+
+                        // AI Media Studio Quick Magic Button
+                        IconButton(
+                            onClick = {
+                                handleOpenMediaStudio("image")
+                            },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = "Create AI Media",
+                                tint = if (isNexaProSubscriber) NeonAmber else NeonCyan,
+                                modifier = Modifier.size(19.dp)
+                            )
                         }
 
                         Spacer(modifier = Modifier.width(2.dp))
@@ -2237,6 +2520,7 @@ fun DirectChatMessageBubble(
     onReactionSelect: ((String) -> Unit)? = null,
     onCopyText: ((String) -> Unit)? = null,
     onImageClick: ((String) -> Unit)? = null,
+    onVideoPlay: ((String, String) -> Unit)? = null,
     onTranslateText: ((com.example.util.NexaAiTranslator.TargetLanguage) -> Unit)? = null,
     onToggleTranslationDisplay: (() -> Unit)? = null
 ) {
@@ -2574,8 +2858,324 @@ fun DirectChatMessageBubble(
                         }
                     }
 
-                    // MEDIA: Image Attached
-                    if (message.mediaType == "image" || !message.mediaUrl.isNullOrBlank()) {
+                    // MEDIA: AI Generated Image (Imagen 3)
+                    if (message.mediaType == "ai_image") {
+                        val imageUrl = message.mediaUrl ?: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop"
+                        val aspectHeight = when (message.mediaAspect) {
+                            "16:9" -> 160.dp
+                            "9:16" -> 240.dp
+                            else -> 200.dp
+                        }
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(aspectHeight)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(Color.Black.copy(alpha = 0.4f))
+                                    .border(1.dp, NeonCyan.copy(alpha = 0.4f), RoundedCornerShape(14.dp))
+                                    .clickable { onImageClick?.invoke(imageUrl) }
+                            ) {
+                                AsyncImage(
+                                    model = imageUrl,
+                                    contentDescription = "AI Generated Image",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+
+                                // Pro AI Badge Overlay
+                                Row(
+                                    modifier = Modifier
+                                        .align(Alignment.TopStart)
+                                        .padding(8.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color(0xFF0F172A).copy(alpha = 0.85f))
+                                        .border(1.dp, NeonCyan.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.AutoAwesome,
+                                        contentDescription = null,
+                                        tint = NeonCyan,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "Imagen 3 Ultra HD",
+                                        color = NeonCyan,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+
+                                // Aspect Ratio Badge
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(8.dp)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(Color.Black.copy(alpha = 0.7f))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = message.mediaAspect ?: "1:1",
+                                        color = Color.White,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            // Prompt & Media Actions Bar (Zoom & Download)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 4.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                if (!message.generationPrompt.isNullOrBlank()) {
+                                    Text(
+                                        text = "🎨 \"${message.generationPrompt}\"",
+                                        color = Color.LightGray,
+                                        fontSize = 11.sp,
+                                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                                        maxLines = 1,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                } else {
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
+
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    // Fullscreen Zoom Button
+                                    IconButton(
+                                        onClick = { onImageClick?.invoke(imageUrl) },
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFF1E293B).copy(alpha = 0.85f))
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.OpenInFull,
+                                            contentDescription = "Zoom Image",
+                                            tint = NeonCyan,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+
+                                    // Download Button
+                                    IconButton(
+                                        onClick = {
+                                            FileExportManager.downloadMedia(
+                                                context = context,
+                                                mediaUrl = imageUrl,
+                                                prompt = message.generationPrompt ?: message.text.ifBlank { "NEXA_Imagen3_Image" },
+                                                isVideo = false
+                                            )
+                                        },
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .clip(CircleShape)
+                                            .background(NeonCyan.copy(alpha = 0.2f))
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Download,
+                                            contentDescription = "Download Image",
+                                            tint = NeonCyan,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
+
+                    // MEDIA: AI Generated Video (Veo 3.1)
+                    if (message.mediaType == "ai_video") {
+                        val videoThumbnail = message.mediaUrl ?: "https://images.unsplash.com/photo-1536240478700-b869070f9279?w=800&auto=format&fit=crop"
+                        val aspectHeight = when (message.mediaAspect) {
+                            "16:9" -> 170.dp
+                            "9:16" -> 250.dp
+                            else -> 210.dp
+                        }
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(aspectHeight)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(Color.Black.copy(alpha = 0.5f))
+                                    .border(1.dp, NeonPurple.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
+                                    .clickable {
+                                        onVideoPlay?.invoke(videoThumbnail, message.generationPrompt ?: message.text)
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                AsyncImage(
+                                    model = videoThumbnail,
+                                    contentDescription = "AI Generated Video Preview",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+
+                                // Dark Tint for video aesthetic
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(Color.Black.copy(alpha = 0.3f))
+                                )
+
+                                // Glowing Play Button Overlay
+                                Box(
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .clip(CircleShape)
+                                        .background(NeonPurple.copy(alpha = 0.85f))
+                                        .border(2.dp, Color.White, CircleShape)
+                                        .clickable {
+                                            onVideoPlay?.invoke(videoThumbnail, message.generationPrompt ?: message.text)
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.PlayArrow,
+                                        contentDescription = "Play Video",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(28.dp)
+                                    )
+                                }
+
+                                // Video Header Badge Overlay
+                                Row(
+                                    modifier = Modifier
+                                        .align(Alignment.TopStart)
+                                        .padding(8.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color(0xFF0F172A).copy(alpha = 0.85f))
+                                        .border(1.dp, NeonPurple.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+                                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Videocam,
+                                        contentDescription = null,
+                                        tint = NeonPurple,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "Veo 3.1 4K Cinema",
+                                        color = NeonPurple,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+
+                                // Duration Badge
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomEnd)
+                                        .padding(8.dp)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(Color.Black.copy(alpha = 0.75f))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = "⏱️ 00:06 • 4K",
+                                        color = Color.White,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            // Prompt & Video Actions Bar (Play & Download)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 4.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                if (!message.generationPrompt.isNullOrBlank()) {
+                                    Text(
+                                        text = "🎬 \"${message.generationPrompt}\"",
+                                        color = Color.LightGray,
+                                        fontSize = 11.sp,
+                                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                                        maxLines = 1,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                } else {
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
+
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    // Play Button
+                                    IconButton(
+                                        onClick = {
+                                            onVideoPlay?.invoke(videoThumbnail, message.generationPrompt ?: message.text)
+                                        },
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .clip(CircleShape)
+                                            .background(NeonPurple.copy(alpha = 0.3f))
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.PlayArrow,
+                                            contentDescription = "Play Video",
+                                            tint = NeonPurple,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+
+                                    // Download Button
+                                    IconButton(
+                                        onClick = {
+                                            FileExportManager.downloadMedia(
+                                                context = context,
+                                                mediaUrl = videoThumbnail,
+                                                prompt = message.generationPrompt ?: message.text.ifBlank { "NEXA_Veo31_Video" },
+                                                isVideo = true
+                                            )
+                                        },
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .clip(CircleShape)
+                                            .background(NeonPurple.copy(alpha = 0.2f))
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Download,
+                                            contentDescription = "Download Video",
+                                            tint = NeonPurple,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
+
+                    // MEDIA: Standard User Image Attached
+                    if (message.mediaType == "image" || (message.mediaType != "ai_image" && message.mediaType != "ai_video" && message.mediaType != "voice" && !message.mediaUrl.isNullOrBlank())) {
                         val imageUrl = message.mediaUrl ?: "https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=600&auto=format&fit=crop"
                         Box(
                             modifier = Modifier
@@ -3199,6 +3799,712 @@ fun EncryptedCallDialog(
                                 modifier = Modifier.size(20.dp)
                             )
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// =====================================================================
+// NEXA AI MEDIA CREATION STUDIO DIALOG (Imagen 3 & Veo 3.1)
+// =====================================================================
+@Composable
+fun NexaAiMediaCreationDialog(
+    isNexaPro: Boolean,
+    remainingGenerations: Int,
+    initialMediaType: String = "image",
+    onDismiss: () -> Unit,
+    onUpgradeToPro: () -> Unit,
+    onGenerate: (prompt: String, mediaType: String, aspectRatio: String) -> Unit
+) {
+    var selectedType by remember { mutableStateOf(initialMediaType) } // "image" or "video"
+    var promptText by remember { mutableStateOf("") }
+    var selectedAspectRatio by remember { mutableStateOf("1:1") } // "1:1", "16:9", "9:16"
+
+    val isQuotaExhausted = (!isNexaPro) && remainingGenerations <= 0
+
+    val samplePrompts = remember(selectedType) {
+        if (selectedType == "image") {
+            listOf(
+                "رائد فضاء يستكشف كوكباً نيونياً بألوان سايبربانك",
+                "مدينة ذكية متطورة عام 2050 مع سيارات طائرة وشلالات",
+                "شخصية أنمي ثلاثية الأبعاد بملابس مستقبلية وإضاءة سينمائية 8K",
+                "غروب الشمس على شاطئ استوائي مع رمال متوهجة كريستالية"
+            )
+        } else {
+            listOf(
+                "طيران درون سينمائي فوق جبال جليدية متوهجة عند الفجر",
+                "سيارة رياضية خارقة تنطلق بسرعة في شوارع طوكيو الممطرة",
+                "بوابة مجرية فضائية تنفتح وتطلق طاقة ضوئية هائلة",
+                "روبوت ذكاء اصطناعي يعزف بيانو كلاسيكي في قاعة كريستال"
+            )
+        }
+    }
+
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                .background(Color(0xFF0F1424))
+                .border(1.dp, if (isNexaPro) NeonAmber.copy(alpha = 0.5f) else NeonCyan.copy(alpha = 0.4f), RoundedCornerShape(24.dp))
+                .padding(20.dp)
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Header & Title
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Clear,
+                            contentDescription = "Close",
+                            tint = Color.Gray,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "استوديو NEXA AI الإبداعي",
+                            color = Color.White,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = null,
+                            tint = if (isNexaPro) NeonAmber else NeonCyan,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Media Type Selector (Image vs Video)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color(0xFF161E33))
+                        .padding(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    // Image Tab
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .then(
+                                if (selectedType == "image") Modifier.background(Brush.horizontalGradient(listOf(NeonCyan, Color(0xFF0284C7))))
+                                else Modifier.background(Color.Transparent)
+                            )
+                            .clickable { selectedType = "image" }
+                            .padding(vertical = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Image,
+                                contentDescription = null,
+                                tint = if (selectedType == "image") Color.Black else Color.Gray,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "صورة Imagen 3",
+                                color = if (selectedType == "image") Color.Black else Color.LightGray,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    // Video Tab
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .then(
+                                if (selectedType == "video") Modifier.background(Brush.horizontalGradient(listOf(NeonPurple, NeonPink)))
+                                else Modifier.background(Color.Transparent)
+                            )
+                            .clickable { selectedType = "video" }
+                            .padding(vertical = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Videocam,
+                                contentDescription = null,
+                                tint = if (selectedType == "video") Color.White else Color.Gray,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "فيديو Veo 3.1 4K",
+                                color = if (selectedType == "video") Color.White else Color.LightGray,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Prompt Input Box
+                Text(
+                    text = "صف ما تريد توليده بالتفصيل:",
+                    color = Color.LightGray,
+                    fontSize = 12.sp,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Start,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(95.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color(0xFF131A2C))
+                        .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(14.dp))
+                        .padding(10.dp)
+                ) {
+                    if (promptText.isEmpty()) {
+                        Text(
+                            text = if (selectedType == "image") "اكتب وصف الصورة بالتفصيل (مثل: مشهد خيالي نيون بدقة 8K)..."
+                            else "اكتب سيناريو الفيديو وحركة الكاميرا والإضاءة...",
+                            color = Color.Gray,
+                            fontSize = 12.sp
+                        )
+                    }
+                    BasicTextField(
+                        value = promptText,
+                        onValueChange = { promptText = it },
+                        textStyle = androidx.compose.ui.text.TextStyle(
+                            color = Color.White,
+                            fontSize = 13.sp,
+                            lineHeight = 18.sp
+                        ),
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Sample Prompt Chips
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    items(samplePrompts) { prompt ->
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFF162035))
+                                .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(12.dp))
+                                .clickable { promptText = prompt }
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = prompt,
+                                color = NeonCyan.copy(alpha = 0.85f),
+                                fontSize = 10.sp,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Aspect Ratio Selector
+                Text(
+                    text = "الأبعاد والنسبة (Aspect Ratio):",
+                    color = Color.LightGray,
+                    fontSize = 12.sp,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Start,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val ratios = listOf(
+                        Triple("1:1", "1:1 مربع", "انستغرام / صور"),
+                        Triple("16:9", "16:9 سينما", "يوتيوب / أفلام"),
+                        Triple("9:16", "9:16 عمودي", "ريلز / ستوري")
+                    )
+
+                    ratios.forEach { (ratio, label, desc) ->
+                        val isSelected = selectedAspectRatio == ratio
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isSelected) NeonCyan.copy(alpha = 0.15f) else Color(0xFF131A2C))
+                                .border(
+                                    width = if (isSelected) 1.5.dp else 1.dp,
+                                    color = if (isSelected) NeonCyan else Color.White.copy(alpha = 0.08f),
+                                    shape = RoundedCornerShape(10.dp)
+                                )
+                                .clickable { selectedAspectRatio = ratio }
+                                .padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = label,
+                                    color = if (isSelected) NeonCyan else Color.White,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = desc,
+                                    color = Color.Gray,
+                                    fontSize = 9.sp
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Quota & Pro Subscription Banner
+                if (isNexaPro) {
+                    // Pro Subscriber Banner
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                Brush.horizontalGradient(
+                                    listOf(Color(0xFF2A1C0A), Color(0xFF1E1528))
+                                )
+                            )
+                            .border(1.dp, NeonAmber.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Diamond,
+                                contentDescription = null,
+                                tint = NeonAmber,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    text = "👑 باقة NEXA AI Pro نشطة • توليد غير محدود",
+                                    color = NeonAmber,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "سرعة معالجة قصوى ودقة 4K فائقة الوضوح ⚡",
+                                    color = Color.LightGray,
+                                    fontSize = 9.sp
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    // Free User Banner with Remaining Limit
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                if (isQuotaExhausted) Color(0xFF2B1318)
+                                else Color(0xFF111D2E)
+                            )
+                            .border(
+                                1.dp,
+                                if (isQuotaExhausted) Color(0xFFEF4444).copy(alpha = 0.6f) else NeonCyan.copy(alpha = 0.3f),
+                                RoundedCornerShape(12.dp)
+                            )
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = if (isQuotaExhausted) Icons.Default.Lock else Icons.Default.FlashOn,
+                                    contentDescription = null,
+                                    tint = if (isQuotaExhausted) Color(0xFFEF4444) else NeonCyan,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Column {
+                                    Text(
+                                        text = if (isQuotaExhausted) "⛔ استنفدت الحد اليومي المجاني (3/3)"
+                                        else "⚡ الرصيد اليومي: $remainingGenerations من 3 متبقي",
+                                        color = if (isQuotaExhausted) Color(0xFFFCA5A5) else NeonCyan,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = if (isQuotaExhausted) "اشترك في Pro للتوليد بلا حدود!"
+                                        else "توليد يومي مجاني متجدد كل 24 ساعة",
+                                        color = Color.LightGray,
+                                        fontSize = 9.sp
+                                    )
+                                }
+                            }
+
+                            // Upgrade button
+                            androidx.compose.material3.TextButton(
+                                onClick = onUpgradeToPro,
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = "ترقية Pro 👑",
+                                    color = NeonAmber,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Action Buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Button(
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f),
+                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF1E293B)
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("إلغاء", color = Color.LightGray, fontSize = 13.sp)
+                    }
+
+                    Button(
+                        onClick = {
+                            if (isQuotaExhausted) {
+                                onUpgradeToPro()
+                            } else {
+                                val effectivePrompt = promptText.ifBlank {
+                                    if (selectedType == "image") "مدينة ذكية مستقبلية في عام 2050 بتصميم سايبربانك وإضاءة نيون سينمائية فائقة الوضوح"
+                                    else "مشهد سينمائي لطيران فوق جزيرة استوائية ساحرة مع شلالات مائية وأشعة شمس الغروب"
+                                }
+                                onGenerate(effectivePrompt, selectedType, selectedAspectRatio)
+                            }
+                        },
+                        modifier = Modifier.weight(1.5f),
+                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                            containerColor = if (isQuotaExhausted) NeonAmber else if (selectedType == "video") NeonPurple else NeonCyan
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = if (isQuotaExhausted) Icons.Default.Diamond else Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                tint = if (isQuotaExhausted || selectedType != "video") Color.Black else Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (isQuotaExhausted) "فتح Pro للبدء 👑" else "بدء التوليد ✨",
+                                color = if (isQuotaExhausted || selectedType != "video") Color.Black else Color.White,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun NexaVideoPlayerDialog(
+    videoUrl: String,
+    prompt: String,
+    durationSec: Int = 6,
+    onDismiss: () -> Unit,
+    onDownload: () -> Unit
+) {
+    var isPlaying by remember { mutableStateOf(true) }
+    var playbackProgress by remember { mutableFloatStateOf(0f) }
+
+    LaunchedEffect(isPlaying) {
+        if (isPlaying) {
+            val totalSteps = durationSec * 30
+            while (isPlaying) {
+                for (step in 0..totalSteps) {
+                    if (!isPlaying) break
+                    playbackProgress = step.toFloat() / totalSteps
+                    delay(33)
+                }
+                playbackProgress = 0f
+            }
+        }
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.95f))
+                .padding(16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(Color(0xFF0F1523))
+                    .border(1.dp, NeonPurple.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
+                    .padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Header: Veo Title & Close Button
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(NeonPurple.copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Videocam,
+                                contentDescription = null,
+                                tint = NeonPurple,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = "مشغل فيديو NEXA AI (Veo 3.1)",
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Ultra HD 4K • 60 FPS Cinema",
+                                color = NeonPurple,
+                                fontSize = 10.sp
+                            )
+                        }
+                    }
+
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.1f))
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Clear,
+                            contentDescription = "Close",
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Video Display Canvas / Frame
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(240.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color.Black)
+                        .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(14.dp))
+                        .clickable { isPlaying = !isPlaying },
+                    contentAlignment = Alignment.Center
+                ) {
+                    AsyncImage(
+                        model = videoUrl,
+                        contentDescription = "AI Video Content",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+
+                    // Video Controls Overlay when paused
+                    if (!isPlaying) {
+                        Box(
+                            modifier = Modifier
+                                .size(56.dp)
+                                .clip(CircleShape)
+                                .background(NeonPurple.copy(alpha = 0.9f))
+                                .border(2.dp, Color.White, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = "Play",
+                                tint = Color.White,
+                                modifier = Modifier.size(32.dp)
+                            )
+                        }
+                    }
+
+                    // Watermark / Model Badge
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color.Black.copy(alpha = 0.7f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "Google Veo 3.1",
+                            color = NeonPurple,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Progress Scrubber Bar
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    androidx.compose.material3.LinearProgressIndicator(
+                        progress = { playbackProgress },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(2.dp)),
+                        color = NeonPurple,
+                        trackColor = Color.White.copy(alpha = 0.15f),
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    val currentSec = (playbackProgress * durationSec).toInt()
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = String.format(java.util.Locale.getDefault(), "00:%02d", currentSec),
+                            color = Color.LightGray,
+                            fontSize = 10.sp
+                        )
+                        Text(
+                            text = String.format(java.util.Locale.getDefault(), "00:%02d", durationSec),
+                            color = Color.Gray,
+                            fontSize = 10.sp
+                        )
+                    }
+                }
+
+                if (prompt.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "🎬 \"$prompt\"",
+                        color = Color.LightGray,
+                        fontSize = 11.sp,
+                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                        maxLines = 2,
+                        textAlign = TextAlign.Center
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Control & Action Buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Play / Pause Toggle
+                    Button(
+                        onClick = { isPlaying = !isPlaying },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isPlaying) Color(0xFF1E293B) else NeonPurple
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (isPlaying) "إيقاف مؤقت" else "تشغيل",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    // Download Video Button
+                    Button(
+                        onClick = onDownload,
+                        modifier = Modifier.weight(1.2f),
+                        colors = ButtonDefaults.buttonColors(containerColor = NeonPurple),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Download,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "تحميل الفيديو 📥",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }

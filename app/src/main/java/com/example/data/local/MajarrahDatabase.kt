@@ -20,7 +20,7 @@ import com.example.data.model.UserProfile
         Conversation::class,
         CartItem::class
     ],
-    version = 5,
+    version = 7,
     exportSchema = false
 )
 abstract class MajarrahDatabase : RoomDatabase() {

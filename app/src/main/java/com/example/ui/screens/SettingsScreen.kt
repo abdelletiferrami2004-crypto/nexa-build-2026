@@ -568,8 +568,9 @@ fun SettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable {
-                        viewModel.startLoginFlow()
-                        onLogoutClick()
+                        viewModel.signOutUser {
+                            onLogoutClick()
+                        }
                     },
                 shape = RoundedCornerShape(16.dp),
                 backgroundColor = Color.White.copy(alpha = 0.06f)

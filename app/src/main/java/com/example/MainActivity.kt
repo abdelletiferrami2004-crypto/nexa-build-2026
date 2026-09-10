@@ -6,6 +6,12 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.fragment.app.FragmentActivity
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -244,68 +250,100 @@ fun MajarrahApp(viewModel: MajarrahViewModel) {
                     .background(androidx.compose.material3.MaterialTheme.colorScheme.background)
                     .padding(innerPadding)
             ) {
-                when (currentRoute) {
-                    "home" -> {
-                        HomeScreen(
-                            viewModel = viewModel,
-                            onOpenChat = { isChatActive = true },
-                            onOpenServicesMenu = { currentRoute = "services" },
-                            onNavigateToProduct = { currentRoute = "store" },
-                            onNavigateToReels = { currentRoute = "reels" }
-                        )
-                    }
+                AnimatedContent(
+                    targetState = currentRoute,
+                    transitionSpec = {
+                        (fadeIn(androidx.compose.animation.core.tween(250)) + slideInHorizontally { it / 8 }) togetherWith
+                                (fadeOut(androidx.compose.animation.core.tween(200)) + slideOutHorizontally { -it / 8 })
+                    },
+                    label = "RouteTransition"
+                ) { route ->
+                    when (route) {
+                        "home" -> {
+                            HomeScreen(
+                                viewModel = viewModel,
+                                onOpenChat = { isChatActive = true },
+                                onOpenServicesMenu = { currentRoute = "services" },
+                                onNavigateToProduct = { currentRoute = "store" },
+                                onNavigateToReels = { currentRoute = "reels" }
+                            )
+                        }
 
-                    "friends" -> {
-                        SocialScreen(
-                            viewModel = viewModel,
-                            onOpenChatWithFriend = { convId ->
-                                viewModel.selectConversation(convId)
-                                isChatActive = true
-                            },
-                            onNavigateToReels = {
-                                currentRoute = "reels"
-                            }
-                        )
-                    }
-
-                    "reels" -> {
-                        ReelsScreen(viewModel = viewModel)
-                    }
-
-                    "store" -> {
-                        StoreScreen(
-                            viewModel = viewModel,
-                            onProductSelected = { product ->
-                                viewModel.addToCart(product)
-                            }
-                        )
-                    }
-
-                    "services" -> {
-                        ServicesScreen(
-                            viewModel = viewModel,
-                            onNavigate = { key ->
-                                if (key == "chat") {
+                        "friends" -> {
+                            SocialScreen(
+                                viewModel = viewModel,
+                                onOpenChatWithFriend = { convId ->
+                                    viewModel.selectConversation(convId)
                                     isChatActive = true
-                                } else {
-                                    currentRoute = key
+                                },
+                                onNavigateToReels = {
+                                    currentRoute = "reels"
                                 }
-                            }
-                        )
-                    }
+                            )
+                        }
 
-                    "profile" -> {
-                        ProfileScreen(viewModel = viewModel)
-                    }
+                        "reels" -> {
+                            ReelsScreen(viewModel = viewModel)
+                        }
 
-                    else -> {
-                        HomeScreen(
-                            viewModel = viewModel,
-                            onOpenChat = { isChatActive = true },
-                            onOpenServicesMenu = { currentRoute = "services" },
-                            onNavigateToProduct = { currentRoute = "store" },
-                            onNavigateToReels = { currentRoute = "reels" }
-                        )
+                        "store" -> {
+                            StoreScreen(
+                                viewModel = viewModel,
+                                onProductSelected = { product ->
+                                    viewModel.addToCart(product)
+                                }
+                            )
+                        }
+
+                        "services" -> {
+                            ServicesScreen(
+                                viewModel = viewModel,
+                                onNavigate = { key ->
+                                    if (key == "chat") {
+                                        isChatActive = true
+                                    } else {
+                                        currentRoute = key
+                                    }
+                                }
+                            )
+                        }
+
+                        "profile" -> {
+                            ProfileScreen(
+                                viewModel = viewModel,
+                                onNavigateToPrivacyAndSupport = {
+                                    currentRoute = "privacy_and_support"
+                                }
+                            )
+                        }
+
+                        "privacy_and_support" -> {
+                            com.example.ui.screens.PrivacyPolicyAndSupportScreen(
+                                viewModel = viewModel,
+                                onBackClick = {
+                                    currentRoute = "profile"
+                                }
+                            )
+                        }
+
+                        "support_and_report" -> {
+                            com.example.ui.screens.SupportAndReportScreen(
+                                viewModel = viewModel,
+                                onBackClick = {
+                                    currentRoute = "services"
+                                }
+                            )
+                        }
+
+                        else -> {
+                            HomeScreen(
+                                viewModel = viewModel,
+                                onOpenChat = { isChatActive = true },
+                                onOpenServicesMenu = { currentRoute = "services" },
+                                onNavigateToProduct = { currentRoute = "store" },
+                                onNavigateToReels = { currentRoute = "reels" }
+                            )
+                        }
                     }
                 }
             }

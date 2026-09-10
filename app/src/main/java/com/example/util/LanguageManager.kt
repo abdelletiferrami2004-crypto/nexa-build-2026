@@ -52,24 +52,24 @@ object LanguageManager {
                 else -> "منصة NEXA الذكية"
             }
             "profile_title" -> when (effective) {
- AppLanguage.ENGLISH ->"Profile & Protection Settings"
- AppLanguage.SPANISH ->"Perfil y Ajustes de Protección"
- AppLanguage.FRENCH ->"Profil & Paramètres de Protection"
- AppLanguage.GERMAN ->"Profil & Schutz-Einstellungen"
- AppLanguage.CHINESE ->"个人资料与安全设置"
- AppLanguage.JAPANESE ->"プロフィールと保護設定"
- AppLanguage.RUSSIAN ->"Профиль и настройки защиты"
- else ->"الملف الشخصي والحماية"
+                AppLanguage.ENGLISH -> "Profile & Protection Settings"
+                AppLanguage.SPANISH -> "Perfil y Ajustes de Protección"
+                AppLanguage.FRENCH -> "Profil & Paramètres de Protection"
+                AppLanguage.GERMAN -> "Profil & Schutz-Einstellungen"
+                AppLanguage.CHINESE -> "个人资料与安全设置"
+                AppLanguage.JAPANESE -> "プロフィールと保護設定"
+                AppLanguage.RUSSIAN -> "Профиль и настройки защиты"
+                else -> "الملف الشخصي والحماية"
             }
             "lang_settings_title" -> when (effective) {
- AppLanguage.ENGLISH ->"App Language & Auto-Detection"
- AppLanguage.SPANISH ->"Idioma de la App y Detección Automática"
- AppLanguage.FRENCH ->"Langue de l'App & Détection Auto"
- AppLanguage.GERMAN ->"App-Sprache & Automatische Erkennung"
- AppLanguage.CHINESE ->"应用语言与自动检测"
- AppLanguage.JAPANESE ->"アプリ言語と自動検出"
- AppLanguage.RUSSIAN ->"Язык приложения и автоопределение"
- else ->"لغة التطبيق والكشف التلقائي"
+                AppLanguage.ENGLISH -> "App Language & Auto-Detection"
+                AppLanguage.SPANISH -> "Idioma de la App y Detección Automática"
+                AppLanguage.FRENCH -> "Langue de l'App & Détection Auto"
+                AppLanguage.GERMAN -> "App-Sprache & Automatische Erkennung"
+                AppLanguage.CHINESE -> "应用语言与自动检测"
+                AppLanguage.JAPANESE -> "アプリ言語と自動検出"
+                AppLanguage.RUSSIAN -> "Язык приложения и автоопределение"
+                else -> "لغة التطبيق والكشف التلقائي"
             }
             "system_detected" -> when (effective) {
                 AppLanguage.ENGLISH -> "System Language Detected:"
@@ -92,41 +92,65 @@ object LanguageManager {
                 else -> "إنشاء ستوري"
             }
             "crowns_and_comments" -> when (effective) {
- AppLanguage.ENGLISH ->"Crowns & Comments"
- AppLanguage.SPANISH ->"Coronas y Comentarios"
- AppLanguage.FRENCH ->"Couronnes & Commentaires"
- AppLanguage.GERMAN ->"Kronen & Kommentare"
- AppLanguage.CHINESE ->"皇冠与评论"
- AppLanguage.JAPANESE ->"クラウンとコメント"
- AppLanguage.RUSSIAN ->"Короны и комментарии"
- else ->"التيجان والتعليقات"
+                AppLanguage.ENGLISH -> "Crowns & Comments"
+                AppLanguage.SPANISH -> "Coronas y Comentarios"
+                AppLanguage.FRENCH -> "Couronnes & Commentaires"
+                AppLanguage.GERMAN -> "Kronen & Kommentare"
+                AppLanguage.CHINESE -> "皇冠与评论"
+                AppLanguage.JAPANESE -> "クラウンとコメント"
+                AppLanguage.RUSSIAN -> "Короны и комментарии"
+                else -> "التيجان والتعليقات"
             }
             "teen_mode_title" -> when (effective) {
- AppLanguage.ENGLISH ->"Teen Protection Mode"
- AppLanguage.SPANISH ->"Modo Protección Juvenil"
- AppLanguage.FRENCH ->"Mode Protection Ados"
- AppLanguage.GERMAN ->"Jugendschutz-Modus"
- AppLanguage.CHINESE ->"青少年保护模式"
- AppLanguage.JAPANESE ->"ティーン保護モード"
- AppLanguage.RUSSIAN ->"Режим защиты подростков"
- else ->"تفعيل وضع الناشئة"
+                AppLanguage.ENGLISH -> "Teen Protection Mode"
+                AppLanguage.SPANISH -> "Modo Protección Juvenil"
+                AppLanguage.FRENCH -> "Mode Protection Ados"
+                AppLanguage.GERMAN -> "Jugendschutz-Modus"
+                AppLanguage.CHINESE -> "青少年保护模式"
+                AppLanguage.JAPANESE -> "ティーン保護モード"
+                AppLanguage.RUSSIAN -> "Режим защиты подростков"
+                else -> "تفعيل وضع الناشئة"
             }
             "ai_assistant" -> when (effective) {
- AppLanguage.ENGLISH ->"NEXA AI Assistant"
- AppLanguage.SPANISH ->"Asistente NEXA AI"
- AppLanguage.FRENCH ->"Assistant NEXA AI"
- AppLanguage.GERMAN ->"NEXA AI Assistent"
- AppLanguage.CHINESE ->"NEXA AI 助手"
- AppLanguage.JAPANESE ->"NEXA AI アシスタント"
- AppLanguage.RUSSIAN ->"NEXA AI Ассистент"
- else ->"ذكاء NEXA AI"
+                AppLanguage.ENGLISH -> "NEXA AI Assistant"
+                AppLanguage.SPANISH -> "Asistente NEXA AI"
+                AppLanguage.FRENCH -> "Assistant NEXA AI"
+                AppLanguage.GERMAN -> "NEXA AI Assistent"
+                AppLanguage.CHINESE -> "NEXA AI 助手"
+                AppLanguage.JAPANESE -> "NEXA AI アシスタント"
+                AppLanguage.RUSSIAN -> "NEXA AI Ассистент"
+                else -> "ذكاء NEXA AI"
             }
             "pin_chat" -> when (effective) {
- AppLanguage.ENGLISH ->"PIN Encrypted Vault"
- AppLanguage.SPANISH ->"Bóveda Cifrada por PIN"
- AppLanguage.FRENCH ->"Coffre Chiffré par PIN"
- AppLanguage.GERMAN ->"PIN Verschlüsselter Tresor"
- else ->"رمز PIN للدردشة المشفرة"
+                AppLanguage.ENGLISH -> "PIN Encrypted Vault"
+                AppLanguage.SPANISH -> "Bóveda Cifrada por PIN"
+                AppLanguage.FRENCH -> "Coffre Chiffré par PIN"
+                AppLanguage.GERMAN -> "PIN Verschlüsselter Tresor"
+                else -> "رمز PIN للدردشة المشفرة"
+            }
+            "support_and_report" -> when (effective) {
+                AppLanguage.ENGLISH -> "Support & Abuse Report Center"
+                AppLanguage.FRENCH -> "Centre d'Assistance et de Signalement"
+                AppLanguage.SPANISH -> "Centro de Soporte y Reportes"
+                else -> "مركز الدعم الفني والبلاغات"
+            }
+            "gdpr_title" -> when (effective) {
+                AppLanguage.ENGLISH -> "GDPR Compliance & Privacy Vault"
+                AppLanguage.FRENCH -> "Conformité RGPD et Confidentialité"
+                AppLanguage.SPANISH -> "Cumplimiento de RGPD y Privacidad"
+                else -> "الامتثال لمعايير الخصوصية GDPR"
+            }
+            "e2ee_badge" -> when (effective) {
+                AppLanguage.ENGLISH -> "AES-256 GCM End-to-End Encrypted"
+                AppLanguage.FRENCH -> "Chiffrement de Bout en Bout AES-256"
+                AppLanguage.SPANISH -> "Cifrado de Extremo a Extremo AES-256"
+                else -> "مشفر بالكامل بتقنية AES-256 E2EE"
+            }
+            "biometric_2fa" -> when (effective) {
+                AppLanguage.ENGLISH -> "Biometric Unlock & Two-Factor Auth"
+                AppLanguage.FRENCH -> "Déverrouillage Biométrique & Double Authentification"
+                AppLanguage.SPANISH -> "Desbloqueo Biométrico y Autenticación 2FA"
+                else -> "المصادقة البيومترية والتحقق بخطوتين (2FA)"
             }
             else -> key
         }

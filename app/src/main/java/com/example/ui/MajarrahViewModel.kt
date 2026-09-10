@@ -29,7 +29,9 @@ import com.example.data.model.User
 
 import com.example.data.model.AppLanguage
 import com.example.util.LanguageManager
+import com.example.util.NexaBillingManager
 import com.example.util.NexaNotificationManager
+import com.example.util.NexaQuotaManager
 import com.example.util.NotificationSoundManager
 
 sealed class LoginStep {
@@ -50,17 +52,273 @@ sealed class LoginStep {
 
 class MajarrahViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val repository: MajarrahRepository
+    private val repository: MajarrahRepository = MajarrahRepository(MajarrahDatabase.getDatabase(application).majarrahDao())
 
-    val userProfile: StateFlow<UserProfile?>
-    val products: StateFlow<List<Product>>
-    val posts: StateFlow<List<Post>>
-    val conversations: StateFlow<List<Conversation>>
-    val cartItems: StateFlow<List<CartItem>>
+    val userProfile: StateFlow<UserProfile?> = repository.userProfile.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        null
+    )
+    val products: StateFlow<List<Product>> = repository.allProducts.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        emptyList()
+    )
+    val posts: StateFlow<List<Post>> = repository.allPosts.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        emptyList()
+    )
+    val conversations: StateFlow<List<Conversation>> = repository.allConversations.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        emptyList()
+    )
+    val cartItems: StateFlow<List<CartItem>> = repository.cartItems.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        emptyList()
+    )
+
+    // Quota and Google Play Billing Managers
+    val quotaManager = NexaQuotaManager.getInstance(application)
+    val billingManager = NexaBillingManager(
+        context = application,
+        coroutineScope = viewModelScope,
+        onProStatusChanged = { isPro ->
+            _isNexaProSubscriber.value = isPro
+            if (isPro) {
+                _remainingFreeGenerations.value = 999999
+                val current = userProfile.value ?: UserProfile()
+                val updated = current.copy(
+                    isNexaProSubscriber = true,
+                    isVipMember = true,
+                    vipTierName = "NEXA AI PRO 👑"
+                )
+                viewModelScope.launch {
+                    repository.saveProfile(updated)
+                    com.example.data.firebase.FirebaseManager.saveUserProfileToCloud(updated)
+                }
+                _monetizationMessage.value = "تم التحقق وتفعيل اشتراك Nexa AI Pro بنجاح عبر Google Play! تم رفع كافة الحدود 👑"
+            } else {
+                _remainingFreeGenerations.value = quotaManager.getRemainingGenerations()
+            }
+        }
+    )
+
+    // Nexa AI Pro Subscription & Daily Generation Quota States
+    private val _isNexaProSubscriber = MutableStateFlow(quotaManager.isProUser())
+    val isNexaProSubscriber: StateFlow<Boolean> = _isNexaProSubscriber.asStateFlow()
+
+    private val _dailyAiGenerationsUsed = MutableStateFlow(quotaManager.getDailyUsed())
+    val dailyAiGenerationsUsed: StateFlow<Int> = _dailyAiGenerationsUsed.asStateFlow()
+
+    private val _remainingFreeGenerations = MutableStateFlow(quotaManager.getRemainingGenerations())
+    val remainingFreeGenerations: StateFlow<Int> = _remainingFreeGenerations.asStateFlow()
+
+    private val _showPaywallModal = MutableStateFlow(false)
+    val showPaywallModal: StateFlow<Boolean> = _showPaywallModal.asStateFlow()
+
+    private val _isGeneratingAiMedia = MutableStateFlow(false)
+    val isGeneratingAiMedia: StateFlow<Boolean> = _isGeneratingAiMedia.asStateFlow()
+
+    private val _aiMediaGenerationStatus = MutableStateFlow<String?>(null)
+    val aiMediaGenerationStatus: StateFlow<String?> = _aiMediaGenerationStatus.asStateFlow()
+
+    fun openPaywall() {
+        _showPaywallModal.value = true
+    }
+
+    fun closePaywall() {
+        _showPaywallModal.value = false
+    }
+
+    fun subscribeToNexaPro(
+        planId: String = "nexa_pro_monthly",
+        activity: android.app.Activity? = null
+    ) {
+        billingManager.launchSubscriptionPurchase(
+            activity = activity,
+            subscriptionId = if (planId.contains("annual")) NexaBillingManager.SUBSCRIPTION_ID_ANNUAL else NexaBillingManager.SUBSCRIPTION_ID_MONTHLY,
+            onDirectVerifiedCallback = {
+                _isNexaProSubscriber.value = true
+                _remainingFreeGenerations.value = 999999
+                val current = userProfile.value ?: UserProfile()
+                val updated = current.copy(
+                    isNexaProSubscriber = true,
+                    isVipMember = true,
+                    vipTierName = "NEXA AI PRO 👑"
+                )
+                viewModelScope.launch {
+                    repository.saveProfile(updated)
+                    com.example.data.firebase.FirebaseManager.saveUserProfileToCloud(updated)
+                }
+                _monetizationMessage.value = "تهانينا! 🎉 تم تفعيل اشتراك Nexa AI Pro بنجاح عبر Google Play In-App Purchases"
+                NotificationSoundManager.playPopChime(getApplication())
+            }
+        )
+    }
+
+    fun cancelNexaProSubscription() {
+        viewModelScope.launch {
+            quotaManager.setProUser(false)
+            _isNexaProSubscriber.value = false
+            _dailyAiGenerationsUsed.value = quotaManager.getDailyUsed()
+            _remainingFreeGenerations.value = quotaManager.getRemainingGenerations()
+            val current = userProfile.value ?: UserProfile()
+            val updated = current.copy(
+                isNexaProSubscriber = false
+            )
+            repository.saveProfile(updated)
+            _monetizationMessage.value = "تم إلغاء التجديد التلقائي لاشتراك Pro بنجاح"
+        }
+    }
+
+    fun triggerPaywallModal() {
+        _showPaywallModal.value = true
+    }
+
+    fun dismissPaywallModal() {
+        _showPaywallModal.value = false
+    }
+
+    fun checkAndConsumeAiGeneration(): Boolean {
+        if (_isNexaProSubscriber.value || quotaManager.isProUser()) {
+            _remainingFreeGenerations.value = 999999
+            return true
+        }
+        val allowed = quotaManager.consumeGeneration()
+        if (allowed) {
+            val used = quotaManager.getDailyUsed()
+            _dailyAiGenerationsUsed.value = used
+            _remainingFreeGenerations.value = quotaManager.getRemainingGenerations()
+            viewModelScope.launch {
+                val current = userProfile.value ?: UserProfile()
+                repository.saveProfile(current.copy(dailyAiGenerationsUsed = used))
+            }
+            return true
+        } else {
+            _dailyAiGenerationsUsed.value = quotaManager.getDailyUsed()
+            _remainingFreeGenerations.value = 0
+            _showPaywallModal.value = true
+            _monetizationMessage.value = "لقد استنفدت الحد اليومي (3/3 توليدات). اشترك في Nexa AI Pro للوصول غير المحدود 🚀"
+            return false
+        }
+    }
+
+    fun generateAiMediaInChat(
+        conversationId: String,
+        prompt: String,
+        mediaType: String,
+        aspectRatio: String = "1:1"
+    ) {
+        generateAiMediaInChat(
+            conversationId = conversationId,
+            prompt = prompt,
+            isVideo = mediaType == "video" || mediaType == "ai_video",
+            aspectRatio = aspectRatio
+        )
+    }
+
+    fun generateAiMediaInChat(
+        conversationId: String,
+        prompt: String,
+        isVideo: Boolean,
+        aspectRatio: String = "1:1"
+    ) {
+        if (prompt.isBlank()) return
+        if (!checkAndConsumeAiGeneration()) {
+            return
+        }
+
+        viewModelScope.launch {
+            _isGeneratingAiMedia.value = true
+            _aiMediaGenerationStatus.value = if (isVideo) "جاري إنتاج وتصيير الفيديو السينمائي عبر محرك Veo 3.1..." else "جاري معالجة وتوليد الصورة الذكية عبر Imagen 3 و Gemini..."
+
+            val isPro = _isNexaProSubscriber.value
+            val now = System.currentTimeMillis()
+            val sender = userProfile.value?.name ?: "أنت"
+
+            // 1. Post user prompt message
+            val promptPrefix = if (isVideo) "🎬 طلب فيديو سينمائي: " else "🎨 طلب توليد صورة: "
+            val userMsg = ChatMessage(
+                conversationId = conversationId,
+                senderName = sender,
+                senderAvatar = userProfile.value?.avatarUrl ?: "",
+                text = promptPrefix + prompt,
+                timestamp = now,
+                isFromUser = true,
+                isEncrypted = true,
+                deliveryStatus = "sent",
+                isRead = true
+            )
+            repository.sendMessage(userMsg)
+
+            // 2. Call Gemini / Imagen / Veo generation
+            val result = if (isVideo) {
+                com.example.data.remote.GeminiRepository.generateAiVideo(
+                    prompt = prompt,
+                    isPro = isPro,
+                    durationSec = if (isPro) 6 else 4
+                )
+            } else {
+                com.example.data.remote.GeminiRepository.generateAiImage(
+                    prompt = prompt,
+                    isPro = isPro,
+                    aspectRatio = aspectRatio
+                )
+            }
+
+            // 3. Insert generated AI media message
+            val aiMsg = ChatMessage(
+                conversationId = conversationId,
+                senderName = if (isVideo) "محرك Veo AI Video" else "محرك Imagen AI Pro",
+                senderAvatar = "",
+                text = result.descriptionText,
+                timestamp = System.currentTimeMillis(),
+                isFromUser = false,
+                isEncrypted = true,
+                mediaType = if (isVideo) "ai_video" else "ai_image",
+                mediaUrl = result.mediaUrl,
+                deliveryStatus = "read",
+                isRead = true,
+                isHdPro = result.isHdPro,
+                generationPrompt = prompt,
+                mediaAspect = aspectRatio,
+                videoDurationSec = if (isVideo) result.durationSec else null
+            )
+            repository.sendMessage(aiMsg)
+
+            val existingConv = conversations.value.firstOrNull { it.id == conversationId }
+            if (existingConv != null) {
+                repository.saveConversation(existingConv.copy(
+                    lastMessage = if (isVideo) "🎬 فيديو ذكي: $prompt" else "🎨 صورة ذكية: $prompt",
+                    lastTimestamp = System.currentTimeMillis(),
+                    unreadCount = 0
+                ))
+            }
+
+            _isGeneratingAiMedia.value = false
+            _aiMediaGenerationStatus.value = null
+            NotificationSoundManager.playPopChime(getApplication())
+            NexaNotificationManager.showIncomingMessageNotification(
+                context = getApplication(),
+                conversationId = conversationId,
+                senderName = if (isVideo) "Veo AI Video" else "Imagen AI Pro",
+                messageText = "تم تجهيز وسائطك الذكية بنجاح! 🎨✨"
+            )
+        }
+    }
 
     // Login & Registration Onboarding Flow State
     private val _loginStep = MutableStateFlow<LoginStep>(LoginStep.Welcome)
     val loginStep: StateFlow<LoginStep> = _loginStep.asStateFlow()
+
+    private val _isAuthLoading = MutableStateFlow(false)
+    val isAuthLoading: StateFlow<Boolean> = _isAuthLoading.asStateFlow()
+
+    private val _authErrorMessage = MutableStateFlow<String?>(null)
+    val authErrorMessage: StateFlow<String?> = _authErrorMessage.asStateFlow()
 
     private val _phoneNumber = MutableStateFlow("+966 50 123 4567")
     val phoneNumber: StateFlow<String> = _phoneNumber.asStateFlow()
@@ -832,42 +1090,9 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     val bubbles: StateFlow<List<Bubble3D>> = _bubbles.asStateFlow()
 
     init {
-        val database = MajarrahDatabase.getDatabase(application)
-        repository = MajarrahRepository(database.majarrahDao())
-
         viewModelScope.launch {
             repository.populateInitialDataIfEmpty()
         }
-
-        userProfile = repository.userProfile.stateIn(
-            viewModelScope,
-            SharingStarted.WhileSubscribed(5000),
-            null
-        )
-
-        products = repository.allProducts.stateIn(
-            viewModelScope,
-            SharingStarted.WhileSubscribed(5000),
-            emptyList()
-        )
-
-        posts = repository.allPosts.stateIn(
-            viewModelScope,
-            SharingStarted.WhileSubscribed(5000),
-            emptyList()
-        )
-
-        conversations = repository.allConversations.stateIn(
-            viewModelScope,
-            SharingStarted.WhileSubscribed(5000),
-            emptyList()
-        )
-
-        cartItems = repository.cartItems.stateIn(
-            viewModelScope,
-            SharingStarted.WhileSubscribed(5000),
-            emptyList()
-        )
 
         // Start real-time Firestore listeners for posts, chat, and server-side persistence
         repository.startCloudRealtimeSync(viewModelScope)
@@ -1031,7 +1256,112 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
                 isLoggedIn = true
             )
             repository.saveProfile(updated)
+            com.example.data.firebase.FirebaseManager.saveUserProfileToCloud(updated)
             _loginStep.value = LoginStep.Completed
+        }
+    }
+
+    fun signInWithEmail(email: String, pass: String, onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            _isAuthLoading.value = true
+            _authErrorMessage.value = null
+            val result = com.example.data.firebase.FirebaseManager.signInWithEmail(email, pass)
+            if (result.isSuccess) {
+                val user = result.getOrNull()
+                val uid = user?.uid ?: ""
+                val cloudProfile = com.example.data.firebase.FirebaseManager.fetchUserProfileFromCloud(uid)
+                val current = userProfile.value ?: UserProfile()
+                val activeProfile = (cloudProfile ?: current).copy(
+                    email = user?.email ?: email,
+                    name = user?.displayName ?: current.name,
+                    firebaseUid = uid,
+                    isLoggedIn = true
+                )
+                repository.saveProfile(activeProfile)
+                com.example.data.firebase.FirebaseManager.saveUserProfileToCloud(activeProfile)
+                attachCloudProfileListener(uid)
+                _loginStep.value = LoginStep.Completed
+                _isAuthLoading.value = false
+                NotificationSoundManager.playPopChime(getApplication())
+                onSuccess()
+            } else {
+                _isAuthLoading.value = false
+                _authErrorMessage.value = result.exceptionOrNull()?.localizedMessage ?: "فشل تسجيل الدخول بالبريد الإلكتروني"
+            }
+        }
+    }
+
+    fun signUpWithEmail(email: String, pass: String, displayName: String, onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            _isAuthLoading.value = true
+            _authErrorMessage.value = null
+            val result = com.example.data.firebase.FirebaseManager.signUpWithEmail(email, pass, displayName)
+            if (result.isSuccess) {
+                val user = result.getOrNull()
+                val uid = user?.uid ?: ""
+                val current = userProfile.value ?: UserProfile()
+                val newProfile = current.copy(
+                    email = email,
+                    name = displayName.ifBlank { current.name },
+                    firebaseUid = uid,
+                    isLoggedIn = true
+                )
+                repository.saveProfile(newProfile)
+                com.example.data.firebase.FirebaseManager.saveUserProfileToCloud(newProfile)
+                attachCloudProfileListener(uid)
+                _loginStep.value = LoginStep.Completed
+                _isAuthLoading.value = false
+                NotificationSoundManager.playPopChime(getApplication())
+                onSuccess()
+            } else {
+                _isAuthLoading.value = false
+                _authErrorMessage.value = result.exceptionOrNull()?.localizedMessage ?: "فشل إنشاء الحساب عبر البريد"
+            }
+        }
+    }
+
+    fun onGoogleSignInSuccess(user: com.google.firebase.auth.FirebaseUser, onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            _isAuthLoading.value = true
+            _authErrorMessage.value = null
+            val uid = user.uid
+            val cloudProfile = com.example.data.firebase.FirebaseManager.fetchUserProfileFromCloud(uid)
+            val current = userProfile.value ?: UserProfile()
+            val activeProfile = (cloudProfile ?: current).copy(
+                email = user.email ?: "google_user@nexa.ai",
+                name = user.displayName ?: current.name,
+                avatarUrl = user.photoUrl?.toString() ?: current.avatarUrl,
+                firebaseUid = uid,
+                isLoggedIn = true
+            )
+            repository.saveProfile(activeProfile)
+            com.example.data.firebase.FirebaseManager.saveUserProfileToCloud(activeProfile)
+            attachCloudProfileListener(uid)
+            _loginStep.value = LoginStep.Completed
+            _isAuthLoading.value = false
+            NotificationSoundManager.playPopChime(getApplication())
+            onSuccess()
+        }
+    }
+
+    fun signOutUser(onSuccess: () -> Unit = {}) {
+        viewModelScope.launch {
+            com.example.data.firebase.FirebaseManager.signOut()
+            userProfile.value?.let { current ->
+                repository.saveProfile(current.copy(isLoggedIn = false))
+            }
+            _loginStep.value = LoginStep.Welcome
+            onSuccess()
+        }
+    }
+
+    private var cloudProfileListener: com.google.firebase.firestore.ListenerRegistration? = null
+    private fun attachCloudProfileListener(uid: String) {
+        cloudProfileListener?.remove()
+        cloudProfileListener = com.example.data.firebase.FirebaseManager.listenToUserProfileRealtime(uid) { updatedProfile ->
+            viewModelScope.launch {
+                repository.saveProfile(updatedProfile)
+            }
         }
     }
 
@@ -2419,6 +2749,27 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     fun handleVoiceInteractionSuccess(exp: Int = 35) {
         incrementQuestProgress("voice", 1)
         addExp(exp, "استخدام المساعد الصوتي")
+    }
+
+    suspend fun submitSupportOrAbuseReport(
+        reportType: String, // "ABUSE_REPORT" or "TECH_SUPPORT"
+        targetSubjectOrUser: String,
+        category: String,
+        details: String,
+        senderContact: String,
+        severityLevel: String = "NORMAL"
+    ): Pair<Boolean, String> {
+        val result = repository.submitReport(
+            reportType = reportType,
+            targetSubjectOrUser = targetSubjectOrUser,
+            category = category,
+            details = details,
+            senderContact = senderContact,
+            severityLevel = severityLevel
+        )
+        // Add system notification for user feedback
+        addExp(20, "إرسال بلاغ أو تذكرة دعم")
+        return result
     }
 }
 

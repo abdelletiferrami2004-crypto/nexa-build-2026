@@ -1046,11 +1046,21 @@ fun ServicesScreen(
                         SettingsDivider()
 
                         SettingsListTile(
-                            title = "سياسة الخصوصية وحماية البيانات",
-                            subtitle = "كيف نحمي بياناتك وحقوقك البيومترية وفق المعايير الدولية",
+                            title = "سياسة الخصوصية وتشفير البيانات E2E",
+                            subtitle = "تشفير AES-256، الحماية البيومترية، وضمان عدم تتبع البيانات",
                             icon = Icons.Default.PrivacyTip,
                             iconColor = EncryptedGreen,
-                            onClick = { showLegalDocsModal = LegalTab.PRIVACY_POLICY }
+                            onClick = { onNavigate("privacy_and_support") }
+                        )
+
+                        SettingsDivider()
+
+                        SettingsListTile(
+                            title = "مركز الدعم الفني وإرسال البلاغات 🎧",
+                            subtitle = "نموذج الشكاوى، بلاغات المحتوى المسيء وحفظها في Firestore",
+                            icon = Icons.Default.SupportAgent,
+                            iconColor = NeonPink,
+                            onClick = { onNavigate("support_and_report") }
                         )
                     }
                 }

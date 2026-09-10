@@ -26,7 +26,11 @@ data class ChatMessage(
     val isModerationFlagged: Boolean = false,
     val moderationWarning: String? = null,
     val isGroupMessage: Boolean = false,
-    val senderRole: String = "member" // "owner", "admin", "creator", "bot", "member"
+    val senderRole: String = "member", // "owner", "admin", "creator", "bot", "member"
+    val isHdPro: Boolean = false, // Pro 4K Generation badge
+    val generationPrompt: String? = null, // Original prompt used
+    val mediaAspect: String? = null, // "1:1", "16:9", "9:16"
+    val videoDurationSec: Int? = null // AI Video duration in seconds
 )
 
 @Entity(tableName = "conversations")

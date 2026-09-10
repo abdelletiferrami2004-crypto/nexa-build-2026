@@ -7,6 +7,8 @@ import com.example.data.model.Conversation
 import com.example.data.model.Post
 import com.example.data.model.Product
 import com.example.data.model.UserProfile
+import com.example.util.NexaAnalyticsAndCrashManager
+import com.example.util.NexaMemoryAndRedisCacheManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 
@@ -23,13 +25,20 @@ class MajarrahRepository(private val dao: MajarrahDao) {
     }
 
     suspend fun saveProfile(profile: UserProfile) {
+        NexaAnalyticsAndCrashManager.startTrace("save_profile")
         dao.insertOrUpdateProfile(profile)
+        NexaMemoryAndRedisCacheManager.put("user_profile_${profile.id}", profile)
         FirebaseManager.saveUserProfileToCloud(profile)
+        NexaAnalyticsAndCrashManager.stopTrace("save_profile")
     }
 
     suspend fun addPost(post: Post) {
+        NexaAnalyticsAndCrashManager.startTrace("create_post")
         dao.insertPost(post)
+        NexaMemoryAndRedisCacheManager.put("post_${post.id}", post)
         FirebaseManager.savePostToCloud(post)
+        NexaAnalyticsAndCrashManager.logEvent("post_created", mapOf("postId" to post.id, "author" to post.authorName))
+        NexaAnalyticsAndCrashManager.stopTrace("create_post")
     }
 
     suspend fun toggleLikePost(post: Post) {
@@ -89,6 +98,7 @@ class MajarrahRepository(private val dao: MajarrahDao) {
 
     suspend fun saveConversation(conversation: Conversation) {
         dao.insertConversation(conversation)
+        FirebaseManager.saveConversationSummary(conversation)
     }
 
     suspend fun sendMessage(message: ChatMessage): ChatMessage {
@@ -586,5 +596,23 @@ class MajarrahRepository(private val dao: MajarrahDao) {
             )
         )
         dao.insertMessages(sampleMessagesConv3)
+    }
+
+    suspend fun submitReport(
+        reportType: String,
+        targetSubjectOrUser: String,
+        category: String,
+        details: String,
+        senderContact: String,
+        severityLevel: String = "NORMAL"
+    ): Pair<Boolean, String> {
+        return FirebaseManager.submitReportToFirestore(
+            reportType = reportType,
+            targetSubjectOrUser = targetSubjectOrUser,
+            category = category,
+            details = details,
+            senderContact = senderContact,
+            severityLevel = severityLevel
+        )
     }
 }

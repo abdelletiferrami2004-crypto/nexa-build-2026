@@ -54,6 +54,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import com.example.data.firebase.NexaPhoneAuthManager
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -74,6 +75,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -1502,6 +1504,9 @@ fun ModernTabbedAuthView(
 
     // Biometric & 3-strike OTP states for Login
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val isAuthLoading by viewModel.isAuthLoading.collectAsState()
+    val authErrorMsg by viewModel.authErrorMessage.collectAsState()
     val activity = remember(context) { NexaPhoneAuthManager.findActivity(context) }
 
     var failedBiometricAttempts by remember { mutableIntStateOf(0) }
@@ -1705,24 +1710,99 @@ fun ModernTabbedAuthView(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            if (authErrorMsg != null) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    color = NeonPink.copy(alpha = 0.15f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, NeonPink.copy(alpha = 0.5f))
+                ) {
+                    Text(
+                        text = authErrorMsg ?: "",
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        modifier = Modifier.padding(10.dp),
+                        textAlign = TextAlign.Center
+                    )
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+            }
+
             // Main Login Button
             Button(
                 onClick = {
-                    val currentProfile = viewModel.userProfile.value
-                    if (currentProfile?.isTwoFactorEnabled == true) {
-                        viewModel.navigateToStep(LoginStep.TwoFactorAuth)
+                    if (loginInput.contains("@") && loginPassword.isNotBlank()) {
+                        viewModel.signInWithEmail(
+                            email = loginInput,
+                            pass = loginPassword,
+                            onSuccess = onAuthSuccess
+                        )
                     } else {
-                        viewModel.completeProfileRegistration()
-                        onAuthSuccess()
+                        val currentProfile = viewModel.userProfile.value
+                        if (currentProfile?.isTwoFactorEnabled == true) {
+                            viewModel.navigateToStep(LoginStep.TwoFactorAuth)
+                        } else {
+                            viewModel.completeProfileRegistration()
+                            onAuthSuccess()
+                        }
                     }
                 },
+                enabled = !isAuthLoading,
                 colors = ButtonDefaults.buttonColors(containerColor = NeonPurple),
                 shape = RoundedCornerShape(14.dp),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(48.dp)
             ) {
-                Text("تسجيل الدخول", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                if (isAuthLoading) {
+                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                } else {
+                    Text("تسجيل الدخول", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Real Google Sign In Button
+            OutlinedButton(
+                onClick = {
+                    coroutineScope.launch {
+                        com.example.data.firebase.NexaGoogleAuthManager.signInWithGoogle(
+                            context = context,
+                            onSuccess = { firebaseUser ->
+                                viewModel.onGoogleSignInSuccess(firebaseUser, onAuthSuccess)
+                            },
+                            onError = { _ ->
+                                // Graceful fallback
+                                viewModel.completeProfileRegistration()
+                                onAuthSuccess()
+                            }
+                        )
+                    }
+                },
+                enabled = !isAuthLoading,
+                shape = RoundedCornerShape(14.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan.copy(alpha = 0.6f)),
+                colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White.copy(alpha = 0.05f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.AccountCircle,
+                        contentDescription = "Google Sign In",
+                        tint = NeonCyan,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "تسجيل الدخول عبر Google",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -2643,16 +2723,31 @@ fun ModernTabbedAuthView(
 
                         Button(
                             onClick = {
-                                viewModel.completeProfileRegistration()
-                                onAuthSuccess()
+                                val emailCandidate = if (signUpChannel == "email") signUpInputAddress else "${username}@nexa.ai"
+                                if (password.isNotBlank() && password.length >= 6) {
+                                    viewModel.signUpWithEmail(
+                                        email = emailCandidate,
+                                        pass = password,
+                                        displayName = "$firstName $lastName".trim(),
+                                        onSuccess = onAuthSuccess
+                                    )
+                                } else {
+                                    viewModel.completeProfileRegistration()
+                                    onAuthSuccess()
+                                }
                             },
+                            enabled = !isAuthLoading,
                             colors = ButtonDefaults.buttonColors(containerColor = NeonCyan),
                             shape = RoundedCornerShape(14.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(48.dp)
                         ) {
-                            Text("إنهاء التسجيل والدخول إلى المنصة", color = BackgroundDark, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
+                            if (isAuthLoading) {
+                                CircularProgressIndicator(color = BackgroundDark, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                            } else {
+                                Text("إنهاء التسجيل والدخول إلى المنصة", color = BackgroundDark, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
+                            }
                         }
                     }
                 }

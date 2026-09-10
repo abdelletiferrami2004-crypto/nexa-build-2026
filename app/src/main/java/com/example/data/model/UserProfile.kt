@@ -33,7 +33,14 @@ data class UserProfile(
     val verificationBadgeCategory: String = "صانع محتوى موثق",
     val isTwoFactorEnabled: Boolean = false, // 2FA Security
     val twoFactorMethod: String = "authenticator", // "sms", "authenticator", "biometric"
-    val twoFactorSecret: String = "NEXA-2FA-SECURE-8891"
+    val twoFactorSecret: String = "NEXA-2FA-SECURE-8891",
+    val isNexaProSubscriber: Boolean = false, // NEXA AI Pro Subscriber
+    val email: String = "user@nexa.ai",
+    val firebaseUid: String = "",
+    val fcmToken: String = "",
+    val dailyAiGenerationsUsed: Int = 0, // Daily AI Image & Video generations used
+    val lastAiGenerationDate: String = "", // e.g. "2026-08-24" for daily reset
+    val maxFreeDailyAiGenerations: Int = 3 // Free limit: 3 generations per day
 )
 
 typealias User = UserProfile

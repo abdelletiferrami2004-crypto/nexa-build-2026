@@ -23,6 +23,9 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.PrivacyTip
+import androidx.compose.material.icons.filled.Gavel
+import androidx.compose.material.icons.filled.SupportAgent
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -96,6 +99,9 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.ui.platform.LocalContext
+import android.content.Intent
 import com.example.data.model.AppLanguage
 import com.example.util.LanguageManager
 import com.example.ui.components.CreatorAvatarWithAura
@@ -105,7 +111,8 @@ import androidx.compose.ui.graphics.Brush
 
 @Composable
 fun ProfileScreen(
-    viewModel: MajarrahViewModel
+    viewModel: MajarrahViewModel,
+    onNavigateToPrivacyAndSupport: (com.example.ui.screens.SupportPolicySection) -> Unit = {}
 ) {
     val profile by viewModel.userProfile.collectAsState()
     val isTeen = profile?.isTeenMode ?: true
@@ -116,6 +123,7 @@ fun ProfileScreen(
     val selectedLang by viewModel.selectedLanguage.collectAsState()
     val effectiveLang = LanguageManager.getEffectiveLanguage(selectedLang)
     val systemLangDisplay = java.util.Locale.getDefault().displayName
+    val context = LocalContext.current
 
     val isPayoutClaimed by viewModel.isPayoutClaimed.collectAsState()
     val blockedUsers by viewModel.blockedUsers.collectAsState()
@@ -1272,13 +1280,13 @@ fun ProfileScreen(
                     Spacer(modifier = Modifier.width(10.dp))
                     Column {
                         Text(
- text ="سياسة الخصوصية وشروط الخدمة",
+                            text = "سياسة الخصوصية والدعم الفني",
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp
                         )
                         Text(
-                            text = "مطابقة لتحديثات قوانين Google Play Store 2026 وسلامة البيانات",
+                            text = "تشفير E2E • شروط الاستخدام • نموذج الشكاوى والبلاغات",
                             color = Color.LightGray,
                             fontSize = 11.sp
                         )
@@ -1287,42 +1295,41 @@ fun ProfileScreen(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
+                // Primary Button: Open Privacy Policy & Support Screen
+                Button(
+                    onClick = {
+                        onNavigateToPrivacyAndSupport(com.example.ui.screens.SupportPolicySection.ENCRYPTION_PRIVACY)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = NeonCyan),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.PrivacyTip,
+                            contentDescription = null,
+                            tint = BackgroundDark,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "فتح صفحة الخصوصية والدعم الفني الشاملة 🛡️",
+                            color = BackgroundDark,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Button(
                         onClick = {
-                            activeLegalTab = LegalTab.PRIVACY_POLICY
-                            showLegalModal = true
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = NeonCyan.copy(alpha = 0.2f)),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier
-                            .weight(1f)
-                            .border(1.dp, NeonCyan, RoundedCornerShape(12.dp))
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.PrivacyTip,
-                                contentDescription = null,
-                                tint = NeonCyan,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "سياسة الخصوصية",
-                                color = NeonCyan,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 11.sp
-                            )
-                        }
-                    }
-
-                    Button(
-                        onClick = {
-                            activeLegalTab = LegalTab.TERMS_OF_SERVICE
-                            showLegalModal = true
+                            onNavigateToPrivacyAndSupport(com.example.ui.screens.SupportPolicySection.TERMS_AND_MODERATION)
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = NeonPurple.copy(alpha = 0.2f)),
                         shape = RoundedCornerShape(12.dp),
@@ -1335,16 +1342,86 @@ fun ProfileScreen(
                                 imageVector = Icons.Default.Gavel,
                                 contentDescription = null,
                                 tint = NeonPurple,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(15.dp)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "شروط الخدمة",
+                                text = "شروط وسياسة الحظر",
                                 color = NeonPurple,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 11.sp
+                                fontSize = 10.sp
                             )
                         }
+                    }
+
+                    Button(
+                        onClick = {
+                            onNavigateToPrivacyAndSupport(com.example.ui.screens.SupportPolicySection.SUPPORT_TICKETS)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = NeonPink.copy(alpha = 0.2f)),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .border(1.dp, NeonPink, RoundedCornerShape(12.dp))
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.SupportAgent,
+                                contentDescription = null,
+                                tint = NeonPink,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "نموذج البلاغات ✍️",
+                                color = NeonPink,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 10.sp
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Share App & Privacy Link Button
+                Button(
+                    onClick = {
+                        try {
+                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(
+                                    Intent.EXTRA_SUBJECT,
+                                    "تطبيق مجرة NEXA - منصة التواصل الاجتماعي الذكية والمشفرة"
+                                )
+                                putExtra(
+                                    Intent.EXTRA_TEXT,
+                                    "حمّل تطبيق مجرة NEXA الآن واستمتع بأقوى تجربة تواصل اجتماعي مشفرة بالذكاء الاصطناعي!\n\nرابط سياسة الخصوصية والأمان: https://nexa.social/privacy-policy\nرابط التطبيق: https://play.google.com/store/apps/details?id=com.aistudio.majarrah.socialstore"
+                                )
+                            }
+                            context.startActivity(Intent.createChooser(shareIntent, "مشاركة تطبيق مجرة NEXA"))
+                        } catch (e: Exception) {}
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.08f)),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = "Share App",
+                            tint = NeonCyan,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "مشاركة التطبيق ورابط سياسة الخصوصية 🚀",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
                     }
                 }
             }

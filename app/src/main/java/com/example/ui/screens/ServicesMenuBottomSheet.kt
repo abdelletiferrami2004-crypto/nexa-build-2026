@@ -359,8 +359,9 @@ fun ServicesMenuBottomSheet(
                     .fillMaxWidth()
                     .clickable {
                         onDismiss()
-                        viewModel.startLoginFlow()
-                        onOpenLogin()
+                        viewModel.signOutUser {
+                            onOpenLogin()
+                        }
                     },
                 shape = RoundedCornerShape(16.dp),
                 backgroundColor = Color.Red.copy(alpha = 0.15f)
