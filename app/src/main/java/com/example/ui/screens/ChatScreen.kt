@@ -61,6 +61,7 @@ import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.MarkEmailUnread
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -114,6 +115,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -133,9 +135,11 @@ import com.example.data.model.User
 import com.example.ui.MajarrahViewModel
 import com.example.util.FileExportManager
 import com.example.ui.components.AdMobBannerSpace
+import com.example.ui.components.AiAssistantModal
 import com.example.ui.components.AiToolboxModal
 import com.example.ui.components.BlueVerificationBadge
 import com.example.ui.components.ConversationDetailsModal
+import com.example.ui.components.EncryptedChatPinDialog
 import com.example.ui.components.MessengerActiveContactsBar
 import com.example.ui.components.NexaVipSubscriptionModal
 import com.example.ui.components.PinLockDialog
@@ -184,7 +188,11 @@ fun ChatScreen(
     var activeCallTargetName by remember { mutableStateOf("") }
     var activeCallTargetAvatar by remember { mutableStateOf("") }
 
-    // PIN Protection Lock Screen
+    val unlockedEncryptedConversations by viewModel.unlockedEncryptedConversations.collectAsState()
+    var pendingEncryptedConversation by remember { mutableStateOf<Conversation?>(null) }
+    var showEncryptedPinDialog by remember { mutableStateOf(false) }
+
+    // PIN Protection Lock Screen (Global app lock)
     if (isPinProtectionEnabled && (!isUnlocked || showPinDialog)) {
         Box(
             modifier = Modifier
@@ -202,6 +210,31 @@ fun ChatScreen(
             )
         }
         return
+    }
+
+    // Encrypted Chat PIN & Biometric Prompt Modal (حماية المحادثات المشفرة الفردية)
+    if (showEncryptedPinDialog && pendingEncryptedConversation != null) {
+        EncryptedChatPinDialog(
+            conversation = pendingEncryptedConversation,
+            correctPin = effectivePin,
+            onDismiss = {
+                showEncryptedPinDialog = false
+                val dismissedId = pendingEncryptedConversation?.id
+                pendingEncryptedConversation = null
+                if (selectedConvId == dismissedId && !viewModel.isEncryptedConversationUnlocked(dismissedId ?: "")) {
+                    viewModel.selectConversation("")
+                }
+            },
+            onUnlockSuccess = {
+                val target = pendingEncryptedConversation
+                if (target != null) {
+                    viewModel.unlockEncryptedConversation(target.id)
+                    viewModel.selectConversation(target.id)
+                }
+                showEncryptedPinDialog = false
+                pendingEncryptedConversation = null
+            }
+        )
     }
 
     // Paywall & VIP Subscription Modal (Nexa AI Pro)
@@ -258,7 +291,17 @@ fun ChatScreen(
 
     // MAIN ROUTER: Chats List vs Direct Peer-to-Peer Chat
     val activeConvId = selectedConvId
-    if (activeConvId.isNullOrBlank()) {
+    val currentConv = conversations.firstOrNull { it.id == activeConvId }
+    val isAiChat = activeConvId == "nexa_ai" || activeConvId == "ai_bot"
+    val isConvUnlocked = activeConvId.isNullOrBlank() || isAiChat || viewModel.isEncryptedConversationUnlocked(activeConvId)
+
+    if (activeConvId.isNullOrBlank() || (!isConvUnlocked && currentConv != null)) {
+        if (!activeConvId.isNullOrBlank() && !isConvUnlocked && currentConv != null && !showEncryptedPinDialog) {
+            LaunchedEffect(activeConvId) {
+                pendingEncryptedConversation = currentConv
+                showEncryptedPinDialog = true
+            }
+        }
         // 1. CHATS LIST SCREEN (قائمة المحادثات الرئيسية - WhatsApp Style)
         ChatsListScreen(
             viewModel = viewModel,
@@ -266,7 +309,14 @@ fun ChatScreen(
             isVipMember = isVipMember,
             onBackClick = onBackClick,
             onSelectConversation = { convId ->
-                viewModel.selectConversation(convId)
+                val conv = conversations.firstOrNull { it.id == convId }
+                val isUnlocked = viewModel.isEncryptedConversationUnlocked(convId)
+                if (conv != null && conv.id != "nexa_ai" && conv.id != "ai_bot" && !isUnlocked) {
+                    pendingEncryptedConversation = conv
+                    showEncryptedPinDialog = true
+                } else {
+                    viewModel.selectConversation(convId)
+                }
             },
             onOpenAiChat = {
                 viewModel.selectConversation("nexa_ai")
@@ -276,6 +326,7 @@ fun ChatScreen(
             },
             onOpenPinLock = {
                 viewModel.lockChat()
+                viewModel.lockAllEncryptedConversations()
                 showPinDialog = true
             },
             onOpenVip = {
@@ -735,8 +786,10 @@ fun ChatsListScreen(
                     }
                 } else {
                     items(filteredConversations) { conv ->
+                        val isUnlocked = viewModel.isEncryptedConversationUnlocked(conv.id)
                         ConversationListItem(
                             conversation = conv,
+                            isUnlocked = isUnlocked,
                             onClick = { onSelectConversation(conv.id) }
                         )
                     }
@@ -905,6 +958,7 @@ fun PinnedNexaAiChatItem(
 @Composable
 fun ConversationListItem(
     conversation: Conversation,
+    isUnlocked: Boolean = false,
     onClick: () -> Unit
 ) {
     val formattedTime = remember(conversation.lastTimestamp) {
@@ -993,6 +1047,15 @@ fun ConversationListItem(
                         Spacer(modifier = Modifier.width(4.dp))
                         BlueVerificationBadge(size = 14.dp)
                     }
+
+                    // Security E2EE Lock / Unlock Status Indicator
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Icon(
+                        imageVector = if (isUnlocked) Icons.Default.LockOpen else Icons.Default.Lock,
+                        contentDescription = if (isUnlocked) "Unlocked E2EE" else "Locked E2EE",
+                        tint = if (isUnlocked) NeonCyan else EncryptedGreen,
+                        modifier = Modifier.size(13.dp)
+                    )
                 }
 
                 Text(
@@ -1120,6 +1183,8 @@ fun DirectChatScreen(
     var selectedImageForZoom by remember { mutableStateOf<String?>(null) }
     var showConversationDetailsModal by remember { mutableStateOf(false) }
     var showAiCreationModal by remember { mutableStateOf(false) }
+    var showAiAssistantModal by remember { mutableStateOf(false) }
+    var showVoiceTutorModal by remember { mutableStateOf(false) }
     var aiCreationInitialType by remember { mutableStateOf("image") }
     var selectedVideoForPlay by remember { mutableStateOf<String?>(null) }
     var selectedVideoPrompt by remember { mutableStateOf("") }
@@ -1200,13 +1265,14 @@ fun DirectChatScreen(
                 showAiCreationModal = false
                 viewModel.triggerPaywallModal()
             },
-            onGenerate = { prompt, mediaType, aspectRatio ->
+            onGenerate = { prompt, mediaType, aspectRatio, sourceBitmap ->
                 showAiCreationModal = false
                 viewModel.generateAiMediaInChat(
                     conversationId = conversationId,
                     prompt = prompt,
                     mediaType = mediaType,
-                    aspectRatio = aspectRatio
+                    aspectRatio = aspectRatio,
+                    sourceBitmap = sourceBitmap
                 )
             }
         )
@@ -1226,6 +1292,19 @@ fun DirectChatScreen(
                     isVideo = true
                 )
             }
+        )
+    }
+
+    if (showVoiceTutorModal) {
+        VoiceTutorModal(
+            onDismiss = { showVoiceTutorModal = false }
+        )
+    }
+
+    if (showAiAssistantModal) {
+        AiAssistantModal(
+            viewModel = viewModel,
+            onDismiss = { showAiAssistantModal = false }
         )
     }
 
@@ -1441,12 +1520,51 @@ fun DirectChatScreen(
                     }
                 }
 
-                // Call & Conversation Info / Settings Action Buttons (REMOVED completely from NEXA AI & Blocked Users)
+                // Call & Conversation Info / Settings Action Buttons
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    if (!isAiChat && !isBlocked) {
+                    if (isAiChat) {
+                        // AI Media Studio (Imagen 3 & Veo 3.1)
+                        IconButton(
+                            onClick = { handleOpenMediaStudio("image") },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = "AI Media Creation Studio",
+                                tint = NeonCyan,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        // Live Voice Conversation (gemini-3.8-live)
+                        IconButton(
+                            onClick = { showVoiceTutorModal = true },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Mic,
+                                contentDescription = "Live Voice Audio",
+                                tint = NeonPink,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        // AI Configuration & Grounding Modal
+                        IconButton(
+                            onClick = { showAiAssistantModal = true },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Psychology,
+                                contentDescription = "AI Engine & Grounding",
+                                tint = NeonAmber,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    } else if (!isBlocked) {
                         // Voice Call Action (Phone icon)
                         IconButton(
                             onClick = { onStartCall("audio") },
@@ -1487,6 +1605,25 @@ fun DirectChatScreen(
                         )
                     }
 
+                    // Quick Lock Button for Encrypted Chat
+                    if (!isAiChat) {
+                        IconButton(
+                            onClick = {
+                                viewModel.lockEncryptedConversation(conversationId)
+                                android.widget.Toast.makeText(context, "تم قفل المحادثة بنجاح 🔒", android.widget.Toast.LENGTH_SHORT).show()
+                                onBackToChatsList()
+                            },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = "Lock Chat",
+                                tint = EncryptedGreen,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+
                     // More Menu
                     Box {
                         IconButton(
@@ -1508,6 +1645,23 @@ fun DirectChatScreen(
                                 .background(Color(0xFF13192B))
                                 .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
                         ) {
+                            if (!isAiChat) {
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.Lock, contentDescription = null, tint = EncryptedGreen, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("قفل المحادثة وتشفيرها فوراً", color = Color.White, fontSize = 13.sp)
+                                        }
+                                    },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        viewModel.lockEncryptedConversation(conversationId)
+                                        android.widget.Toast.makeText(context, "تم قفل وتأمين المحادثة 🔒", android.widget.Toast.LENGTH_SHORT).show()
+                                        onBackToChatsList()
+                                    }
+                                )
+                            }
                             DropdownMenuItem(
                                 text = {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -3816,25 +3970,69 @@ fun NexaAiMediaCreationDialog(
     initialMediaType: String = "image",
     onDismiss: () -> Unit,
     onUpgradeToPro: () -> Unit,
-    onGenerate: (prompt: String, mediaType: String, aspectRatio: String) -> Unit
+    onGenerate: (prompt: String, mediaType: String, aspectRatio: String, sourceBitmap: android.graphics.Bitmap?) -> Unit
 ) {
-    var selectedType by remember { mutableStateOf(initialMediaType) } // "image" or "video"
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var selectedType by remember { mutableStateOf(initialMediaType) } // "image", "edit_image", "video", "animate_video"
     var promptText by remember { mutableStateOf("") }
-    var selectedAspectRatio by remember { mutableStateOf("1:1") } // "1:1", "16:9", "9:16"
+    var selectedAspectRatio by remember { mutableStateOf("16:9") } // "1:1", "16:9", "9:16"
+    var attachedImageBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var showPhotoPickerMenu by remember { mutableStateOf(false) }
 
     val isQuotaExhausted = (!isNexaPro) && remainingGenerations <= 0
 
+    // Gallery Picker
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: android.net.Uri? ->
+        uri?.let {
+            try {
+                val bmp = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                    android.graphics.ImageDecoder.decodeBitmap(
+                        android.graphics.ImageDecoder.createSource(context.contentResolver, it)
+                    ) { decoder, _, _ -> decoder.isMutableRequired = true }
+                } else {
+                    @Suppress("DEPRECATION")
+                    android.provider.MediaStore.Images.Media.getBitmap(context.contentResolver, it)
+                }
+                attachedImageBitmap = bmp
+            } catch (e: Exception) {
+                android.widget.Toast.makeText(context, "فشل قراءة الصورة", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    // Camera Capture
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicturePreview()
+    ) { bmp: android.graphics.Bitmap? ->
+        bmp?.let {
+            attachedImageBitmap = it
+        }
+    }
+
     val samplePrompts = remember(selectedType) {
-        if (selectedType == "image") {
-            listOf(
-                "رائد فضاء يستكشف كوكباً نيونياً بألوان سايبربانك",
+        when (selectedType) {
+            "image" -> listOf(
+                "رائد فضاء يستكشف كوكباً نيونياً بألوان سايبربانك 8K",
                 "مدينة ذكية متطورة عام 2050 مع سيارات طائرة وشلالات",
-                "شخصية أنمي ثلاثية الأبعاد بملابس مستقبلية وإضاءة سينمائية 8K",
+                "شخصية أنمي ثلاثية الأبعاد بملابس مستقبلية وإضاءة سينمائية",
                 "غروب الشمس على شاطئ استوائي مع رمال متوهجة كريستالية"
             )
-        } else {
-            listOf(
-                "طيران درون سينمائي فوق جبال جليدية متوهجة عند الفجر",
+            "edit_image" -> listOf(
+                "اجعل الإضاءة دافئة سينمائية وأضف سماء ليلية مليئة بالنجوم المتلألئة",
+                "حول النمط إلى رسم كرتوني سايبربانك مستقبلي مع خطوط نيون زاهية",
+                "أزل الخلفية وضع مكاناً بحرياً هادئاً وقت الغروب الذهبي",
+                "أضف تأثيرات ثلجية وأجواء شتوية ساحرة حول الشخصية"
+            )
+            "animate_video" -> listOf(
+                "حرك أمواج البحر بانسيابية وحلق بالكاميرا ببطء للأمام بتقنية سينمائية",
+                "اجعل أضواء المدينة تومض ببطء مع حركة سيارات نيون في الشوارع",
+                "أضف حركة هبوب رياح لطيفة للأشجار وسقوط بتلات زهور واقعية",
+                "تحريك بطيء بنمط زووم سينمائي مع تساقط رذاذ المطر الهادئ"
+            )
+            else -> listOf(
+                "طيران درون سينمائي فوق جبال جليدية متوهجة عند الفجر بدقة 4K",
                 "سيارة رياضية خارقة تنطلق بسرعة في شوارع طوكيو الممطرة",
                 "بوابة مجرية فضائية تنفتح وتطلق طاقة ضوئية هائلة",
                 "روبوت ذكاء اصطناعي يعزف بيانو كلاسيكي في قاعة كريستال"
@@ -3892,81 +4090,225 @@ fun NexaAiMediaCreationDialog(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Media Type Selector (Image vs Video)
-                Row(
+                // 4-Mode Creation Selector
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(14.dp))
                         .background(Color(0xFF161E33))
                         .padding(4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    // Image Tab
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .then(
-                                if (selectedType == "image") Modifier.background(Brush.horizontalGradient(listOf(NeonCyan, Color(0xFF0284C7))))
-                                else Modifier.background(Color.Transparent)
-                            )
-                            .clickable { selectedType = "image" }
-                            .padding(vertical = 10.dp),
-                        contentAlignment = Alignment.Center
+                    // Row 1: Image options
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Image,
-                                contentDescription = null,
-                                tint = if (selectedType == "image") Color.Black else Color.Gray,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
+                        // 1. Text-to-Image (gemini-3.1-flash-image-preview)
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .then(
+                                    if (selectedType == "image") Modifier.background(Brush.horizontalGradient(listOf(NeonCyan, Color(0xFF0284C7))))
+                                    else Modifier.background(Color.Transparent)
+                                )
+                                .clickable { selectedType = "image" }
+                                .padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
                             Text(
-                                text = "صورة Imagen 3",
+                                text = "🎨 صورة جديدة",
                                 color = if (selectedType == "image") Color.Black else Color.LightGray,
-                                fontSize = 12.sp,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        // 2. Edit Image (gemini-3.1-flash-image-preview)
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .then(
+                                    if (selectedType == "edit_image") Modifier.background(Brush.horizontalGradient(listOf(NeonPurple, Color(0xFF7C3AED))))
+                                    else Modifier.background(Color.Transparent)
+                                )
+                                .clickable { selectedType = "edit_image" }
+                                .padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "🖌️ تعديل صورة",
+                                color = if (selectedType == "edit_image") Color.White else Color.LightGray,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         }
                     }
 
-                    // Video Tab
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .then(
-                                if (selectedType == "video") Modifier.background(Brush.horizontalGradient(listOf(NeonPurple, NeonPink)))
-                                else Modifier.background(Color.Transparent)
-                            )
-                            .clickable { selectedType = "video" }
-                            .padding(vertical = 10.dp),
-                        contentAlignment = Alignment.Center
+                    // Row 2: Video options
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Videocam,
-                                contentDescription = null,
-                                tint = if (selectedType == "video") Color.White else Color.Gray,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
+                        // 3. Text-to-Video (veo-3.1-fast-generate-preview)
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .then(
+                                    if (selectedType == "video") Modifier.background(Brush.horizontalGradient(listOf(NeonPurple, NeonPink)))
+                                    else Modifier.background(Color.Transparent)
+                                )
+                                .clickable { selectedType = "video" }
+                                .padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
                             Text(
-                                text = "فيديو Veo 3.1 4K",
+                                text = "🎬 فيديو Veo",
                                 color = if (selectedType == "video") Color.White else Color.LightGray,
-                                fontSize = 12.sp,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        // 4. Animate Image into Video (veo-3.1-fast-generate-preview)
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .then(
+                                    if (selectedType == "animate_video") Modifier.background(Brush.horizontalGradient(listOf(Color(0xFFE11D48), NeonAmber)))
+                                    else Modifier.background(Color.Transparent)
+                                )
+                                .clickable { selectedType = "animate_video" }
+                                .padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "🎥 تحريك صورة",
+                                color = if (selectedType == "animate_video") Color.White else Color.LightGray,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Model badge info
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val modelBadge = when (selectedType) {
+                        "image", "edit_image" -> "gemini-3.1-flash-image-preview"
+                        else -> "veo-3.1-fast-generate-preview"
+                    }
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color.White.copy(alpha = 0.08f))
+                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                    ) {
+                        Text("المحرك: $modelBadge", color = NeonCyan, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+
+                // If edit_image or animate_video, show Image Upload Picker Box
+                if (selectedType == "edit_image" || selectedType == "animate_video") {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFF131A2C))
+                            .border(1.dp, NeonPurple.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                            .clickable { showPhotoPickerMenu = true }
+                            .padding(8.dp)
+                    ) {
+                        if (attachedImageBitmap != null) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    androidx.compose.foundation.Image(
+                                        bitmap = attachedImageBitmap!!.asImageBitmap(),
+                                        contentDescription = "Selected Image",
+                                        modifier = Modifier
+                                            .size(44.dp)
+                                            .clip(RoundedCornerShape(8.dp)),
+                                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column {
+                                        Text("تم اختيار الصورة المصدرية بنجاح ✓", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        Text("انقر لتغيير الصورة", color = NeonCyan, fontSize = 9.sp)
+                                    }
+                                }
+                                IconButton(
+                                    onClick = { attachedImageBitmap = null },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(Icons.Default.Clear, contentDescription = "Clear", tint = Color.Red, modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        } else {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 10.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = if (selectedType == "edit_image") "حدد صورة من المعرض أو الكاميرا لتعديلها 📷" else "حدد صورة من المعرض لتحويلها لفيديو 🎥",
+                                    color = NeonCyan,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        DropdownMenu(
+                            expanded = showPhotoPickerMenu,
+                            onDismissRequest = { showPhotoPickerMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("اختيار من المعرض") },
+                                onClick = {
+                                    showPhotoPickerMenu = false
+                                    galleryLauncher.launch("image/*")
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("التقاط صورة بالكاميرا") },
+                                onClick = {
+                                    showPhotoPickerMenu = false
+                                    cameraLauncher.launch(null)
+                                }
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
 
                 // Prompt Input Box
                 Text(
-                    text = "صف ما تريد توليده بالتفصيل:",
+                    text = when (selectedType) {
+                        "edit_image" -> "صف التعديلات المطلوبة على صورتك:"
+                        "animate_video" -> "صف حركة الكاميرا والتحريك السينمائي المطلوب:"
+                        "video" -> "صف سيناريو وحركة الفيديو المطلوب بالتفصيل:"
+                        else -> "صف ما تريد توليده بالتفصيل:"
+                    },
                     color = Color.LightGray,
                     fontSize = 12.sp,
                     modifier = Modifier.fillMaxWidth(),
@@ -3979,7 +4321,7 @@ fun NexaAiMediaCreationDialog(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(95.dp)
+                        .height(85.dp)
                         .clip(RoundedCornerShape(14.dp))
                         .background(Color(0xFF131A2C))
                         .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(14.dp))
@@ -3987,8 +4329,12 @@ fun NexaAiMediaCreationDialog(
                 ) {
                     if (promptText.isEmpty()) {
                         Text(
-                            text = if (selectedType == "image") "اكتب وصف الصورة بالتفصيل (مثل: مشهد خيالي نيون بدقة 8K)..."
-                            else "اكتب سيناريو الفيديو وحركة الكاميرا والإضاءة...",
+                            text = when (selectedType) {
+                                "edit_image" -> "اكتب التعديلات بدقة (مثال: أضف إضاءة نيون وحول الخلفية لغروب شمس)..."
+                                "animate_video" -> "اكتب حركة المشهد (مثال: تحريك انسيابي للأمواج مع حركة كاميرا للأمام)..."
+                                "video" -> "اكتب سيناريو الفيديو وحركة الكاميرا والإضاءة..."
+                                else -> "اكتب وصف الصورة بالتفصيل (مثل: مشهد خيالي نيون بدقة 8K)..."
+                            },
                             color = Color.Gray,
                             fontSize = 12.sp
                         )
@@ -4031,9 +4377,9 @@ fun NexaAiMediaCreationDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                // Aspect Ratio Selector
+                // Aspect Ratio Selector (Veo supports 16:9 or 9:16)
                 Text(
                     text = "الأبعاد والنسبة (Aspect Ratio):",
                     color = Color.LightGray,
@@ -4049,11 +4395,18 @@ fun NexaAiMediaCreationDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    val ratios = listOf(
-                        Triple("1:1", "1:1 مربع", "انستغرام / صور"),
-                        Triple("16:9", "16:9 سينما", "يوتيوب / أفلام"),
-                        Triple("9:16", "9:16 عمودي", "ريلز / ستوري")
-                    )
+                    val ratios = if (selectedType == "video" || selectedType == "animate_video") {
+                        listOf(
+                            Triple("16:9", "16:9 سينما", "أفلام / يوتيوب"),
+                            Triple("9:16", "9:16 عمودي", "ريلز / ستوري")
+                        )
+                    } else {
+                        listOf(
+                            Triple("1:1", "1:1 مربع", "انستغرام / صور"),
+                            Triple("16:9", "16:9 سينما", "شاشات عريضة"),
+                            Triple("9:16", "9:16 عمودي", "ريلز / ستوري")
+                        )
+                    }
 
                     ratios.forEach { (ratio, label, desc) ->
                         val isSelected = selectedAspectRatio == ratio
@@ -4088,11 +4441,10 @@ fun NexaAiMediaCreationDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // Quota & Pro Subscription Banner
                 if (isNexaPro) {
-                    // Pro Subscriber Banner
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -4129,7 +4481,6 @@ fun NexaAiMediaCreationDialog(
                         }
                     }
                 } else {
-                    // Free User Banner with Remaining Limit
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -4178,7 +4529,6 @@ fun NexaAiMediaCreationDialog(
                                 }
                             }
 
-                            // Upgrade button
                             androidx.compose.material3.TextButton(
                                 onClick = onUpgradeToPro,
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
@@ -4194,7 +4544,7 @@ fun NexaAiMediaCreationDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
                 // Action Buttons
                 Row(
@@ -4218,15 +4568,19 @@ fun NexaAiMediaCreationDialog(
                                 onUpgradeToPro()
                             } else {
                                 val effectivePrompt = promptText.ifBlank {
-                                    if (selectedType == "image") "مدينة ذكية مستقبلية في عام 2050 بتصميم سايبربانك وإضاءة نيون سينمائية فائقة الوضوح"
-                                    else "مشهد سينمائي لطيران فوق جزيرة استوائية ساحرة مع شلالات مائية وأشعة شمس الغروب"
+                                    when (selectedType) {
+                                        "edit_image" -> "تحسين وتعديل سينمائي فاخر بلمسات إضاءة نيون ساحرة"
+                                        "animate_video" -> "تحريك سينمائي انسيابي للأمام مع مؤثرات حركة طبيعية"
+                                        "video" -> "مشهد سينمائي لطيران فوق جزيرة استوائية ساحرة مع شلالات مائية"
+                                        else -> "مدينة ذكية مستقبلية في عام 2050 بتصميم سايبربانك وإضاءة نيون سينمائية"
+                                    }
                                 }
-                                onGenerate(effectivePrompt, selectedType, selectedAspectRatio)
+                                onGenerate(effectivePrompt, selectedType, selectedAspectRatio, attachedImageBitmap)
                             }
                         },
                         modifier = Modifier.weight(1.5f),
                         colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                            containerColor = if (isQuotaExhausted) NeonAmber else if (selectedType == "video") NeonPurple else NeonCyan
+                            containerColor = if (isQuotaExhausted) NeonAmber else if (selectedType.contains("video")) NeonPurple else NeonCyan
                         ),
                         shape = RoundedCornerShape(12.dp)
                     ) {
@@ -4234,13 +4588,13 @@ fun NexaAiMediaCreationDialog(
                             Icon(
                                 imageVector = if (isQuotaExhausted) Icons.Default.Diamond else Icons.Default.AutoAwesome,
                                 contentDescription = null,
-                                tint = if (isQuotaExhausted || selectedType != "video") Color.Black else Color.White,
+                                tint = if (isQuotaExhausted || !selectedType.contains("video")) Color.Black else Color.White,
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = if (isQuotaExhausted) "فتح Pro للبدء 👑" else "بدء التوليد ✨",
-                                color = if (isQuotaExhausted || selectedType != "video") Color.Black else Color.White,
+                                color = if (isQuotaExhausted || !selectedType.contains("video")) Color.Black else Color.White,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.ExtraBold
                             )
@@ -4250,6 +4604,25 @@ fun NexaAiMediaCreationDialog(
             }
         }
     }
+}
+
+@Composable
+fun NexaAiMediaCreationDialog(
+    isNexaPro: Boolean,
+    remainingGenerations: Int,
+    initialMediaType: String = "image",
+    onDismiss: () -> Unit,
+    onUpgradeToPro: () -> Unit,
+    onGenerate: (prompt: String, mediaType: String, aspectRatio: String) -> Unit
+) {
+    NexaAiMediaCreationDialog(
+        isNexaPro = isNexaPro,
+        remainingGenerations = remainingGenerations,
+        initialMediaType = initialMediaType,
+        onDismiss = onDismiss,
+        onUpgradeToPro = onUpgradeToPro,
+        onGenerate = { p, m, a, _ -> onGenerate(p, m, a) }
+    )
 }
 
 @Composable

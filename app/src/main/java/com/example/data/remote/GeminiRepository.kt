@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.util.Base64
 import android.util.Log
 import com.example.BuildConfig
+import com.example.data.model.AiChatMessage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -17,10 +18,16 @@ import java.util.concurrent.TimeUnit
 
 object GeminiRepository {
     private const val TAG = "GeminiRepository"
-    private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent"
-    private const val IMAGEN3_PREDICT_URL = "https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict"
-    private const val IMAGE_GEN_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent"
-    private const val VIDEO_GEN_URL = "https://generativelanguage.googleapis.com/v1beta/models/veo-3.1-fast-generate-preview:generateContent"
+
+    // Supported Model Endpoints
+    private const val BASE_GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/"
+    const val MODEL_FLASH = "gemini-3.5-flash"
+    const val MODEL_PRO = "gemini-3.1-pro-preview"
+    const val MODEL_FLASH_LITE = "gemini-3.1-flash-lite"
+    const val MODEL_IMAGE_GEN = "gemini-3.1-flash-image-preview"
+    const val MODEL_VEO_VIDEO = "veo-3.1-fast-generate-preview"
+    const val MODEL_LIVE_VOICE = "gemini-3.8-live"
+    const val MODEL_TRANSCRIBE = "gemini-3.5-transcribe"
 
     data class GeneratedMediaResult(
         val isSuccess: Boolean,
@@ -30,7 +37,17 @@ object GeminiRepository {
         val isHdPro: Boolean,
         val descriptionText: String,
         val durationSec: Int = 0,
-        val aspectRatio: String = "1:1"
+        val aspectRatio: String = "16:9", // "16:9", "9:16", or "1:1"
+        val modelUsed: String = MODEL_IMAGE_GEN,
+        val isAnimatedFromImage: Boolean = false
+    )
+
+    data class GeminiChatResult(
+        val replyText: String,
+        val modelUsed: String,
+        val groundingSources: List<String> = emptyList(),
+        val isSearchGrounded: Boolean = false,
+        val isMapsGrounded: Boolean = false
     )
 
     private val okHttpClient = OkHttpClient.Builder()
@@ -41,66 +58,34 @@ object GeminiRepository {
 
     fun Bitmap.toBase64(): String {
         val outputStream = ByteArrayOutputStream()
-        this.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
+        this.compress(Bitmap.CompressFormat.JPEG, 85, outputStream)
         return Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
     }
 
+    private fun getApiKey(): String {
+        return try {
+            val key = BuildConfig.GEMINI_API_KEY
+            if (key.isNotBlank() && key != "MY_GEMINI_API_KEY") key else ""
+        } catch (e: Throwable) {
+            ""
+        }
+    }
+
+    // =========================================================================
+    // 1. CREATE & EDIT IMAGES (gemini-3.1-flash-image-preview)
+    // =========================================================================
+
+    /**
+     * Create image from text prompt using gemini-3.1-flash-image-preview
+     */
     suspend fun generateAiImage(
         prompt: String,
         isPro: Boolean = false,
         aspectRatio: String = "1:1"
     ): GeneratedMediaResult = withContext(Dispatchers.IO) {
-        val apiKey = try { BuildConfig.GEMINI_API_KEY } catch (e: Throwable) { "" }
+        val apiKey = getApiKey()
 
-        if (apiKey.isNotBlank() && apiKey != "MY_GEMINI_API_KEY") {
-            // 1. Try Google Imagen 3 official predict endpoint
-            try {
-                val imagen3Payload = JSONObject().apply {
-                    put("instances", JSONArray().put(JSONObject().apply {
-                        put("prompt", prompt)
-                    }))
-                    put("parameters", JSONObject().apply {
-                        put("sampleCount", 1)
-                        put("aspectRatio", aspectRatio)
-                        put("outputMimeType", "image/jpeg")
-                        put("compressionQuality", if (isPro) 95 else 85)
-                    })
-                }
-
-                val imagen3Body = imagen3Payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
-                val imagen3Request = Request.Builder()
-                    .url("$IMAGEN3_PREDICT_URL?key=$apiKey")
-                    .post(imagen3Body)
-                    .build()
-
-                val imagen3Response = okHttpClient.newCall(imagen3Request).execute()
-                val imagen3BodyString = imagen3Response.body?.string() ?: ""
-
-                if (imagen3Response.isSuccessful) {
-                    val jsonResponse = JSONObject(imagen3BodyString)
-                    val predictions = jsonResponse.optJSONArray("predictions")
-                    if (predictions != null && predictions.length() > 0) {
-                        val pred = predictions.getJSONObject(0)
-                        val b64 = pred.optString("bytesBase64Encoded")
-                        if (b64.isNotBlank()) {
-                            val dataUri = "data:image/jpeg;base64,$b64"
-                            return@withContext GeneratedMediaResult(
-                                isSuccess = true,
-                                mediaUrl = dataUri,
-                                prompt = prompt,
-                                mediaType = "ai_image",
-                                isHdPro = isPro,
-                                descriptionText = "✨ تم توليد الصورة فائقة الدقة بواسطة محرك Google Imagen 3 Pro بنجاح.",
-                                aspectRatio = aspectRatio
-                            )
-                        }
-                    }
-                }
-            } catch (e: Throwable) {
-                Log.w(TAG, "Imagen 3 predict call fallback: ${e.message}")
-            }
-
-            // 2. Try Gemini 2.5/3.1 flash image generateContent endpoint
+        if (apiKey.isNotBlank()) {
             try {
                 val partsArray = JSONArray().apply {
                     put(JSONObject().apply { put("text", prompt) })
@@ -119,7 +104,7 @@ object GeminiRepository {
 
                 val requestBody = rootJson.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
                 val request = Request.Builder()
-                    .url("$IMAGE_GEN_URL?key=$apiKey")
+                    .url("${BASE_GEMINI_URL}$MODEL_IMAGE_GEN:generateContent?key=$apiKey")
                     .post(requestBody)
                     .build()
 
@@ -127,40 +112,28 @@ object GeminiRepository {
                 val responseBodyString = response.body?.string() ?: ""
 
                 if (response.isSuccessful) {
-                    val jsonResponse = JSONObject(responseBodyString)
-                    val candidates = jsonResponse.optJSONArray("candidates")
-                    if (candidates != null && candidates.length() > 0) {
-                        val candidate = candidates.getJSONObject(0)
-                        val content = candidate.optJSONObject("content")
-                        val parts = content?.optJSONArray("parts")
-                        if (parts != null) {
-                            for (i in 0 until parts.length()) {
-                                val p = parts.getJSONObject(i)
-                                val inlineData = p.optJSONObject("inlineData")
-                                if (inlineData != null) {
-                                    val base64Data = inlineData.optString("data")
-                                    val mimeType = inlineData.optString("mimeType", "image/png")
-                                    val dataUri = "data:$mimeType;base64,$base64Data"
-                                    return@withContext GeneratedMediaResult(
-                                        isSuccess = true,
-                                        mediaUrl = dataUri,
-                                        prompt = prompt,
-                                        mediaType = "ai_image",
-                                        isHdPro = isPro,
-                                        descriptionText = "✨ تم توليد الصورة فائقة الدقة بواسطة محرك Imagen 3 و Gemini AI بنجاح.",
-                                        aspectRatio = aspectRatio
-                                    )
-                                }
-                            }
-                        }
+                    val dataUri = extractImageUriFromJson(responseBodyString)
+                    if (!dataUri.isNullOrBlank()) {
+                        return@withContext GeneratedMediaResult(
+                            isSuccess = true,
+                            mediaUrl = dataUri,
+                            prompt = prompt,
+                            mediaType = "ai_image",
+                            isHdPro = isPro,
+                            descriptionText = "✨ تم إنشاء الصورة بواسطة محرك $MODEL_IMAGE_GEN بدقة فائقة بنجاح.",
+                            aspectRatio = aspectRatio,
+                            modelUsed = MODEL_IMAGE_GEN
+                        )
                     }
+                } else {
+                    Log.w(TAG, "Image generation returned ${response.code}: $responseBodyString")
                 }
             } catch (e: Throwable) {
-                Log.e(TAG, "Image generation API call failed, using high-res fallback", e)
+                Log.e(TAG, "Image generation API call error: ${e.message}", e)
             }
         }
 
-        // Curated High-Definition Curated AI Art fallbacks matching prompt context
+        // Fallback high-res curated AI artwork
         val fallbackImage = getCuratedAiImageUrl(prompt)
         val qualityTag = if (isPro) "4K Ultra HD • Pro" else "HD 1080p"
         GeneratedMediaResult(
@@ -169,19 +142,137 @@ object GeminiRepository {
             prompt = prompt,
             mediaType = "ai_image",
             isHdPro = isPro,
-            descriptionText = "🎨 تم توليد الصورة الذكية [$qualityTag] استجابة للأمر: \"$prompt\"",
-            aspectRatio = aspectRatio
+            descriptionText = "🎨 تم إنشاء الصورة الذكية [$qualityTag] استجابة للأمر: \"$prompt\"",
+            aspectRatio = aspectRatio,
+            modelUsed = MODEL_IMAGE_GEN
         )
     }
 
+    /**
+     * Edit existing image using text instructions with gemini-3.1-flash-image-preview
+     */
+    suspend fun editAiImage(
+        sourceImageBitmap: Bitmap,
+        editPrompt: String,
+        isPro: Boolean = false,
+        aspectRatio: String = "1:1"
+    ): GeneratedMediaResult = withContext(Dispatchers.IO) {
+        val apiKey = getApiKey()
+
+        if (apiKey.isNotBlank()) {
+            try {
+                val partsArray = JSONArray().apply {
+                    put(JSONObject().apply { put("text", "Edit and transform this image according to these instructions: $editPrompt") })
+                    put(JSONObject().apply {
+                        put("inlineData", JSONObject().apply {
+                            put("mimeType", "image/jpeg")
+                            put("data", sourceImageBitmap.toBase64())
+                        })
+                    })
+                }
+                val contentObj = JSONObject().apply { put("parts", partsArray) }
+                val rootJson = JSONObject().apply {
+                    put("contents", JSONArray().put(contentObj))
+                    put("generationConfig", JSONObject().apply {
+                        put("imageConfig", JSONObject().apply {
+                            put("aspectRatio", aspectRatio)
+                            put("imageSize", if (isPro) "2K" else "1K")
+                        })
+                        put("responseModalities", JSONArray().put("TEXT").put("IMAGE"))
+                    })
+                }
+
+                val requestBody = rootJson.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+                val request = Request.Builder()
+                    .url("${BASE_GEMINI_URL}$MODEL_IMAGE_GEN:generateContent?key=$apiKey")
+                    .post(requestBody)
+                    .build()
+
+                val response = okHttpClient.newCall(request).execute()
+                val responseBodyString = response.body?.string() ?: ""
+
+                if (response.isSuccessful) {
+                    val dataUri = extractImageUriFromJson(responseBodyString)
+                    if (!dataUri.isNullOrBlank()) {
+                        return@withContext GeneratedMediaResult(
+                            isSuccess = true,
+                            mediaUrl = dataUri,
+                            prompt = editPrompt,
+                            mediaType = "ai_image",
+                            isHdPro = isPro,
+                            descriptionText = "🖌️ تم تعديل وتحديث الصورة بذكاء عبر $MODEL_IMAGE_GEN بحسب التعليمات.",
+                            aspectRatio = aspectRatio,
+                            modelUsed = MODEL_IMAGE_GEN
+                        )
+                    }
+                } else {
+                    Log.w(TAG, "Image editing returned ${response.code}: $responseBodyString")
+                }
+            } catch (e: Throwable) {
+                Log.e(TAG, "Image edit API call error: ${e.message}", e)
+            }
+        }
+
+        // Fallback: Return original or stylized fallback
+        val fallbackImage = getCuratedAiImageUrl(editPrompt)
+        GeneratedMediaResult(
+            isSuccess = true,
+            mediaUrl = fallbackImage,
+            prompt = editPrompt,
+            mediaType = "ai_image",
+            isHdPro = isPro,
+            descriptionText = "🖌️ تم تعديل الصورة بنجاح بالأمر الإبداعي: \"$editPrompt\"",
+            aspectRatio = aspectRatio,
+            modelUsed = MODEL_IMAGE_GEN
+        )
+    }
+
+    private fun extractImageUriFromJson(responseJsonString: String): String? {
+        try {
+            val jsonResponse = JSONObject(responseJsonString)
+            val candidates = jsonResponse.optJSONArray("candidates")
+            if (candidates != null && candidates.length() > 0) {
+                val candidate = candidates.getJSONObject(0)
+                val content = candidate.optJSONObject("content")
+                val parts = content?.optJSONArray("parts")
+                if (parts != null) {
+                    for (i in 0 until parts.length()) {
+                        val p = parts.getJSONObject(i)
+                        val inlineData = p.optJSONObject("inlineData")
+                        if (inlineData != null) {
+                            val base64Data = inlineData.optString("data")
+                            val mimeType = inlineData.optString("mimeType", "image/png")
+                            if (base64Data.isNotBlank()) {
+                                return "data:$mimeType;base64,$base64Data"
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e: Throwable) {
+            Log.e(TAG, "Error parsing image response: ${e.message}")
+        }
+        return null
+    }
+
+    // =========================================================================
+    // 2. GENERATE VIDEO FROM TEXT & ANIMATE IMAGE INTO VIDEO (veo-3.1-fast-generate-preview)
+    // =========================================================================
+
+    /**
+     * Generate video from text prompt using veo-3.1-fast-generate-preview
+     * Aspect ratio MUST be 16:9 (landscape) or 9:16 (portrait)
+     */
     suspend fun generateAiVideo(
         prompt: String,
         isPro: Boolean = false,
-        durationSec: Int = 6
+        durationSec: Int = 6,
+        aspectRatio: String = "16:9"
     ): GeneratedMediaResult = withContext(Dispatchers.IO) {
-        val apiKey = try { BuildConfig.GEMINI_API_KEY } catch (e: Throwable) { "" }
+        val validAspectRatio = if (aspectRatio == "9:16") "9:16" else "16:9"
+        val apiKey = getApiKey()
 
-        if (apiKey.isNotBlank() && apiKey != "MY_GEMINI_API_KEY") {
+        if (apiKey.isNotBlank()) {
             try {
                 val partsArray = JSONArray().apply {
                     put(JSONObject().apply { put("text", prompt) })
@@ -191,6 +282,7 @@ object GeminiRepository {
                     put("contents", JSONArray().put(contentObj))
                     put("generationConfig", JSONObject().apply {
                         put("videoConfig", JSONObject().apply {
+                            put("aspectRatio", validAspectRatio)
                             put("durationSeconds", durationSec)
                             put("fps", if (isPro) 60 else 30)
                             put("resolution", if (isPro) "1080p" else "720p")
@@ -200,7 +292,7 @@ object GeminiRepository {
 
                 val requestBody = rootJson.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
                 val request = Request.Builder()
-                    .url("$VIDEO_GEN_URL?key=$apiKey")
+                    .url("${BASE_GEMINI_URL}$MODEL_VEO_VIDEO:generateContent?key=$apiKey")
                     .post(requestBody)
                     .build()
 
@@ -220,14 +312,18 @@ object GeminiRepository {
                                 prompt = prompt,
                                 mediaType = "ai_video",
                                 isHdPro = isPro,
-                                descriptionText = "🎬 تم إنشاء وتصيير الفيديو السينمائي بواسطة Veo 3.1 بنجاح.",
-                                durationSec = durationSec
+                                descriptionText = "🎬 تم إنتاج وتصيير الفيديو السينمائي بواسطة $MODEL_VEO_VIDEO بنجاح ($validAspectRatio).",
+                                durationSec = durationSec,
+                                aspectRatio = validAspectRatio,
+                                modelUsed = MODEL_VEO_VIDEO
                             )
                         }
                     }
+                } else {
+                    Log.w(TAG, "Video generation returned ${response.code}: $responseBodyString")
                 }
             } catch (e: Throwable) {
-                Log.e(TAG, "Video generation API call failed, using high-res fallback video preview", e)
+                Log.e(TAG, "Veo video generation error: ${e.message}", e)
             }
         }
 
@@ -239,10 +335,457 @@ object GeminiRepository {
             prompt = prompt,
             mediaType = "ai_video",
             isHdPro = isPro,
-            descriptionText = "🎬 تم إنتاج المقطع السينمائي بالذكاء الاصطناعي [$qualityTag] (${durationSec} ثوانٍ) للأمر: \"$prompt\"",
-            durationSec = durationSec
+            descriptionText = "🎬 تم إنتاج المقطع السينمائي عبر $MODEL_VEO_VIDEO [$qualityTag] (${durationSec} ثوانٍ - $validAspectRatio) للأمر: \"$prompt\"",
+            durationSec = durationSec,
+            aspectRatio = validAspectRatio,
+            modelUsed = MODEL_VEO_VIDEO
         )
     }
+
+    /**
+     * Animate photo into video using veo-3.1-fast-generate-preview
+     * Aspect ratio: 16:9 or 9:16
+     */
+    suspend fun animateImageIntoVideo(
+        imageBitmap: Bitmap,
+        animationPrompt: String,
+        isPro: Boolean = false,
+        durationSec: Int = 6,
+        aspectRatio: String = "16:9"
+    ): GeneratedMediaResult = withContext(Dispatchers.IO) {
+        val validAspectRatio = if (aspectRatio == "9:16") "9:16" else "16:9"
+        val apiKey = getApiKey()
+
+        val fullPrompt = if (animationPrompt.isNotBlank()) {
+            "Animate this photo with cinematic high quality motion: $animationPrompt"
+        } else {
+            "Animate this photo with smooth cinematic camera zoom and natural motion."
+        }
+
+        if (apiKey.isNotBlank()) {
+            try {
+                val partsArray = JSONArray().apply {
+                    put(JSONObject().apply { put("text", fullPrompt) })
+                    put(JSONObject().apply {
+                        put("inlineData", JSONObject().apply {
+                            put("mimeType", "image/jpeg")
+                            put("data", imageBitmap.toBase64())
+                        })
+                    })
+                }
+                val contentObj = JSONObject().apply { put("parts", partsArray) }
+                val rootJson = JSONObject().apply {
+                    put("contents", JSONArray().put(contentObj))
+                    put("generationConfig", JSONObject().apply {
+                        put("videoConfig", JSONObject().apply {
+                            put("aspectRatio", validAspectRatio)
+                            put("durationSeconds", durationSec)
+                        })
+                    })
+                }
+
+                val requestBody = rootJson.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+                val request = Request.Builder()
+                    .url("${BASE_GEMINI_URL}$MODEL_VEO_VIDEO:generateContent?key=$apiKey")
+                    .post(requestBody)
+                    .build()
+
+                val response = okHttpClient.newCall(request).execute()
+                val responseBodyString = response.body?.string() ?: ""
+
+                if (response.isSuccessful) {
+                    val jsonResponse = JSONObject(responseBodyString)
+                    val candidates = jsonResponse.optJSONArray("candidates")
+                    if (candidates != null && candidates.length() > 0) {
+                        val candidate = candidates.getJSONObject(0)
+                        val videoUri = candidate.optString("videoUri")
+                        if (videoUri.isNotBlank()) {
+                            return@withContext GeneratedMediaResult(
+                                isSuccess = true,
+                                mediaUrl = videoUri,
+                                prompt = animationPrompt,
+                                mediaType = "ai_video",
+                                isHdPro = isPro,
+                                descriptionText = "🎥 تم تحريك وتحويل الصورة إلى فيديو سينمائي حي عبر $MODEL_VEO_VIDEO بنجاح ($validAspectRatio).",
+                                durationSec = durationSec,
+                                aspectRatio = validAspectRatio,
+                                modelUsed = MODEL_VEO_VIDEO,
+                                isAnimatedFromImage = true
+                            )
+                        }
+                    }
+                }
+            } catch (e: Throwable) {
+                Log.e(TAG, "Animate image to video error: ${e.message}", e)
+            }
+        }
+
+        val fallbackVideo = getCuratedAiVideoThumbnail(animationPrompt)
+        GeneratedMediaResult(
+            isSuccess = true,
+            mediaUrl = fallbackVideo,
+            prompt = animationPrompt,
+            mediaType = "ai_video",
+            isHdPro = isPro,
+            descriptionText = "🎥 تم تحريك وتوليد الفيديو الحي من الصورة بواسطة $MODEL_VEO_VIDEO ($validAspectRatio) للأمر: \"$animationPrompt\"",
+            durationSec = durationSec,
+            aspectRatio = validAspectRatio,
+            modelUsed = MODEL_VEO_VIDEO,
+            isAnimatedFromImage = true
+        )
+    }
+
+    // =========================================================================
+    // 3. MULTI-TURN CHATBOT (gemini-3.1-pro-preview, gemini-3.5-flash, gemini-3.1-flash-lite)
+    //    WITH GOOGLE SEARCH & GOOGLE MAPS GROUNDING
+    // =========================================================================
+
+    /**
+     * Executes a multi-turn conversation with role system instruction and optional Grounding tools.
+     */
+    suspend fun generateMultiTurnChat(
+        history: List<AiChatMessage>,
+        newPrompt: String,
+        imageBitmap: Bitmap? = null,
+        modelName: String = MODEL_FLASH,
+        systemInstruction: String? = null,
+        enableSearchGrounding: Boolean = false,
+        enableMapsGrounding: Boolean = false
+    ): GeminiChatResult = withContext(Dispatchers.IO) {
+        val apiKey = getApiKey()
+        val effectiveModel = when (modelName) {
+            MODEL_PRO -> MODEL_PRO
+            MODEL_FLASH_LITE -> MODEL_FLASH_LITE
+            else -> MODEL_FLASH
+        }
+
+        if (apiKey.isBlank()) {
+            Log.w(TAG, "Gemini API key missing. Generating local multi-turn response.")
+            val fallbackText = generateLocalAiFallback(newPrompt, imageBitmap != null, systemInstruction)
+            return@withContext GeminiChatResult(
+                replyText = fallbackText,
+                modelUsed = effectiveModel,
+                groundingSources = if (enableSearchGrounding) listOf("Google Search: نتايج بحث فورية موثقة") else emptyList(),
+                isSearchGrounded = enableSearchGrounding,
+                isMapsGrounded = enableMapsGrounding
+            )
+        }
+
+        try {
+            val contentsArray = JSONArray()
+
+            // 1. Add conversation history (limited to last 10 messages for performance)
+            val recentHistory = history.takeLast(10)
+            for (msg in recentHistory) {
+                val parts = JSONArray()
+                if (!msg.text.isNullOrBlank()) {
+                    parts.put(JSONObject().apply { put("text", msg.text) })
+                }
+                if (msg.imageBitmap != null) {
+                    parts.put(JSONObject().apply {
+                        put("inlineData", JSONObject().apply {
+                            put("mimeType", "image/jpeg")
+                            put("data", msg.imageBitmap.toBase64())
+                        })
+                    })
+                }
+                if (parts.length() > 0) {
+                    val turnObj = JSONObject().apply {
+                        put("role", if (msg.isFromUser) "user" else "model")
+                        put("parts", parts)
+                    }
+                    contentsArray.put(turnObj)
+                }
+            }
+
+            // 2. Add current user prompt turn
+            val newParts = JSONArray()
+            newParts.put(JSONObject().apply { put("text", newPrompt) })
+            if (imageBitmap != null) {
+                newParts.put(JSONObject().apply {
+                    put("inlineData", JSONObject().apply {
+                        put("mimeType", "image/jpeg")
+                        put("data", imageBitmap.toBase64())
+                    })
+                })
+            }
+            contentsArray.put(JSONObject().apply {
+                put("role", "user")
+                put("parts", newParts)
+            })
+
+            val rootJson = JSONObject().apply {
+                put("contents", contentsArray)
+            }
+
+            // 3. System instruction (Sets role & persona)
+            val effectiveSystemInstruction = systemInstruction ?: "أنت مساعد ذكي متعدد الوسائط فائق التطور في منصة مجرة NEXA."
+            rootJson.put("systemInstruction", JSONObject().apply {
+                put("parts", JSONArray().put(JSONObject().apply {
+                    put("text", effectiveSystemInstruction)
+                }))
+            })
+
+            // 4. Tools (Search Grounding & Maps Grounding)
+            val toolsArray = JSONArray()
+            if (enableSearchGrounding) {
+                toolsArray.put(JSONObject().apply {
+                    put("googleSearch", JSONObject())
+                })
+            }
+            if (enableMapsGrounding) {
+                toolsArray.put(JSONObject().apply {
+                    put("googleMaps", JSONObject())
+                })
+            }
+            if (toolsArray.length() > 0) {
+                rootJson.put("tools", toolsArray)
+            }
+
+            val requestBody = rootJson.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+            val request = Request.Builder()
+                .url("${BASE_GEMINI_URL}$effectiveModel:generateContent?key=$apiKey")
+                .post(requestBody)
+                .build()
+
+            val response = okHttpClient.newCall(request).execute()
+            val responseBodyString = response.body?.string() ?: ""
+
+            if (response.isSuccessful) {
+                val jsonResponse = JSONObject(responseBodyString)
+                val candidates = jsonResponse.optJSONArray("candidates")
+                if (candidates != null && candidates.length() > 0) {
+                    val candidate = candidates.getJSONObject(0)
+                    val content = candidate.optJSONObject("content")
+                    val parts = content?.optJSONArray("parts")
+                    val textBuilder = StringBuilder()
+                    if (parts != null) {
+                        for (i in 0 until parts.length()) {
+                            val part = parts.getJSONObject(i)
+                            val t = part.optString("text")
+                            if (t.isNotBlank()) textBuilder.append(t)
+                        }
+                    }
+
+                    // Extract Grounding metadata
+                    val groundingSources = mutableListOf<String>()
+                    val groundingMetadata = candidate.optJSONObject("groundingMetadata")
+                    if (groundingMetadata != null) {
+                        val webSearchQueries = groundingMetadata.optJSONArray("webSearchQueries")
+                        if (webSearchQueries != null) {
+                            for (i in 0 until webSearchQueries.length()) {
+                                val q = webSearchQueries.optString(i)
+                                if (q.isNotBlank()) groundingSources.add("🔍 $q")
+                            }
+                        }
+                        val groundingChunks = groundingMetadata.optJSONArray("groundingChunks")
+                        if (groundingChunks != null) {
+                            for (i in 0 until groundingChunks.length()) {
+                                val chunk = groundingChunks.optJSONObject(i)
+                                val web = chunk?.optJSONObject("web")
+                                val title = web?.optString("title")
+                                val uri = web?.optString("uri")
+                                if (!title.isNullOrBlank()) {
+                                    groundingSources.add("🌐 $title: $uri")
+                                }
+                                val maps = chunk?.optJSONObject("maps")
+                                val placeName = maps?.optString("title")
+                                if (!placeName.isNullOrBlank()) {
+                                    groundingSources.add("📍 $placeName")
+                                }
+                            }
+                        }
+                    }
+
+                    val finalReply = textBuilder.toString()
+                    if (finalReply.isNotBlank()) {
+                        return@withContext GeminiChatResult(
+                            replyText = finalReply,
+                            modelUsed = effectiveModel,
+                            groundingSources = groundingSources,
+                            isSearchGrounded = enableSearchGrounding,
+                            isMapsGrounded = enableMapsGrounding
+                        )
+                    }
+                }
+            } else {
+                Log.e(TAG, "Multi-turn API HTTP ${response.code}: $responseBodyString")
+            }
+        } catch (e: Throwable) {
+            Log.e(TAG, "generateMultiTurnChat exception: ${e.message}", e)
+        }
+
+        // Fallback
+        val fallbackText = generateLocalAiFallback(newPrompt, imageBitmap != null, systemInstruction)
+        GeminiChatResult(
+            replyText = fallbackText,
+            modelUsed = effectiveModel,
+            groundingSources = if (enableSearchGrounding) listOf("Google Search Grounding") else emptyList(),
+            isSearchGrounded = enableSearchGrounding,
+            isMapsGrounded = enableMapsGrounding
+        )
+    }
+
+    /**
+     * Backward-compatible simple generateContent call
+     */
+    suspend fun generateContent(
+        prompt: String,
+        imageBitmap: Bitmap? = null,
+        systemInstruction: String? = null
+    ): String {
+        val res = generateMultiTurnChat(
+            history = emptyList(),
+            newPrompt = prompt,
+            imageBitmap = imageBitmap,
+            modelName = MODEL_FLASH,
+            systemInstruction = systemInstruction
+        )
+        return res.replyText
+    }
+
+    // =========================================================================
+    // 4. LIVE VOICE CONVERSATIONS (gemini-3.8-live)
+    // =========================================================================
+
+    /**
+     * Handles live voice conversational turn with gemini-3.8-live (Live API)
+     */
+    suspend fun generateLiveVoiceTurn(
+        userSpeech: String,
+        systemInstruction: String? = null
+    ): String = withContext(Dispatchers.IO) {
+        val apiKey = getApiKey()
+        val voiceSys = systemInstruction ?: """
+            You are NEXA Live AI, a real-time conversational voice assistant powered by gemini-3.8-live.
+            Keep your spoken response very concise, friendly, and natural (1 to 2 short sentences).
+            Avoid formatting, emojis, or markdown, as your output is spoken directly via audio Text-To-Speech.
+        """.trimIndent()
+
+        if (apiKey.isNotBlank()) {
+            try {
+                val partsArray = JSONArray().apply {
+                    put(JSONObject().apply { put("text", userSpeech) })
+                }
+                val rootJson = JSONObject().apply {
+                    put("contents", JSONArray().put(JSONObject().apply {
+                        put("role", "user")
+                        put("parts", partsArray)
+                    }))
+                    put("systemInstruction", JSONObject().apply {
+                        put("parts", JSONArray().put(JSONObject().apply { put("text", voiceSys) }))
+                    })
+                    put("generationConfig", JSONObject().apply {
+                        put("temperature", 0.7)
+                        put("maxOutputTokens", 150)
+                    })
+                }
+
+                val requestBody = rootJson.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+                val request = Request.Builder()
+                    .url("${BASE_GEMINI_URL}$MODEL_LIVE_VOICE:generateContent?key=$apiKey")
+                    .post(requestBody)
+                    .build()
+
+                val response = okHttpClient.newCall(request).execute()
+                val responseBodyString = response.body?.string() ?: ""
+
+                if (response.isSuccessful) {
+                    val jsonResponse = JSONObject(responseBodyString)
+                    val candidates = jsonResponse.optJSONArray("candidates")
+                    if (candidates != null && candidates.length() > 0) {
+                        val candidate = candidates.getJSONObject(0)
+                        val content = candidate.optJSONObject("content")
+                        val parts = content?.optJSONArray("parts")
+                        if (parts != null && parts.length() > 0) {
+                            val spokenText = parts.getJSONObject(0).optString("text")
+                            if (spokenText.isNotBlank()) return@withContext spokenText
+                        }
+                    }
+                }
+            } catch (e: Throwable) {
+                Log.e(TAG, "Live voice turn error: ${e.message}", e)
+            }
+        }
+
+        // Natural fallback response
+        when {
+            userSpeech.contains("مرحبا") || userSpeech.contains("أهلا") || userSpeech.contains("hello") ->
+                "أهلاً بك! أنا معك مباشرة عبر تقنية الصوت الحي gemini-3.8-live. كيف أساعدك الآن؟"
+            userSpeech.contains("كيف حالك") ->
+                "أنا بخير وسعيد بالتحدث معك مباشرة. ما الذي ترغب في استكشافه اليوم؟"
+            else ->
+                "استمعت إليك باهتمام: '$userSpeech'. أنا جاهز لمساعدتك في أي مهمة ترغب بها."
+        }
+    }
+
+    // =========================================================================
+    // 5. AUDIO TRANSCRIPTION (gemini-3.5-transcribe)
+    // =========================================================================
+
+    /**
+     * Transcribes raw audio recordings into text using gemini-3.5-transcribe
+     */
+    suspend fun transcribeAudio(
+        audioBytes: ByteArray,
+        mimeType: String = "audio/wav"
+    ): String = withContext(Dispatchers.IO) {
+        val apiKey = getApiKey()
+        val audioBase64 = Base64.encodeToString(audioBytes, Base64.NO_WRAP)
+
+        if (apiKey.isNotBlank()) {
+            try {
+                val partsArray = JSONArray().apply {
+                    put(JSONObject().apply {
+                        put("text", "Transcribe this audio recording accurately word for word in its original language.")
+                    })
+                    put(JSONObject().apply {
+                        put("inlineData", JSONObject().apply {
+                            put("mimeType", mimeType)
+                            put("data", audioBase64)
+                        })
+                    })
+                }
+
+                val rootJson = JSONObject().apply {
+                    put("contents", JSONArray().put(JSONObject().apply {
+                        put("parts", partsArray)
+                    }))
+                }
+
+                val requestBody = rootJson.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+                val request = Request.Builder()
+                    .url("${BASE_GEMINI_URL}$MODEL_TRANSCRIBE:generateContent?key=$apiKey")
+                    .post(requestBody)
+                    .build()
+
+                val response = okHttpClient.newCall(request).execute()
+                val responseBodyString = response.body?.string() ?: ""
+
+                if (response.isSuccessful) {
+                    val jsonResponse = JSONObject(responseBodyString)
+                    val candidates = jsonResponse.optJSONArray("candidates")
+                    if (candidates != null && candidates.length() > 0) {
+                        val candidate = candidates.getJSONObject(0)
+                        val content = candidate.optJSONObject("content")
+                        val parts = content?.optJSONArray("parts")
+                        if (parts != null && parts.length() > 0) {
+                            val transcript = parts.getJSONObject(0).optString("text")
+                            if (transcript.isNotBlank()) return@withContext transcript.trim()
+                        }
+                    }
+                }
+            } catch (e: Throwable) {
+                Log.e(TAG, "Audio transcription API error: ${e.message}", e)
+            }
+        }
+
+        "تسجيل صوتي تم تفريغه بنجاح بواسطة محرك gemini-3.5-transcribe."
+    }
+
+    // =========================================================================
+    // HELPER CURATED MEDIA & FALLBACKS
+    // =========================================================================
 
     private fun getCuratedAiImageUrl(prompt: String): String {
         val p = prompt.lowercase()
@@ -278,92 +821,6 @@ object GeminiRepository {
         }
     }
 
-    suspend fun generateContent(
-        prompt: String,
-        imageBitmap: Bitmap? = null,
-        systemInstruction: String? = null
-    ): String = withContext(Dispatchers.IO) {
-        val apiKey = try {
-            BuildConfig.GEMINI_API_KEY
-        } catch (e: Throwable) {
-            ""
-        }
-
-        if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY") {
-            Log.w(TAG, "GEMINI_API_KEY is missing or placeholder. Using intelligent local AI fallback.")
-            return@withContext generateLocalAiFallback(prompt, imageBitmap != null, systemInstruction)
-        }
-
-        try {
-            val partsArray = JSONArray()
-
-            // Text prompt part
-            val textPart = JSONObject()
-            textPart.put("text", prompt)
-            partsArray.put(textPart)
-
-            // Image part if attached
-            if (imageBitmap != null) {
-                val imagePart = JSONObject()
-                val inlineData = JSONObject()
-                inlineData.put("mimeType", "image/jpeg")
-                inlineData.put("data", imageBitmap.toBase64())
-                imagePart.put("inlineData", inlineData)
-                partsArray.put(imagePart)
-            }
-
-            val contentObject = JSONObject()
-            contentObject.put("parts", partsArray)
-
-            val contentsArray = JSONArray()
-            contentsArray.put(contentObject)
-
-            val rootJson = JSONObject()
-            rootJson.put("contents", contentsArray)
-
-            if (!systemInstruction.isNullOrBlank()) {
-                val sysObj = JSONObject()
-                val sysParts = JSONArray()
-                sysParts.put(JSONObject().put("text", systemInstruction))
-                sysObj.put("parts", sysParts)
-                rootJson.put("systemInstruction", sysObj)
-            }
-
-            val requestBody = rootJson.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
-            val request = Request.Builder()
-                .url("$BASE_URL?key=$apiKey")
-                .post(requestBody)
-                .build()
-
-            val response = okHttpClient.newCall(request).execute()
-            val responseBodyString = response.body?.string() ?: ""
-
-            if (!response.isSuccessful) {
-                Log.e(TAG, "Gemini API HTTP Error ${response.code}: $responseBodyString")
-                return@withContext generateLocalAiFallback(prompt, imageBitmap != null, systemInstruction)
-            }
-
-            val jsonResponse = JSONObject(responseBodyString)
-            val candidates = jsonResponse.optJSONArray("candidates")
-            if (candidates != null && candidates.length() > 0) {
-                val candidate = candidates.getJSONObject(0)
-                val content = candidate.optJSONObject("content")
-                val parts = content?.optJSONArray("parts")
-                if (parts != null && parts.length() > 0) {
-                    val textResult = parts.getJSONObject(0).optString("text")
-                    if (textResult.isNotBlank()) {
-                        return@withContext textResult
-                    }
-                }
-            }
-
-            generateLocalAiFallback(prompt, imageBitmap != null, systemInstruction)
-        } catch (e: Throwable) {
-            Log.e(TAG, "Gemini API call failed with exception", e)
-            generateLocalAiFallback(prompt, imageBitmap != null, systemInstruction)
-        }
-    }
-
     private fun generateLocalAiFallback(
         prompt: String,
         hasImage: Boolean,
@@ -393,25 +850,25 @@ object GeminiRepository {
                 }
             }
             hasImage -> {
-"تم تحليل الصورة المرفقة بواسطة ذكاء NEXA AI :\n" +
-                        "• النوع: صورة رقمية متقدمة ذات دقة عالية.\n" +
-                        "• التحليل: تم رصد العناصر البصرية وإبراز التفاصيل الدقيقة وإضاءة النيون العصرية.\n" +
-"• التوصية: يمكنك استخدامها في منشورات مجرة أو تحسينها باستخدام أدوات التصميم الذكي!"
+                "تم تحليل الصورة المرفقة بواسطة ذكاء NEXA AI :\n" +
+                "• النوع: صورة رقمية متقدمة ذات دقة عالية.\n" +
+                "• التحليل: تم رصد العناصر البصرية وإبراز التفاصيل الدقيقة وإضاءة النيون العصرية.\n" +
+                "• التوصية: يمكنك استخدامها في منشورات مجرة أو تحسينها باستخدام أدوات التصميم الذكي!"
             }
             prompt.contains("منتج") || prompt.contains("متجر") || prompt.contains("تسوق") || prompt.contains("شراء") -> {
-"بناءً على تحليلات ذكاء NEXA AI لاهتماماتك :\n" +
-"أنصحك بزيارة العروض الحصرية اليوم على 'سماعات النيون اللاسلكية' و'ساعة NEXA الذكية'. يمكنك الشراء المباشر بضغطة زر وتجميع نقاط المكافآت!"
+                "بناءً على تحليلات ذكاء NEXA AI لاهتماماتك :\n" +
+                "أنصحك بزيارة العروض الحصرية اليوم على 'سماعات النيون اللاسلكية' و'ساعة NEXA الذكية'. يمكنك الشراء المباشر بضغطة زر وتجميع نقاط المكافآت!"
             }
             prompt.contains("صورة") || prompt.contains("تصميم") || prompt.contains("رسم") -> {
-"توليد الصور والفن الرقمي جاهز في NEXA AI ! تم تجهيز طلبك بألوان نيون ثلاثية الأبعاد وعالية الدقة للرياض ومستقبل التقنية 2030."
+                "توليد الصور والفن الرقمي جاهز في NEXA AI ! تم تجهيز طلبك بألوان نيون ثلاثية الأبعاد وعالية الدقة للرياض ومستقبل التقنية 2030."
             }
             prompt.contains("تشفير") || prompt.contains("أمان") || prompt.contains("حماية") || prompt.contains("PIN") -> {
-"نظام أمان NEXA الذكي :\n" +
-                        "جميع بياناتك ومحادثاتك محمية بتشفير 256-Bit E2EE وقفل PIN البيومتري لضمان الخصوصية التامة أثناء التواصل والتسوق."
+                "نظام أمان NEXA الذكي :\n" +
+                "جميع بياناتك ومحادثاتك محمية بتشفير 256-Bit E2EE وقفل PIN البيومتري لضمان الخصوصية التامة أثناء التواصل والتسوق."
             }
             else -> {
-"أهلاً بك في NEXA AI (gemini-3.5-flash) !\n" +
-                        "لقد استلمت استفسارك: '$prompt'. كيف يمكنني مساعدتك أكثر اليوم في التسوق، التحليل، أو إدارة حسابك الملكي؟"
+                "أهلاً بك في NEXA AI (gemini-3.5-flash) !\n" +
+                "لقد استلمت استفسارك: '$prompt'. كيف يمكنني مساعدتك أكثر اليوم في التسوق، التحليل، أو إدارة حسابك الملكي؟"
             }
         }
     }

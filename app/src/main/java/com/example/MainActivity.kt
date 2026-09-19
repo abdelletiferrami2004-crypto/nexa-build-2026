@@ -91,6 +91,23 @@ fun MajarrahApp(viewModel: MajarrahViewModel) {
     }
 
     val loginStep by viewModel.loginStep.collectAsState()
+    val serverStatus by viewModel.serverStatus.collectAsState()
+    val maintenanceMessage by viewModel.maintenanceMessage.collectAsState()
+    val isConnectedToRtdb by viewModel.isConnectedToRtdb.collectAsState()
+    val isMaintenanceBypassed by viewModel.isMaintenanceBypassed.collectAsState()
+
+    // Live Server Maintenance Check from Firebase Realtime Database (/server_status and /maintenance_message)
+    // If server_status is ONLINE (or bypassed for testing), proceed normally.
+    if (serverStatus != "ONLINE" && !isMaintenanceBypassed) {
+        com.example.ui.components.NexaServerMaintenanceScreen(
+            serverStatus = serverStatus,
+            maintenanceMessage = maintenanceMessage,
+            isConnectedToRtdb = isConnectedToRtdb,
+            onBypassMaintenance = { viewModel.bypassMaintenanceForTesting() }
+        )
+        return
+    }
+
     val isAnomalyDetected by viewModel.isAnomalyDetected.collectAsState()
     val anomalyReason by viewModel.anomalyReason.collectAsState()
     val anomalyCountdownSeconds by viewModel.anomalyCountdownSeconds.collectAsState()

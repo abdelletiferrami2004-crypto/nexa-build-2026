@@ -20,9 +20,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Backspace
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -34,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -42,6 +45,8 @@ import androidx.compose.ui.window.Dialog
 import com.example.ui.theme.EncryptedGreen
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonPink
+import com.example.ui.theme.NeonPurple
+import com.example.util.SystemBiometricAuthManager
 
 @Composable
 fun PinLockDialog(
@@ -51,8 +56,22 @@ fun PinLockDialog(
     onDismiss: () -> Unit,
     onPinSuccess: () -> Unit
 ) {
+    val context = LocalContext.current
     var enteredPin by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    fun triggerBiometrics() {
+        SystemBiometricAuthManager.authenticate(
+            context = context,
+            title = "فتح الدردشات المشفرة",
+            subtitle = "تحقق من هويتك بالبصمة لفك قفل المحادثات",
+            negativeButtonText = "إلغاء / استخدام PIN",
+            onSuccess = onPinSuccess,
+            onError = { error ->
+                errorMessage = "فشل التحقق بالبصمة: $error"
+            }
+        )
+    }
 
     fun onNumberPress(num: String) {
         if (enteredPin.length < 4) {
@@ -158,7 +177,42 @@ fun PinLockDialog(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Biometric Prompt Action Button
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .clickable { triggerBiometrics() },
+                    shape = RoundedCornerShape(14.dp),
+                    color = NeonCyan.copy(alpha = 0.12f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan.copy(alpha = 0.4f))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp, horizontal = 12.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Fingerprint,
+                            contentDescription = "Biometric Prompt",
+                            tint = NeonCyan,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "فتح بالبصمة الحيوية (Biometric Prompt)",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
 
                 // Glass Keypad 1-9, 0, Backspace
                 val keys = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "del")

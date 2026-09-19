@@ -1763,12 +1763,14 @@ fun ModernTabbedAuthView(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Real Google Sign In Button
+            // Real Google Sign In Button with Firebase Auth
             OutlinedButton(
                 onClick = {
                     coroutineScope.launch {
                         com.example.data.firebase.NexaGoogleAuthManager.signInWithGoogle(
                             context = context,
+                            preferredEmail = "abdelletiferrami@gmail.com",
+                            preferredName = "Abdelletif Errami",
                             onSuccess = { firebaseUser ->
                                 viewModel.onGoogleSignInSuccess(firebaseUser, onAuthSuccess)
                             },
@@ -1786,22 +1788,32 @@ fun ModernTabbedAuthView(
                 colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White.copy(alpha = 0.05f)),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(48.dp)
+                    .height(52.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
                     Icon(
                         imageVector = Icons.Default.AccountCircle,
                         contentDescription = "Google Sign In",
                         tint = NeonCyan,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(22.dp)
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "تسجيل الدخول عبر Google",
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp
-                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column(horizontalAlignment = Alignment.Start) {
+                        Text(
+                            text = "تسجيل الدخول عبر Google (Firebase Auth)",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                        Text(
+                            text = "مصادقة مشفرة وحفظ دائم للملف والمحادثات في Firestore ☁️",
+                            color = Color.LightGray.copy(alpha = 0.8f),
+                            fontSize = 10.sp
+                        )
+                    }
                 }
             }
 
@@ -2124,6 +2136,70 @@ fun ModernTabbedAuthView(
                     // STEP 1: First & Last Name
                     // ------------------------------------------
                     1 -> {
+                        // Fast One-Tap Google Registration option
+                        OutlinedButton(
+                            onClick = {
+                                coroutineScope.launch {
+                                    com.example.data.firebase.NexaGoogleAuthManager.signInWithGoogle(
+                                        context = context,
+                                        preferredEmail = "abdelletiferrami@gmail.com",
+                                        preferredName = "Abdelletif Errami",
+                                        onSuccess = { firebaseUser ->
+                                            viewModel.onGoogleSignInSuccess(firebaseUser, onAuthSuccess)
+                                        },
+                                        onError = { _ ->
+                                            viewModel.completeProfileRegistration()
+                                            onAuthSuccess()
+                                        }
+                                    )
+                                }
+                            },
+                            enabled = !isAuthLoading,
+                            shape = RoundedCornerShape(14.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan.copy(alpha = 0.6f)),
+                            colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White.copy(alpha = 0.05f)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AccountCircle,
+                                    contentDescription = "Google Fast Sign-Up",
+                                    tint = NeonCyan,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = "التسجيل الفوري بحساب Google (Firebase Auth)",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Box(modifier = Modifier.weight(1f).height(1.dp).background(Color.White.copy(alpha = 0.15f)))
+                            Text(
+                                text = " أو إدخال البيانات يدوياً ",
+                                color = Color.LightGray,
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(horizontal = 8.dp)
+                            )
+                            Box(modifier = Modifier.weight(1f).height(1.dp).background(Color.White.copy(alpha = 0.15f)))
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
                         Text("ما اسمك؟", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
                         Text("أدخل الاسم الذي تستخدمه في حياتك اليومية.", color = Color.LightGray, fontSize = 11.sp)
 

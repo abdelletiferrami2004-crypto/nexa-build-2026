@@ -11,6 +11,10 @@ data class AiChatMessage(
     val imageUri: String? = null,
     val imageBitmap: Bitmap? = null,
     val isError: Boolean = false,
-    val modelUsed: String = "gemini-3.5-flash"
+    val modelUsed: String = "gemini-3.5-flash",
+    val groundingSources: List<String> = emptyList(),
+    val isSearchGrounded: Boolean = false,
+    val isMapsGrounded: Boolean = false,
+    val role: String = "general"
 )
 

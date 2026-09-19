@@ -154,8 +154,8 @@ fun VoiceTutorModal(
         """.trimIndent()
 
         scope.launch {
-            val responseText = GeminiRepository.generateContent(
-                prompt = spokenText,
+            val responseText = GeminiRepository.generateLiveVoiceTurn(
+                userSpeech = spokenText,
                 systemInstruction = systemInstruction
             )
             isAiThinking = false
@@ -228,8 +228,19 @@ fun VoiceTutorModal(
                         }
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
- Text("NEXA Voice Tutor", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                            Text("المحاكي الصوتي الذكي للغات", color = Color.Gray, fontSize = 11.sp)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("NEXA Voice Tutor", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(NeonPurple.copy(alpha = 0.3f))
+                                        .padding(horizontal = 5.dp, vertical = 2.dp)
+                                ) {
+                                    Text("gemini-3.8-live", color = NeonCyan, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                            Text("تحدث صوتي تفاعلي حي متعدد اللغات", color = Color.Gray, fontSize = 10.sp)
                         }
                     }
 

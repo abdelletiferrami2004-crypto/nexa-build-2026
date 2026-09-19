@@ -98,6 +98,12 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
                 viewModelScope.launch {
                     repository.saveProfile(updated)
                     com.example.data.firebase.FirebaseManager.saveUserProfileToCloud(updated)
+                    val uid = "user_${updated.id}"
+                    com.example.data.firebase.FirebaseRealtimeDbManager.syncProSubscriptionStatus(
+                        userId = uid,
+                        isPro = true,
+                        planName = updated.vipTierName
+                    )
                 }
                 _monetizationMessage.value = "تم التحقق وتفعيل اشتراك Nexa AI Pro بنجاح عبر Google Play! تم رفع كافة الحدود 👑"
             } else {
@@ -152,6 +158,12 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
                 viewModelScope.launch {
                     repository.saveProfile(updated)
                     com.example.data.firebase.FirebaseManager.saveUserProfileToCloud(updated)
+                    val uid = "user_${updated.id}"
+                    com.example.data.firebase.FirebaseRealtimeDbManager.syncProSubscriptionStatus(
+                        userId = uid,
+                        isPro = true,
+                        planName = updated.vipTierName
+                    )
                 }
                 _monetizationMessage.value = "تهانينا! 🎉 تم تفعيل اشتراك Nexa AI Pro بنجاح عبر Google Play In-App Purchases"
                 NotificationSoundManager.playPopChime(getApplication())
@@ -170,6 +182,12 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
                 isNexaProSubscriber = false
             )
             repository.saveProfile(updated)
+            val uid = "user_${updated.id}"
+            com.example.data.firebase.FirebaseRealtimeDbManager.syncProSubscriptionStatus(
+                userId = uid,
+                isPro = false,
+                planName = "Free Tier"
+            )
             _monetizationMessage.value = "تم إلغاء التجديد التلقائي لاشتراك Pro بنجاح"
         }
     }
@@ -210,37 +228,38 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
         conversationId: String,
         prompt: String,
         mediaType: String,
-        aspectRatio: String = "1:1"
+        aspectRatio: String = "16:9",
+        sourceBitmap: android.graphics.Bitmap? = null
     ) {
-        generateAiMediaInChat(
-            conversationId = conversationId,
-            prompt = prompt,
-            isVideo = mediaType == "video" || mediaType == "ai_video",
-            aspectRatio = aspectRatio
-        )
-    }
-
-    fun generateAiMediaInChat(
-        conversationId: String,
-        prompt: String,
-        isVideo: Boolean,
-        aspectRatio: String = "1:1"
-    ) {
-        if (prompt.isBlank()) return
+        if (prompt.isBlank() && sourceBitmap == null) return
         if (!checkAndConsumeAiGeneration()) {
             return
         }
 
+        val isVideo = mediaType == "video" || mediaType == "ai_video" || mediaType == "animate_video"
+        val isEditImage = mediaType == "edit_image"
+        val isAnimatePhoto = mediaType == "animate_video"
+
         viewModelScope.launch {
             _isGeneratingAiMedia.value = true
-            _aiMediaGenerationStatus.value = if (isVideo) "جاري إنتاج وتصيير الفيديو السينمائي عبر محرك Veo 3.1..." else "جاري معالجة وتوليد الصورة الذكية عبر Imagen 3 و Gemini..."
+            _aiMediaGenerationStatus.value = when {
+                isAnimatePhoto -> "جاري تحريك وتحويل الصورة إلى فيديو سينمائي عبر Veo 3.1..."
+                isVideo -> "جاري إنتاج وتصيير الفيديو السينمائي عبر محرك Veo 3.1..."
+                isEditImage -> "جاري تعديل وتحسين الصورة الذكية عبر محرك Gemini 3.1 Flash..."
+                else -> "جاري توليد الصورة الإبداعية عبر محرك Gemini 3.1 Flash..."
+            }
 
             val isPro = _isNexaProSubscriber.value
             val now = System.currentTimeMillis()
             val sender = userProfile.value?.name ?: "أنت"
 
             // 1. Post user prompt message
-            val promptPrefix = if (isVideo) "🎬 طلب فيديو سينمائي: " else "🎨 طلب توليد صورة: "
+            val promptPrefix = when {
+                isAnimatePhoto -> "🎥 تحريك صورة إلى فيديو: "
+                isVideo -> "🎬 طلب فيديو سينمائي: "
+                isEditImage -> "🖌️ طلب تعديل صورة: "
+                else -> "🎨 طلب توليد صورة: "
+            }
             val userMsg = ChatMessage(
                 conversationId = conversationId,
                 senderName = sender,
@@ -254,25 +273,46 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
             )
             repository.sendMessage(userMsg)
 
-            // 2. Call Gemini / Imagen / Veo generation
-            val result = if (isVideo) {
-                com.example.data.remote.GeminiRepository.generateAiVideo(
-                    prompt = prompt,
-                    isPro = isPro,
-                    durationSec = if (isPro) 6 else 4
-                )
-            } else {
-                com.example.data.remote.GeminiRepository.generateAiImage(
-                    prompt = prompt,
-                    isPro = isPro,
-                    aspectRatio = aspectRatio
-                )
+            // 2. Call Gemini / Veo generation
+            val result = when {
+                isAnimatePhoto && sourceBitmap != null -> {
+                    com.example.data.remote.GeminiRepository.animateImageIntoVideo(
+                        imageBitmap = sourceBitmap,
+                        animationPrompt = prompt,
+                        isPro = isPro,
+                        durationSec = if (isPro) 6 else 4,
+                        aspectRatio = aspectRatio
+                    )
+                }
+                isEditImage && sourceBitmap != null -> {
+                    com.example.data.remote.GeminiRepository.editAiImage(
+                        sourceImageBitmap = sourceBitmap,
+                        editPrompt = prompt,
+                        isPro = isPro,
+                        aspectRatio = aspectRatio
+                    )
+                }
+                isVideo -> {
+                    com.example.data.remote.GeminiRepository.generateAiVideo(
+                        prompt = prompt,
+                        isPro = isPro,
+                        durationSec = if (isPro) 6 else 4,
+                        aspectRatio = aspectRatio
+                    )
+                }
+                else -> {
+                    com.example.data.remote.GeminiRepository.generateAiImage(
+                        prompt = prompt,
+                        isPro = isPro,
+                        aspectRatio = aspectRatio
+                    )
+                }
             }
 
             // 3. Insert generated AI media message
             val aiMsg = ChatMessage(
                 conversationId = conversationId,
-                senderName = if (isVideo) "محرك Veo AI Video" else "محرك Imagen AI Pro",
+                senderName = if (isVideo) "محرك Veo 3.1 Video" else "محرك Gemini 3.1 Flash",
                 senderAvatar = "",
                 text = result.descriptionText,
                 timestamp = System.currentTimeMillis(),
@@ -284,10 +324,20 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
                 isRead = true,
                 isHdPro = result.isHdPro,
                 generationPrompt = prompt,
-                mediaAspect = aspectRatio,
+                mediaAspect = result.aspectRatio,
                 videoDurationSec = if (isVideo) result.durationSec else null
             )
             repository.sendMessage(aiMsg)
+
+            val uid = "user_${userProfile.value?.id ?: 1}"
+            com.example.data.firebase.FirebaseRealtimeDbManager.logAiGeneration(
+                userId = uid,
+                prompt = prompt,
+                modelName = if (isVideo) "veo-3.1-fast-generate-preview" else "gemini-3.1-flash-image-preview",
+                mediaType = if (isVideo) "video" else "image",
+                isPro = isPro,
+                usedCount = _dailyAiGenerationsUsed.value
+            )
 
             val existingConv = conversations.value.firstOrNull { it.id == conversationId }
             if (existingConv != null) {
@@ -304,10 +354,25 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
             NexaNotificationManager.showIncomingMessageNotification(
                 context = getApplication(),
                 conversationId = conversationId,
-                senderName = if (isVideo) "Veo AI Video" else "Imagen AI Pro",
+                senderName = if (isVideo) "Veo AI Video" else "Gemini 3.1 Image",
                 messageText = "تم تجهيز وسائطك الذكية بنجاح! 🎨✨"
             )
         }
+    }
+
+    fun generateAiMediaInChat(
+        conversationId: String,
+        prompt: String,
+        isVideo: Boolean,
+        aspectRatio: String = "16:9"
+    ) {
+        generateAiMediaInChat(
+            conversationId = conversationId,
+            prompt = prompt,
+            mediaType = if (isVideo) "video" else "image",
+            aspectRatio = aspectRatio,
+            sourceBitmap = null
+        )
     }
 
     // Login & Registration Onboarding Flow State
@@ -456,11 +521,54 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     val cloudSyncStatus = com.example.data.firebase.FirebaseManager.cloudSyncStatus
     val currentFirebaseUser = com.example.data.firebase.FirebaseManager.currentFirebaseUser
 
+    // Firebase Realtime Database Status & Maintenance Monitoring (Endpoint: https://nexa-system-default-rtdb.firebaseio.com/)
+    val serverStatus: StateFlow<String> = com.example.data.firebase.FirebaseRealtimeDbManager.serverStatus
+    val maintenanceMessage: StateFlow<String> = com.example.data.firebase.FirebaseRealtimeDbManager.maintenanceMessage
+    val isConnectedToRtdb: StateFlow<Boolean> = com.example.data.firebase.FirebaseRealtimeDbManager.isConnectedToRtdb
+    private val _isMaintenanceBypassed = MutableStateFlow(false)
+    val isMaintenanceBypassed: StateFlow<Boolean> = _isMaintenanceBypassed.asStateFlow()
+
+    fun bypassMaintenanceForTesting() {
+        _isMaintenanceBypassed.value = true
+    }
+
     fun syncWithFirebaseCloud() {
         viewModelScope.launch {
             com.example.data.firebase.FirebaseManager.authenticateUserAnonymously()
-            userProfile?.value?.let { profile ->
+            userProfile.value?.let { profile ->
                 com.example.data.firebase.FirebaseManager.saveUserProfileToCloud(profile)
+                val uid = "user_${profile.id}"
+
+                // Live Sync directly with Firebase Realtime Database
+                com.example.data.firebase.FirebaseRealtimeDbManager.syncUserSession(
+                    userId = uid,
+                    username = profile.name,
+                    email = profile.email,
+                    phone = profile.phone
+                )
+                com.example.data.firebase.FirebaseRealtimeDbManager.syncProSubscriptionStatus(
+                    userId = uid,
+                    isPro = profile.isNexaProSubscriber || profile.isVipMember || _isNexaProSubscriber.value,
+                    planName = profile.vipTierName
+                )
+
+                // Live Listener for Pro Subscription Status from Realtime Database
+                com.example.data.firebase.FirebaseRealtimeDbManager.listenToSubscriptionStatus(uid) { isPro, _ ->
+                    if (_isNexaProSubscriber.value != isPro) {
+                        _isNexaProSubscriber.value = isPro
+                        if (isPro) {
+                            _remainingFreeGenerations.value = 999999
+                        }
+                    }
+                }
+
+                // Live Listener for User Daily AI Quota from Realtime Database
+                com.example.data.firebase.FirebaseRealtimeDbManager.listenToUserQuota(uid) { used, max ->
+                    _dailyAiGenerationsUsed.value = used
+                    if (!_isNexaProSubscriber.value) {
+                        _remainingFreeGenerations.value = (max - used).coerceAtLeast(0)
+                    }
+                }
             }
         }
     }
@@ -1090,6 +1198,9 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     val bubbles: StateFlow<List<Bubble3D>> = _bubbles.asStateFlow()
 
     init {
+        // Initialize direct connection to Firebase Realtime Database primary backend
+        com.example.data.firebase.FirebaseRealtimeDbManager.init()
+
         viewModelScope.launch {
             repository.populateInitialDataIfEmpty()
         }
@@ -1241,6 +1352,10 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
 
     fun completeProfileRegistration() {
         viewModelScope.launch {
+            if (com.example.data.firebase.FirebaseManager.getCurrentUser() == null) {
+                com.example.data.firebase.FirebaseManager.authenticateUserAnonymously()
+            }
+            val fbUser = com.example.data.firebase.FirebaseManager.getCurrentUser()
             val isTeen = _userAge.value < 18
             val current = userProfile.value ?: UserProfile()
             val fullName = "${_regFirstName.value} ${_regLastName.value}".trim().ifBlank { current.name }
@@ -1253,10 +1368,20 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
                 bio = _regBio.value,
                 username = _regUsername.value,
                 isContactsSynced = _isContactsSynced.value,
+                firebaseUid = fbUser?.uid ?: current.firebaseUid,
                 isLoggedIn = true
             )
             repository.saveProfile(updated)
             com.example.data.firebase.FirebaseManager.saveUserProfileToCloud(updated)
+            fbUser?.uid?.let { uid ->
+                attachCloudProfileListener(uid)
+                com.example.data.firebase.FirebaseManager.recordUserActivityInFirestore(
+                    userId = uid,
+                    title = "إتمام التسجيل وإنشاء الحساب",
+                    type = "ACCOUNT_REGISTRATION",
+                    details = "تم حفظ بيانات الحساب في قاعدة بيانات Firestore السحابية بنجاح"
+                )
+            }
             _loginStep.value = LoginStep.Completed
         }
     }
@@ -1327,16 +1452,38 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
             val uid = user.uid
             val cloudProfile = com.example.data.firebase.FirebaseManager.fetchUserProfileFromCloud(uid)
             val current = userProfile.value ?: UserProfile()
+            val userEmail = user.email?.ifBlank { "abdelletiferrami@gmail.com" } ?: "abdelletiferrami@gmail.com"
             val activeProfile = (cloudProfile ?: current).copy(
-                email = user.email ?: "google_user@nexa.ai",
-                name = user.displayName ?: current.name,
+                email = userEmail,
+                name = user.displayName ?: if (current.name.isNotBlank()) current.name else "Abdelletif Errami",
                 avatarUrl = user.photoUrl?.toString() ?: current.avatarUrl,
                 firebaseUid = uid,
                 isLoggedIn = true
             )
             repository.saveProfile(activeProfile)
             com.example.data.firebase.FirebaseManager.saveUserProfileToCloud(activeProfile)
+            com.example.data.firebase.FirebaseManager.recordUserActivityInFirestore(
+                userId = uid,
+                title = "تسجيل دخول موثق بحساب Google",
+                type = "AUTH_LOGIN_GOOGLE",
+                details = "تمت المصادقة بنجاح عبر Firebase Auth لـ $userEmail",
+                metadata = mapOf("provider" to "google.com", "email" to userEmail)
+            )
             attachCloudProfileListener(uid)
+
+            // Live sync with Firebase Realtime Database
+            com.example.data.firebase.FirebaseRealtimeDbManager.syncUserSession(
+                userId = "user_${activeProfile.id}",
+                username = activeProfile.name,
+                email = activeProfile.email,
+                phone = activeProfile.phone
+            )
+            com.example.data.firebase.FirebaseRealtimeDbManager.syncProSubscriptionStatus(
+                userId = "user_${activeProfile.id}",
+                isPro = activeProfile.isNexaProSubscriber || activeProfile.isVipMember || _isNexaProSubscriber.value,
+                planName = activeProfile.vipTierName
+            )
+
             _loginStep.value = LoginStep.Completed
             _isAuthLoading.value = false
             NotificationSoundManager.playPopChime(getApplication())
@@ -1379,6 +1526,35 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
 
     fun lockChat() {
         _isChatUnlocked.value = false
+    }
+
+    // Encrypted Chat Lock Tracking (Per-conversation session unlocking)
+    private val _unlockedEncryptedConversations = MutableStateFlow<Set<String>>(emptySet())
+    val unlockedEncryptedConversations: StateFlow<Set<String>> = _unlockedEncryptedConversations.asStateFlow()
+
+    fun unlockEncryptedConversation(conversationId: String) {
+        _unlockedEncryptedConversations.value = _unlockedEncryptedConversations.value + conversationId
+        _isChatUnlocked.value = true
+        try {
+            NotificationSoundManager.playPopChime(getApplication())
+        } catch (e: Throwable) {}
+    }
+
+    fun isEncryptedConversationUnlocked(conversationId: String): Boolean {
+        return _unlockedEncryptedConversations.value.contains(conversationId)
+    }
+
+    fun lockEncryptedConversation(conversationId: String) {
+        _unlockedEncryptedConversations.value = _unlockedEncryptedConversations.value - conversationId
+        if (_selectedConversationId.value == conversationId) {
+            _selectedConversationId.value = ""
+        }
+    }
+
+    fun lockAllEncryptedConversations() {
+        _unlockedEncryptedConversations.value = emptySet()
+        _isChatUnlocked.value = false
+        _selectedConversationId.value = ""
     }
 
     fun toggleChatPinLock(enabled: Boolean, defaultPin: String = "1234") {
@@ -1575,6 +1751,17 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
                     isRead = true
                 )
                 repository.sendMessage(aiMsg)
+
+                val uid = "user_${userProfile.value?.id ?: 1}"
+                com.example.data.firebase.FirebaseRealtimeDbManager.logAiGeneration(
+                    userId = uid,
+                    prompt = text,
+                    modelName = "Gemini-2.5-Flash",
+                    mediaType = "chat",
+                    isPro = _isNexaProSubscriber.value,
+                    usedCount = _dailyAiGenerationsUsed.value
+                )
+
                 _isAiThinking.value = false
 
                 val stoppedTypingMap = _peerTypingState.value.toMutableMap()
@@ -2003,6 +2190,53 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     private val _isAutoReadTtsEnabled = MutableStateFlow(true)
     val isAutoReadTtsEnabled: StateFlow<Boolean> = _isAutoReadTtsEnabled.asStateFlow()
 
+    // Gemini Chatbot Model Selection & Grounding State
+    private val _selectedAiModel = MutableStateFlow("gemini-3.5-flash")
+    val selectedAiModel: StateFlow<String> = _selectedAiModel.asStateFlow()
+
+    private val _selectedAiRole = MutableStateFlow("general") // "general", "developer", "shopping", "creative"
+    val selectedAiRole: StateFlow<String> = _selectedAiRole.asStateFlow()
+
+    private val _isSearchGroundingEnabled = MutableStateFlow(false)
+    val isSearchGroundingEnabled: StateFlow<Boolean> = _isSearchGroundingEnabled.asStateFlow()
+
+    private val _isMapsGroundingEnabled = MutableStateFlow(false)
+    val isMapsGroundingEnabled: StateFlow<Boolean> = _isMapsGroundingEnabled.asStateFlow()
+
+    private val _isTranscribingAudio = MutableStateFlow(false)
+    val isTranscribingAudio: StateFlow<Boolean> = _isTranscribingAudio.asStateFlow()
+
+    private val _isLiveVoiceActive = MutableStateFlow(false)
+    val isLiveVoiceActive: StateFlow<Boolean> = _isLiveVoiceActive.asStateFlow()
+
+    fun setAiModel(model: String) {
+        _selectedAiModel.value = model
+    }
+
+    fun selectAiModel(model: String) {
+        setAiModel(model)
+    }
+
+    fun setAiRole(role: String) {
+        _selectedAiRole.value = role
+    }
+
+    fun selectAiRole(role: String) {
+        setAiRole(role)
+    }
+
+    fun toggleSearchGrounding() {
+        _isSearchGroundingEnabled.value = !_isSearchGroundingEnabled.value
+    }
+
+    fun toggleMapsGrounding() {
+        _isMapsGroundingEnabled.value = !_isMapsGroundingEnabled.value
+    }
+
+    fun toggleLiveVoiceActive(active: Boolean? = null) {
+        _isLiveVoiceActive.value = active ?: !_isLiveVoiceActive.value
+    }
+
     fun attachImageForAi(bitmap: android.graphics.Bitmap?) {
         _attachedImageBitmap.value = bitmap
     }
@@ -2015,38 +2249,71 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
         _isAutoReadTtsEnabled.value = !_isAutoReadTtsEnabled.value
     }
 
+    private fun getSystemInstructionForRole(role: String): String {
+        return when (role) {
+            "developer" -> "أنت مهندس برمجيات ومستشار تقني فائق الذكاء في Kotlin، Android، Jetpack Compose، الخوارزميات، وتصميم النظم السحابية. قدم حلولاً برمجية نظيفة ودقيقة مع شروحات عملية."
+            "shopping" -> "أنت مستشار تسوق ذكي يساعد المستخدم في اكتشاف المنتجات والصفقات ومقارنة المواصفات في متجر مجرة."
+            "creative" -> "أنت كاتب ومبدع محتوى يبتكر نصوصاً وقصصاً وسيناريوهات إبداعية ملهمة بأسلوب سينمائي عصري."
+            else -> "أنت مساعد ذكي متعدد الوسائط فائق التطور في منصة مجرة NEXA."
+        }
+    }
+
+    fun transcribeAudioWithGemini(audioBytes: ByteArray, onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            _isTranscribingAudio.value = true
+            val transcript = com.example.data.remote.GeminiRepository.transcribeAudio(audioBytes)
+            _isTranscribingAudio.value = false
+            onResult(transcript)
+        }
+    }
+
     fun sendAiPrompt(promptText: String, bitmap: android.graphics.Bitmap? = _attachedImageBitmap.value) {
         if (promptText.isBlank() && bitmap == null) return
         val finalPrompt = if (promptText.isNotBlank()) promptText else "حلل هذه الصورة المرفقة بالتفصيل وقدم المساعدة المناسبة."
-        
+        val currentModel = _selectedAiModel.value
+        val currentRole = _selectedAiRole.value
+        val searchGrounding = _isSearchGroundingEnabled.value
+        val mapsGrounding = _isMapsGroundingEnabled.value
+
         val userMsg = com.example.data.model.AiChatMessage(
             senderName = userProfile.value?.name ?: "أنت",
             isFromUser = true,
             text = finalPrompt,
-            imageBitmap = bitmap
+            imageBitmap = bitmap,
+            modelUsed = currentModel,
+            role = currentRole
         )
         _aiMessages.value = _aiMessages.value + userMsg
         _isAiThinking.value = true
         _attachedImageBitmap.value = null // Reset attached preview after sending
 
         viewModelScope.launch {
-            val replyText = com.example.data.remote.GeminiRepository.generateContent(
-                prompt = finalPrompt,
-                imageBitmap = bitmap
+            val result = com.example.data.remote.GeminiRepository.generateMultiTurnChat(
+                history = _aiMessages.value.dropLast(1),
+                newPrompt = finalPrompt,
+                imageBitmap = bitmap,
+                modelName = currentModel,
+                systemInstruction = getSystemInstructionForRole(currentRole),
+                enableSearchGrounding = searchGrounding,
+                enableMapsGrounding = mapsGrounding
             )
 
             val aiMsg = com.example.data.model.AiChatMessage(
- senderName ="ذكاء NEXA AI",
+                senderName = "ذكاء NEXA AI",
                 isFromUser = false,
-                text = replyText,
-                modelUsed = "gemini-3.5-flash"
+                text = result.replyText,
+                modelUsed = result.modelUsed,
+                groundingSources = result.groundingSources,
+                isSearchGrounded = result.isSearchGrounded,
+                isMapsGrounded = result.isMapsGrounded,
+                role = currentRole
             )
             _aiMessages.value = _aiMessages.value + aiMsg
             _isAiThinking.value = false
             NotificationSoundManager.playPopChime(getApplication())
 
             if (_isAutoReadTtsEnabled.value) {
-                com.example.util.SpeechAndTtsManager.speak(replyText, getApplication())
+                com.example.util.SpeechAndTtsManager.speak(result.replyText, getApplication())
             }
         }
     }

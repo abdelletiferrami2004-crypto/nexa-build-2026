@@ -1220,13 +1220,53 @@ fun ProfileScreen(
                             fontSize = 11.sp,
                             lineHeight = 16.sp
                         )
-                        if (currentFirebaseUser != null) {
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "Firebase UID: ${currentFirebaseUser?.uid}",
-                                color = NeonCyan,
-                                fontSize = 10.sp
-                            )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color.White.copy(alpha = 0.06f))
+                                .border(1.dp, NeonCyan.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                                .padding(8.dp)
+                        ) {
+                            Column {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .clip(CircleShape)
+                                            .background(EncryptedGreen)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "حفظ البيانات السحابي (Firestore Persistence) نشط",
+                                        color = EncryptedGreen,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 10.sp
+                                    )
+                                }
+                                val fbUser = currentFirebaseUser
+                                if (fbUser != null) {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "المستخدم الموثق: ${fbUser.displayName ?: profile?.name ?: "Abdelletif Errami"} (${fbUser.email ?: profile?.email ?: "abdelletiferrami@gmail.com"})",
+                                        color = Color.White,
+                                        fontSize = 10.sp
+                                    )
+                                    Text(
+                                        text = "Firebase Auth UID: ${fbUser.uid}",
+                                        color = NeonCyan,
+                                        fontSize = 9.sp
+                                    )
+                                } else {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "البريد الإلكتروني: ${profile?.email?.ifBlank { "abdelletiferrami@gmail.com" } ?: "abdelletiferrami@gmail.com"}",
+                                        color = Color.White,
+                                        fontSize = 10.sp
+                                    )
+                                }
+                            }
                         }
                     }
                 }

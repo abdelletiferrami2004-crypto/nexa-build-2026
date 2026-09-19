@@ -105,6 +105,7 @@ class MajarrahRepository(private val dao: MajarrahDao) {
         val rowId = dao.insertMessage(message)
         val savedMsg = if (message.id == 0) message.copy(id = rowId.toInt()) else message
         FirebaseManager.saveMessageToCloud(savedMsg)
+        com.example.data.firebase.FirebaseRealtimeDbManager.syncChatMessage(savedMsg.conversationId, savedMsg)
         return savedMsg
     }
 
@@ -112,12 +113,14 @@ class MajarrahRepository(private val dao: MajarrahDao) {
         val updated = message.copy(deliveryStatus = status, isRead = isRead)
         dao.insertMessage(updated)
         FirebaseManager.saveMessageToCloud(updated)
+        com.example.data.firebase.FirebaseRealtimeDbManager.syncChatMessage(updated.conversationId, updated)
     }
 
     suspend fun updateMessageReaction(message: ChatMessage, newReaction: String?) {
         val updated = message.copy(reaction = if (message.reaction == newReaction) null else newReaction)
         dao.insertMessage(updated)
         FirebaseManager.saveMessageToCloud(updated)
+        com.example.data.firebase.FirebaseRealtimeDbManager.syncChatMessage(updated.conversationId, updated)
     }
 
     fun startCloudRealtimeSync(scope: kotlinx.coroutines.CoroutineScope) {
@@ -132,6 +135,12 @@ class MajarrahRepository(private val dao: MajarrahDao) {
         FirebaseManager.listenToMessagesRealtime(conversationId) { fetchedMessages ->
             scope.launch {
                 dao.insertMessages(fetchedMessages)
+            }
+        }
+        // Also listen live to the primary Realtime Database endpoint
+        com.example.data.firebase.FirebaseRealtimeDbManager.listenToChatMessages(conversationId) { rtdbMsg ->
+            scope.launch {
+                dao.insertMessage(rtdbMsg)
             }
         }
     }
