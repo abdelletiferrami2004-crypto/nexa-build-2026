@@ -81,7 +81,7 @@ data class DeviceSession(
 fun NexaSecurityAnd2faModal(
     onDismiss: () -> Unit
 ) {
-    var is2faEnabled by remember { mutableStateOf(true) }
+    var is2faEnabled by remember { mutableStateOf(false) }
     var isAutoModerationEnabled by remember { mutableStateOf(true) }
     var isBiometricAuthEnabled by remember { mutableStateOf(true) }
     var showSuccessToast by remember { mutableStateOf<String?>(null) }
@@ -205,40 +205,25 @@ fun NexaSecurityAnd2faModal(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.PhonelinkLock, contentDescription = null, tint = EncryptedGreen)
+                                        Icon(Icons.Default.PhonelinkLock, contentDescription = null, tint = Color.Gray)
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Column {
                                             Text("المصادقة الثنائية (2FA)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                                            Text("تأكيد تسجيل الدخول عبر تطبيق Authenticator أو SMS", color = Color.Gray, fontSize = 11.sp)
+                                            Text("قريباً", color = Color.Gray, fontSize = 11.sp)
                                         }
                                     }
 
                                     Switch(
-                                        checked = is2faEnabled,
-                                        onCheckedChange = {
-                                            is2faEnabled = it
-                                            showSuccessToast = if (it) "تم تفعيل المصادقة الثنائية (2FA) لحسابك بنجاح 🔐" else "تم إيقاف المصادقة الثنائية"
-                                        },
-                                        colors = SwitchDefaults.colors(checkedThumbColor = EncryptedGreen)
+                                        checked = false,
+                                        enabled = false,
+                                        onCheckedChange = null,
+                                        colors = SwitchDefaults.colors(
+                                            disabledCheckedThumbColor = Color.Gray,
+                                            disabledCheckedTrackColor = Color.DarkGray,
+                                            disabledUncheckedThumbColor = Color.Gray,
+                                            disabledUncheckedTrackColor = Color.DarkGray
+                                        )
                                     )
-                                }
-
-                                if (is2faEnabled) {
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(10.dp))
-                                            .background(EncryptedGreen.copy(alpha = 0.15f))
-                                            .border(1.dp, EncryptedGreen, RoundedCornerShape(10.dp))
-                                            .padding(10.dp)
-                                    ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(Icons.Default.QrCode, contentDescription = null, tint = EncryptedGreen)
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Text("رمز الأمان المخصص: NEXA-8942-SECURE-2FA", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                        }
-                                    }
                                 }
                             }
                         }

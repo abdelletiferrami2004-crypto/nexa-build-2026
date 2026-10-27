@@ -50,12 +50,20 @@ import com.example.util.SystemBiometricAuthManager
 
 @Composable
 fun PinLockDialog(
-    correctPin: String = "1234",
+    correctPin: String = "",
     title: String = "إدخال رمز PIN المحادثة المشفرة",
     subtitle: String = "الرجاء إدخال الرمز السري المكون من 4 أرقام لفك تشفير الرسائل",
     onDismiss: () -> Unit,
-    onPinSuccess: () -> Unit
+    onPinSuccess: () -> Unit,
+    onSignOut: (() -> Unit)? = null
 ) {
+    if (correctPin.isBlank()) {
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            onPinSuccess()
+        }
+        return
+    }
+
     val context = LocalContext.current
     var enteredPin by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -78,8 +86,7 @@ fun PinLockDialog(
             enteredPin += num
             errorMessage = null
             if (enteredPin.length == 4) {
-                // Master code 0000 or custom user PIN
-                if (enteredPin == "0000" || enteredPin == correctPin || correctPin.isEmpty()) {
+                if (correctPin.isNotBlank() && enteredPin == correctPin) {
                     onPinSuccess()
                 } else {
                     errorMessage = "رمز PIN غير صحيح! حاول مجدداً"
@@ -266,28 +273,18 @@ fun PinLockDialog(
                 Spacer(modifier = Modifier.height(14.dp))
 
                 Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(NeonCyan.copy(alpha = 0.1f))
-                        .border(1.dp, NeonCyan.copy(alpha = 0.3f), RoundedCornerShape(10.dp))
-                        .clickable {
-                            onPinSuccess()
-                        }
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = if (onSignOut != null) Arrangement.SpaceBetween else Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "وضع المطور (Admin): رمز الماستر 0000 متاح دائماً",
-                        color = NeonCyan,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                TextButton(onClick = onDismiss) {
-                    Text("إلغاء", color = Color.Gray)
+                    TextButton(onClick = onDismiss) {
+                        Text("إلغاء", color = Color.Gray)
+                    }
+                    if (onSignOut != null) {
+                        TextButton(onClick = onSignOut) {
+                            Text("تسجيل الخروج", color = NeonPink, fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
             }
         }

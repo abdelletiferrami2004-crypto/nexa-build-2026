@@ -175,8 +175,8 @@ fun NexaVipSubscriptionModal(
                     )
                     VipFeatureItem(
                         icon = Icons.Default.Star,
-                        title = "+1000 رصيد مجاني شهرياً",
-                        desc = "استخدم الرصيد في توليد الصور المتقدمة ودعم صناع المحتوى"
+                        title = "توليد ذكاء اصطناعي فائق وسريع",
+                        desc = "وصول كامل وغير محدود لكافة قدرات ونماذج الذكاء الاصطناعي"
                     )
                 }
 
@@ -220,7 +220,7 @@ fun NexaVipSubscriptionModal(
                                 modifier = Modifier.padding(top = 4.dp)
                             )
                             Text(
-                                text = "+1000 رصيد مجاناً",
+                                text = "توليد غير محدود",
                                 color = Color.LightGray,
                                 fontSize = 10.sp
                             )
@@ -262,7 +262,7 @@ fun NexaVipSubscriptionModal(
                                 modifier = Modifier.padding(top = 4.dp)
                             )
                             Text(
-                                text = "توفير 45% + 5000 رصيد",
+                                text = "توفير 45% سنوياً",
                                 color = Color.LightGray,
                                 fontSize = 10.sp
                             )
@@ -273,8 +273,8 @@ fun NexaVipSubscriptionModal(
                 // Subscribe Action Button
                 Button(
                     onClick = {
- val name = if (selectedPlan =="Diamond")"NEXA VIP Diamond" else"NEXA VIP Royal الملكي"
-                        onSubscribe(name)
+                        val planId = if (selectedPlan == "Royal") "nexa_pro_annual" else "nexa_pro_monthly"
+                        onSubscribe(planId)
                         onDismiss()
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = NeonCyan),

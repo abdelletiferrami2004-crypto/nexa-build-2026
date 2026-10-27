@@ -134,7 +134,6 @@ import com.example.data.model.Conversation
 import com.example.data.model.User
 import com.example.ui.MajarrahViewModel
 import com.example.util.FileExportManager
-import com.example.ui.components.AdMobBannerSpace
 import com.example.ui.components.AiAssistantModal
 import com.example.ui.components.AiToolboxModal
 import com.example.ui.components.BlueVerificationBadge
@@ -172,12 +171,12 @@ fun ChatScreen(
     val isAiThinking by viewModel.isAiThinking.collectAsState()
 
     val isVipMember = profile.isVipMember
+    val effectivePin = profile.chatPin.ifBlank { PinLockManager.getSavedPin(context) }
     val isPinProtectionEnabled = try {
-        (profile.isChatPinEnabled && profile.chatPin.isNotBlank()) || PinLockManager.isPinEnabled(context)
+        effectivePin.isNotBlank() && ((profile.isChatPinEnabled && profile.chatPin.isNotBlank()) || PinLockManager.isPinEnabled(context))
     } catch (e: Throwable) {
         false
     }
-    val effectivePin = profile.chatPin.ifBlank { PinLockManager.getSavedPin(context).ifBlank { "1234" } }
 
     var showPinDialog by remember { mutableStateOf(false) }
     var showVipModal by remember { mutableStateOf(false) }
@@ -193,7 +192,7 @@ fun ChatScreen(
     var showEncryptedPinDialog by remember { mutableStateOf(false) }
 
     // PIN Protection Lock Screen (Global app lock)
-    if (isPinProtectionEnabled && (!isUnlocked || showPinDialog)) {
+    if (isPinProtectionEnabled && effectivePin.isNotBlank() && (!isUnlocked || showPinDialog)) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -206,6 +205,9 @@ fun ChatScreen(
                 onPinSuccess = {
                     viewModel.unlockChatWithPin()
                     showPinDialog = false
+                },
+                onSignOut = {
+                    viewModel.signOutUser()
                 }
             )
         }
@@ -383,8 +385,6 @@ fun ChatsListScreen(
     onOpenPinLock: () -> Unit,
     onOpenVip: () -> Unit
 ) {
-    val isAdWatching by viewModel.isAdWatching.collectAsState()
-    val adWatchProgress by viewModel.adWatchProgress.collectAsState()
     val userProfile by viewModel.userProfile.collectAsState()
     val blockedUsers by viewModel.blockedUsers.collectAsState()
 
@@ -575,18 +575,7 @@ fun ChatsListScreen(
                 }
             }
 
-            // 2. DISCREET COMPACT ADMOB STRIP
-            AdMobBannerSpace(
-                isVipMember = isVipMember,
-                isAdWatching = isAdWatching,
-                adWatchProgress = adWatchProgress,
-                onWatchRewardedAd = { viewModel.watchRewardedAdForCredits() },
-                onGoVip = onOpenVip,
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 2.dp),
-                compact = true
-            )
-
-            // 3. SMART SEARCH / ASK NEXA AI BAR (Meta AI style search bar)
+            // 2. SMART SEARCH / ASK NEXA AI BAR (Meta AI style search bar)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1140,8 +1129,6 @@ fun DirectChatScreen(
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val isListening by com.example.util.SpeechAndTtsManager.isListening.collectAsState()
-    val isAdWatching by viewModel.isAdWatching.collectAsState()
-    val adWatchProgress by viewModel.adWatchProgress.collectAsState()
 
     // Conversations, Blocking & Message Request States
     val conversations by viewModel.conversations.collectAsState()
@@ -1750,20 +1737,7 @@ fun DirectChatScreen(
                 )
             }
 
-            // 2. COMPACT ADMOB STRIP (Completely REMOVED from NEXA AI & Blocked chats)
-            if (!isAiChat && !isBlocked) {
-                AdMobBannerSpace(
-                    isVipMember = isVipMember,
-                    isAdWatching = isAdWatching,
-                    adWatchProgress = adWatchProgress,
-                    onWatchRewardedAd = { viewModel.watchRewardedAdForCredits() },
-                    onGoVip = onOpenVip,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp),
-                    compact = true
-                )
-            }
-
-            // 3. AI QUICK PROMPTS (Only in AI Chat)
+            // 2. AI QUICK PROMPTS (Only in AI Chat)
             if (isAiChat) {
                 LazyRow(
                     modifier = Modifier
@@ -4515,7 +4489,7 @@ fun NexaAiMediaCreationDialog(
                                 Column {
                                     Text(
                                         text = if (isQuotaExhausted) "⛔ استنفدت الحد اليومي المجاني (3/3)"
-                                        else "⚡ الرصيد اليومي: $remainingGenerations من 3 متبقي",
+                                        else "⚡ التوليد اليومي: $remainingGenerations من 3 متبقي",
                                         color = if (isQuotaExhausted) Color(0xFFFCA5A5) else NeonCyan,
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold

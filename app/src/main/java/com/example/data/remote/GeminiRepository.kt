@@ -644,6 +644,66 @@ object GeminiRepository {
         return res.replyText
     }
 
+    /**
+     * Translates text directly using Gemini API (gemini-3.5-flash)
+     */
+    suspend fun translateText(
+        text: String,
+        targetLanguageName: String
+    ): Result<String> = withContext(Dispatchers.IO) {
+        val apiKey = getApiKey()
+        if (apiKey.isBlank()) {
+            return@withContext Result.failure(IllegalStateException("مفتاح Gemini API غير مهيأ في إعدادات التطبيق"))
+        }
+
+        try {
+            val systemInstruction = "You are an expert translator. Translate the given text accurately into $targetLanguageName. Output ONLY the translated text without explanations, without quotes, and without any surrounding formatting."
+            val contentsArray = JSONArray().put(
+                JSONObject().apply {
+                    put("role", "user")
+                    put("parts", JSONArray().put(JSONObject().apply { put("text", text) }))
+                }
+            )
+
+            val rootJson = JSONObject().apply {
+                put("contents", contentsArray)
+                put("systemInstruction", JSONObject().apply {
+                    put("parts", JSONArray().put(JSONObject().apply { put("text", systemInstruction) }))
+                })
+            }
+
+            val requestBody = rootJson.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+            val request = Request.Builder()
+                .url("${BASE_GEMINI_URL}$MODEL_FLASH:generateContent?key=$apiKey")
+                .post(requestBody)
+                .build()
+
+            val response = okHttpClient.newCall(request).execute()
+            val responseBodyString = response.body?.string() ?: ""
+
+            if (response.isSuccessful) {
+                val jsonResponse = JSONObject(responseBodyString)
+                val candidates = jsonResponse.optJSONArray("candidates")
+                if (candidates != null && candidates.length() > 0) {
+                    val candidate = candidates.getJSONObject(0)
+                    val content = candidate.optJSONObject("content")
+                    val parts = content?.optJSONArray("parts")
+                    if (parts != null && parts.length() > 0) {
+                        val translated = parts.getJSONObject(0).optString("text").trim()
+                        if (translated.isNotBlank()) {
+                            return@withContext Result.success(translated)
+                        }
+                    }
+                }
+                Result.failure(Exception("لم يتم استلام نص مترجم من خادم الذكاء الاصطناعي"))
+            } else {
+                Result.failure(Exception("فشلت عملية الترجمة (${response.code})"))
+            }
+        } catch (e: Throwable) {
+            Result.failure(Exception("خطأ في الاتصال بالترجمة: ${e.message}"))
+        }
+    }
+
     // =========================================================================
     // 4. LIVE VOICE CONVERSATIONS (gemini-3.8-live)
     // =========================================================================

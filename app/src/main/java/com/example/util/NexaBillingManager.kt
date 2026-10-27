@@ -102,10 +102,10 @@ class NexaBillingManager(
             .setProductList(productList)
             .build()
 
-        billingClient.queryProductDetailsAsync(params) { billingResult, productDetailsList ->
+        billingClient.queryProductDetailsAsync(params) { billingResult, queryProductDetailsResult ->
             if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
                 val map = mutableMapOf<String, ProductDetails>()
-                for (details in productDetailsList) {
+                for (details in queryProductDetailsResult.productDetailsList) {
                     map[details.productId] = details
                     Log.d(TAG, "Found Google Play Subscription Product: ${details.productId}")
                 }
@@ -156,15 +156,30 @@ class NexaBillingManager(
     }
 
     /**
-     * Processes purchases, checks for nexa_pro_monthly, verifies payment, and unlocks Pro status.
+     * Processes purchases, checks for nexa_pro_monthly/nexa_pro_annual, verifies payment,
+     * and sets Pro status or revokes Pro if expired/canceled/refunded.
      */
     private fun handlePurchases(purchases: List<Purchase>) {
-        for (purchase in purchases) {
+        val activePurchase = purchases.firstOrNull { purchase ->
             val containsTargetSubscription = purchase.products.contains(SUBSCRIPTION_ID_MONTHLY) ||
                     purchase.products.contains(SUBSCRIPTION_ID_ANNUAL)
+            containsTargetSubscription && purchase.purchaseState == Purchase.PurchaseState.PURCHASED
+        }
 
-            if (containsTargetSubscription && purchase.purchaseState == Purchase.PurchaseState.PURCHASED) {
-                verifyAndActivatePro(purchase)
+        if (activePurchase != null) {
+            verifyAndActivatePro(activePurchase)
+        } else {
+            // No active subscription exists in Google Play (expired, canceled & ended, or refunded)
+            val currentToken = quotaManager.getPurchaseToken()
+            val isSimulatedDebug = com.example.BuildConfig.DEBUG && currentToken?.startsWith("gplay_verified_tok_") == true
+            if (!isSimulatedDebug && quotaManager.isProUser()) {
+                Log.i(TAG, "No active subscription found in Google Play. Revoking Pro access.")
+                coroutineScope.launch(Dispatchers.IO) {
+                    quotaManager.setProUser(false)
+                    withContext(Dispatchers.Main) {
+                        onProStatusChanged(false)
+                    }
+                }
             }
         }
     }
@@ -219,7 +234,8 @@ class NexaBillingManager(
     fun launchSubscriptionPurchase(
         activity: Activity?,
         subscriptionId: String = SUBSCRIPTION_ID_MONTHLY,
-        onDirectVerifiedCallback: () -> Unit = {}
+        onDirectVerifiedCallback: () -> Unit = {},
+        onError: (String) -> Unit = {}
     ) {
         val productDetails = cachedProductDetails[subscriptionId]
         if (activity != null && isConnected && productDetails != null) {
@@ -242,7 +258,16 @@ class NexaBillingManager(
             }
         }
 
-        // Fallback execution for sandboxes / emulator / preview environments:
+        // In Release builds: If the billing flow cannot launch, do NOT grant Pro.
+        if (!com.example.BuildConfig.DEBUG) {
+            Log.w(TAG, "Google Play Billing flow unavailable in Release build.")
+            coroutineScope.launch(Dispatchers.Main) {
+                onError("الدفع غير متاح حالياً")
+            }
+            return
+        }
+
+        // Fallback execution for sandboxes / emulator / preview environments (DEBUG ONLY):
         // Automatically simulates a valid Google Play purchase token for nexa_pro_monthly,
         // acknowledges and verifies payment, setting isProUser = true immediately.
         coroutineScope.launch(Dispatchers.IO) {

@@ -116,7 +116,8 @@ class ProfileViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 val userId = getUserId()
-                val blockDocRef = db.collection("blocked_users").document(targetPhone)
+                val docId = "${userId}_${targetPhone}"
+                val blockDocRef = db.collection("blocked_users").document(docId)
                 val doc = blockDocRef.get().await()
                 if (doc.exists()) {
                     blockDocRef.delete().await()
@@ -141,11 +142,14 @@ class ProfileViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 val userId = getUserId()
-                db.collection("users").document(userId).delete().await()
-                val user = auth.currentUser
-                user?.delete()?.await()
-                _uiState.value = ProfileUiState(message = "تم حذف الحساب بنجاح 🗑️")
-                onSuccess()
+                val success = com.example.data.firebase.FirebaseManager.deleteUserCloudData(userId)
+                if (success) {
+                    _uiState.value = ProfileUiState(message = "تم حذف الحساب بنجاح 🗑️")
+                    onSuccess()
+                } else {
+                    val errMsg = com.example.data.firebase.FirebaseManager.lastDeletionErrorMessage ?: "فشل حذف الحساب"
+                    _uiState.value = _uiState.value.copy(message = errMsg)
+                }
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(message = "فشل حذف الحساب: ${e.localizedMessage}")
             }

@@ -91,7 +91,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import com.example.ui.components.DailyRewardsAndReferralModal
 import com.example.ui.components.E2eEncryptionStatusCard
-import com.example.ui.components.InAppCreditsTopUpModal
 import com.example.ui.components.NexaVipSubscriptionModal
 
 import androidx.compose.material3.DropdownMenu
@@ -106,6 +105,7 @@ import com.example.data.model.AppLanguage
 import com.example.util.LanguageManager
 import com.example.ui.components.CreatorAvatarWithAura
 import com.example.ui.components.DailyStreakAndRankCard
+import com.example.ui.components.UserExpAndBadgesSection
 import com.example.data.model.CreatorBadgeTier
 import androidx.compose.ui.graphics.Brush
 
@@ -133,14 +133,9 @@ fun ProfileScreen(
     val currentFirebaseUser by viewModel.currentFirebaseUser.collectAsState()
 
     val isVipMember = profile?.isVipMember ?: false
-    val vipTierName = profile?.vipTierName ?: "NEXA VIP Diamond"
-    val creditsBalance = profile?.creditsBalance ?: 850
-    val referralCode = profile?.referralCode ?: "NEXA-8821"
-    val claimedStreakDays = profile?.claimedDailyRewardDays ?: 3
+    val vipTierName = profile?.vipTierName ?: "NEXA Standard"
+    val claimedStreakDays = profile?.claimedDailyRewardDays ?: 0
     val isE2eEncryptionEnabled = profile?.isE2eEncryptionEnabled ?: true
-
-    val isAdWatching by viewModel.isAdWatching.collectAsState()
-    val adWatchProgress by viewModel.adWatchProgress.collectAsState()
 
     val isDataSaverEnabled by viewModel.isDataSaverEnabled.collectAsState()
     val isSocialPass6Active by viewModel.isSocialPass6Active.collectAsState()
@@ -155,7 +150,6 @@ fun ProfileScreen(
     }
 
     var showVipModal by remember { mutableStateOf(false) }
-    var showCreditsModal by remember { mutableStateOf(false) }
     var showDailyRewardsModal by remember { mutableStateOf(false) }
 
     var showLangDropdown by remember { mutableStateOf(false) }
@@ -265,30 +259,21 @@ fun ProfileScreen(
     }
 
     if (showVipModal) {
+        val activity = context as? android.app.Activity
         NexaVipSubscriptionModal(
             isCurrentlyVip = isVipMember,
-            onSubscribe = { tier -> viewModel.activateVipSubscription(tier) },
+            onSubscribe = { planId ->
+                viewModel.subscribeToNexaPro(planId = planId, activity = activity)
+                showVipModal = false
+            },
             onDismiss = { showVipModal = false }
-        )
-    }
-
-    if (showCreditsModal) {
-        InAppCreditsTopUpModal(
-            creditsBalance = creditsBalance,
-            isAdWatching = isAdWatching,
-            adWatchProgress = adWatchProgress,
-            onTopUp = { amount, price -> viewModel.topUpCredits(amount, price) },
-            onWatchAd = { viewModel.watchRewardedAdForCredits() },
-            onDismiss = { showCreditsModal = false }
         )
     }
 
     if (showDailyRewardsModal) {
         DailyRewardsAndReferralModal(
             claimedStreakDays = claimedStreakDays,
-            referralCode = referralCode,
             onClaimDaily = { viewModel.claimDailyReward() },
-            onApplyReferral = { code -> viewModel.applyReferralCode(code) },
             onDismiss = { showDailyRewardsModal = false }
         )
     }
@@ -447,13 +432,9 @@ fun ProfileScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // 3. Gamified Daily Streak & User Rank/Badges Card
-        DailyStreakAndRankCard(
-            streakDays = claimedStreakDays,
-            userXp = (claimedStreakDays * 120 + 250).coerceAtMost(1000),
-            nextRankXp = 1000,
- currentRankTitle = if (claimedStreakDays >= 5)"خبير الذكاء" else"مستكشف NEXA",
-            onClaimStreak = { viewModel.claimDailyReward() }
+        // 3. Gamified User EXP Progression & Earned Badges Section
+        UserExpAndBadgesSection(
+            viewModel = viewModel
         )
 
         Spacer(modifier = Modifier.height(20.dp))
@@ -1057,96 +1038,50 @@ fun ProfileScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
- // 3⃣ In-App Credits & Daily Rewards Section
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        // Daily Rewards Section
+        GlassCard(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { showDailyRewardsModal = true },
+            shape = RoundedCornerShape(22.dp)
         ) {
-            // Credits Card
-            GlassCard(
+            Row(
                 modifier = Modifier
-                    .weight(1f)
-                    .clickable { showCreditsModal = true },
-                shape = RoundedCornerShape(22.dp)
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Toll,
-                        contentDescription = "Credits",
-                        tint = NeonAmber,
-                        modifier = Modifier.size(28.dp)
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "رصيد العملات",
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp
-                    )
-                    Text(
-                        text = "$creditsBalance رصيد",
-                        color = NeonAmber,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 14.sp
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(NeonAmber)
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
- Text("شحن الآن", color = BackgroundDark, fontWeight = FontWeight.Bold, fontSize = 10.sp)
-                    }
-                }
-            }
-
-            // Daily Rewards Card
-            GlassCard(
-                modifier = Modifier
-                    .weight(1f)
-                    .clickable { showDailyRewardsModal = true },
-                shape = RoundedCornerShape(22.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         imageVector = Icons.Default.CardGiftcard,
                         contentDescription = "Rewards",
                         tint = NeonPink,
                         modifier = Modifier.size(28.dp)
                     )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "المكافآت والإحالة",
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp
-                    )
-                    Text(
- text ="سلسلة $claimedStreakDays أيام",
-                        color = NeonPink,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 13.sp
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(NeonPink)
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
- Text("استلام", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 10.sp)
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = "المكافآت اليومية",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                        Text(
+                            text = "سلسلة $claimedStreakDays أيام متتالية • اكسب EXP وطوّر حسابك",
+                            color = NeonPink,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 11.sp
+                        )
                     }
+                }
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(NeonPink)
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text("استلام", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                 }
             }
         }
@@ -1637,7 +1572,7 @@ fun ProfileScreen(
             },
             text = {
                 Text(
-                    text = "وفقاً لسياسة Google Play Store 2026، فإن الاستمرار في هذا الخيار سيؤدي إلى مسح كلي لجميع فيديوهاتك، تعليقاتك، رسائلك المشفرة، ورصيد أرباحك في منصة NEXA فوراً ودون أي إمكانية لاسترجاعها.",
+                    text = "وفقاً لسياسة Google Play Store 2026، فإن الاستمرار في هذا الخيار سيؤدي إلى مسح كلي لجميع فيديوهاتك، تعليقاتك، رسائلك المشفرة، وبيانات حسابك في منصة NEXA فوراً ودون أي إمكانية لاسترجاعها.",
                     color = Color.LightGray,
                     fontSize = 12.sp,
                     lineHeight = 18.sp
@@ -1646,8 +1581,15 @@ fun ProfileScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        viewModel.deleteAccountAndData()
                         showDeleteConfirmation = false
+                        viewModel.deleteAccountAndData { success, errorMsg ->
+                            if (success) {
+                                android.widget.Toast.makeText(context, "تم حذف الحساب وبياناته بنجاح", android.widget.Toast.LENGTH_SHORT).show()
+                                viewModel.signOutUser()
+                            } else {
+                                android.widget.Toast.makeText(context, errorMsg ?: "فشل في حذف الحساب", android.widget.Toast.LENGTH_LONG).show()
+                            }
+                        }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
                 ) {
@@ -1948,57 +1890,28 @@ fun CreatorMonetizationCard(
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column {
-                                Text("الأرباح المقدرة (الشهر الحالي):", color = Color.LightGray, fontSize = 11.sp)
-                                Text("$1,850.40 USD", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 20.sp)
- Text("~ 6,939.00 SAR", color = NeonCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("حالة السحب ونظام المدفوعات:", color = Color.LightGray, fontSize = 11.sp)
+                                Text("غير متاح بعد", color = Color.Gray, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                             }
-
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text("معدل الـ RPM:", color = Color.LightGray, fontSize = 11.sp)
-                                Text("$1.28 / 1k مشاهدة", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                Text("المشاهدات: ${String.format("%,d", totalViewsCount)}", color = Color.LightGray, fontSize = 11.sp)
-                            }
+                            Text(
+                                text = "المشاهدات: ${String.format("%,d", totalViewsCount)}",
+                                color = Color.LightGray,
+                                fontSize = 11.sp
+                            )
                         }
 
-                        Spacer(modifier = Modifier.height(14.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
 
-                        if (isPayoutClaimed) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(Color(0xFF00E676).copy(alpha = 0.3f))
-                                    .border(1.dp, Color(0xFF00E676), RoundedCornerShape(12.dp))
-                                    .padding(12.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-"تم إرسال طلب سحب $1,850.40 إلى حسابك البنكي/محفظة NEXA بنجاح!",
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 11.sp
-                                )
-                            }
-                        } else {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(
-                                        Brush.horizontalGradient(
-                                            listOf(Color(0xFF00E676), Color(0xFF00B0FF))
-                                        )
-                                    )
-                                    .clickable { viewModel.withdrawCreatorEarnings() }
-                                    .padding(vertical = 10.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
- Text("طلب سحب الأرباح الفوري", color = Color.Black, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp)
-                            }
-                        }
+                        Text(
+                            text = "نظام سحب وتحويل الأرباح غير متوفر حالياً وستتم إتاحته مستقبلاً فور اعتماد الربط المالي.",
+                            color = Color.LightGray,
+                            fontSize = 11.sp,
+                            lineHeight = 16.sp
+                        )
                     }
                 }
             } else {

@@ -14,19 +14,21 @@ import com.google.firebase.auth.FirebaseUser
 
 object NexaGoogleAuthManager {
     private const val TAG = "NexaGoogleAuth"
-    
-    // Web client ID configured for Google Sign-In
-    // In production, this matches the OAuth 2.0 Web Client ID from Google Cloud Console
-    private const val DEFAULT_SERVER_CLIENT_ID = "619082711624-prod-nexa-app.apps.googleusercontent.com"
+
+    val isGoogleAuthConfigured: Boolean
+        get() = com.example.BuildConfig.GOOGLE_WEB_CLIENT_ID.isNotBlank()
 
     suspend fun signInWithGoogle(
         context: Context,
-        serverClientId: String = DEFAULT_SERVER_CLIENT_ID,
-        preferredEmail: String = "abdelletiferrami@gmail.com",
-        preferredName: String = "Abdelletif Errami",
+        serverClientId: String = com.example.BuildConfig.GOOGLE_WEB_CLIENT_ID,
         onSuccess: (FirebaseUser) -> Unit,
         onError: (String) -> Unit
     ) {
+        if (serverClientId.isBlank()) {
+            onError("تسجيل الدخول بـ Google غير مُعد")
+            return
+        }
+
         val credentialManager = CredentialManager.create(context)
 
         val googleIdOption = GetGoogleIdOption.Builder()
@@ -56,44 +58,29 @@ object NexaGoogleAuthManager {
                     if (user != null) {
                         onSuccess(user)
                         return
+                    } else {
+                        onError("فشل استرجاع بيانات المستخدم بعد المصادقة")
+                        return
                     }
+                } else {
+                    val errMsg = result.exceptionOrNull()?.localizedMessage ?: "تعذر تسجيل الدخول بحساب Google عبر Firebase"
+                    onError(errMsg)
+                    return
                 }
+            } else {
+                onError("نوع بيانات الاعتماد المستلمة غير مدعوم")
             }
-            // If credential was not Google ID token or signInWithGoogleCredential failed, proceed to Firebase Auth
-            authenticateWithFirebaseFallback(preferredEmail, preferredName, onSuccess, onError)
         } catch (e: GetCredentialCancellationException) {
             Log.d(TAG, "Google Sign-In was cancelled by user: ${e.message}")
-            // Even if cancelled, offer seamless Firebase Auth login
-            authenticateWithFirebaseFallback(preferredEmail, preferredName, onSuccess, onError)
+            onError("تم إلغاء تسجيل الدخول بحساب Google")
         } catch (e: GetCredentialException) {
-            Log.w(TAG, "Credential Manager error (proceeding with secure Firebase Auth Google identification): ${e.message}")
-            authenticateWithFirebaseFallback(preferredEmail, preferredName, onSuccess, onError)
+            Log.w(TAG, "Credential Manager error: ${e.message}", e)
+            val msg = e.localizedMessage?.ifBlank { "فشل الاتصال بخدمة Google Credentials" } ?: "فشل الاتصال بخدمة Google Credentials"
+            onError(msg)
         } catch (e: Exception) {
-            Log.e(TAG, "Unexpected error in Google Sign-In, falling back to Firebase Auth", e)
-            authenticateWithFirebaseFallback(preferredEmail, preferredName, onSuccess, onError)
-        }
-    }
-
-    private suspend fun authenticateWithFirebaseFallback(
-        email: String,
-        displayName: String,
-        onSuccess: (FirebaseUser) -> Unit,
-        onError: (String) -> Unit
-    ) {
-        val fallbackResult = FirebaseManager.signInWithGoogleFallback(
-            email = email,
-            displayName = displayName
-        )
-        if (fallbackResult.isSuccess) {
-            val user = fallbackResult.getOrNull()
-            if (user != null) {
-                Log.d(TAG, "Firebase Auth Google user verified: ${user.uid}")
-                onSuccess(user)
-            } else {
-                onError("فشل استرجاع بيانات المستخدم بعد المصادقة")
-            }
-        } else {
-            onError(fallbackResult.exceptionOrNull()?.localizedMessage ?: "فشل تسجيل الدخول عبر Firebase Auth")
+            Log.e(TAG, "Unexpected error in Google Sign-In", e)
+            val msg = e.localizedMessage?.ifBlank { "حدث خطأ غير متوقع أثناء تسجيل الدخول بحساب Google" } ?: "حدث خطأ غير متوقع أثناء تسجيل الدخول بحساب Google"
+            onError(msg)
         }
     }
 }

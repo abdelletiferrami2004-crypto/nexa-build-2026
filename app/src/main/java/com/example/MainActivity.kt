@@ -37,11 +37,14 @@ import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.ProfileScreen
 import com.example.ui.screens.ReelsScreen
 import com.example.ui.screens.ServicesScreen
-import com.example.ui.screens.SocialScreen
-import com.example.ui.screens.StoreScreen
+import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
+import androidx.compose.material3.windowsizeclass.WindowSizeClass
+import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
+import com.example.ui.screens.MainScreen
 import com.example.ui.theme.BackgroundDark
 import com.example.ui.theme.MajarrahTheme
 
+@OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
 class MainActivity : FragmentActivity() {
 
     private val viewModel: MajarrahViewModel by viewModels()
@@ -68,11 +71,15 @@ class MainActivity : FragmentActivity() {
             android.util.Log.e("MainActivity", "Init exception caught", e)
         }
         setContent {
+            val windowSizeClass = calculateWindowSizeClass(this)
             val isDarkTheme by viewModel.isDarkTheme.collectAsState()
             MajarrahTheme(darkTheme = isDarkTheme) {
                 // Mandatory RTL Layout Direction for Arabic Interface
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                    MajarrahApp(viewModel = viewModel)
+                    MajarrahApp(
+                        viewModel = viewModel,
+                        windowSizeClass = windowSizeClass
+                    )
                 }
             }
         }
@@ -80,7 +87,10 @@ class MainActivity : FragmentActivity() {
 }
 
 @Composable
-fun MajarrahApp(viewModel: MajarrahViewModel) {
+fun MajarrahApp(
+    viewModel: MajarrahViewModel,
+    windowSizeClass: WindowSizeClass? = null
+) {
     var isShowingSplash by remember { mutableStateOf(true) }
 
     if (isShowingSplash) {
@@ -127,7 +137,6 @@ fun MajarrahApp(viewModel: MajarrahViewModel) {
     val isCoolingAppExitTriggered by viewModel.isCoolingAppExitTriggered.collectAsState()
     val activeScreenTimeSeconds by viewModel.activeScreenTimeSeconds.collectAsState()
 
-    var currentRoute by remember { mutableStateOf("home") }
     var isChatActive by remember { mutableStateOf(false) }
     var showGlobalStoryCreatorModal by remember { mutableStateOf(false) }
 
@@ -243,127 +252,11 @@ fun MajarrahApp(viewModel: MajarrahViewModel) {
             onBackClick = { isChatActive = false }
         )
     } else {
-        Scaffold(
-            bottomBar = {
-                BottomNavBar(
-                    currentRoute = currentRoute,
-                    onTabSelected = { route ->
-                        if (route == "chat") {
-                            isChatActive = true
-                        } else {
-                            currentRoute = route
-                        }
-                    },
-                    onFloatingAddClick = {
-                        showGlobalStoryCreatorModal = true
-                    }
-                )
-            },
-            containerColor = androidx.compose.material3.MaterialTheme.colorScheme.background
-        ) { innerPadding ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(androidx.compose.material3.MaterialTheme.colorScheme.background)
-                    .padding(innerPadding)
-            ) {
-                AnimatedContent(
-                    targetState = currentRoute,
-                    transitionSpec = {
-                        (fadeIn(androidx.compose.animation.core.tween(250)) + slideInHorizontally { it / 8 }) togetherWith
-                                (fadeOut(androidx.compose.animation.core.tween(200)) + slideOutHorizontally { -it / 8 })
-                    },
-                    label = "RouteTransition"
-                ) { route ->
-                    when (route) {
-                        "home" -> {
-                            HomeScreen(
-                                viewModel = viewModel,
-                                onOpenChat = { isChatActive = true },
-                                onOpenServicesMenu = { currentRoute = "services" },
-                                onNavigateToProduct = { currentRoute = "store" },
-                                onNavigateToReels = { currentRoute = "reels" }
-                            )
-                        }
-
-                        "friends" -> {
-                            SocialScreen(
-                                viewModel = viewModel,
-                                onOpenChatWithFriend = { convId ->
-                                    viewModel.selectConversation(convId)
-                                    isChatActive = true
-                                },
-                                onNavigateToReels = {
-                                    currentRoute = "reels"
-                                }
-                            )
-                        }
-
-                        "reels" -> {
-                            ReelsScreen(viewModel = viewModel)
-                        }
-
-                        "store" -> {
-                            StoreScreen(
-                                viewModel = viewModel,
-                                onProductSelected = { product ->
-                                    viewModel.addToCart(product)
-                                }
-                            )
-                        }
-
-                        "services" -> {
-                            ServicesScreen(
-                                viewModel = viewModel,
-                                onNavigate = { key ->
-                                    if (key == "chat") {
-                                        isChatActive = true
-                                    } else {
-                                        currentRoute = key
-                                    }
-                                }
-                            )
-                        }
-
-                        "profile" -> {
-                            ProfileScreen(
-                                viewModel = viewModel,
-                                onNavigateToPrivacyAndSupport = {
-                                    currentRoute = "privacy_and_support"
-                                }
-                            )
-                        }
-
-                        "privacy_and_support" -> {
-                            com.example.ui.screens.PrivacyPolicyAndSupportScreen(
-                                viewModel = viewModel,
-                                onBackClick = {
-                                    currentRoute = "profile"
-                                }
-                            )
-                        }
-
-                        "support_and_report" -> {
-                            com.example.ui.screens.SupportAndReportScreen(
-                                viewModel = viewModel,
-                                onBackClick = {
-                                    currentRoute = "services"
-                                }
-                            )
-                        }
-
-                        else -> {
-                            HomeScreen(
-                                viewModel = viewModel,
-                                onOpenChat = { isChatActive = true },
-                                onOpenServicesMenu = { currentRoute = "services" },
-                                onNavigateToProduct = { currentRoute = "store" },
-                                onNavigateToReels = { currentRoute = "reels" }
-                            )
-                        }
-                    }
-                }
-            }
-        }
+        MainScreen(
+            viewModel = viewModel,
+            windowSizeClass = windowSizeClass,
+            onOpenChatFullScreen = { isChatActive = true },
+            onOpenStoryCreator = { showGlobalStoryCreatorModal = true }
+        )
     }
 }

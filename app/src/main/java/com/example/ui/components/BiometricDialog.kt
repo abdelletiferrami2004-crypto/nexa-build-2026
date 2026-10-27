@@ -69,7 +69,7 @@ import kotlinx.coroutines.delay
 fun BiometricDialog(
     onDismiss: () -> Unit,
     onSuccess: () -> Unit,
-    defaultPhoneOrEmail: String = "+966 50 123 4567"
+    defaultPhoneOrEmail: String = "+966 50 555 7890"
 ) {
     val context = LocalContext.current
     val activity = remember(context) { NexaPhoneAuthManager.findActivity(context) }
@@ -82,10 +82,8 @@ fun BiometricDialog(
 
     // Fallback OTP States
     var showOtpFallbackScreen by remember { mutableStateOf(false) }
-    var otpChannel by remember { mutableStateOf("sms") } // "sms" or "gmail"
     var destinationInput by remember { mutableStateOf(defaultPhoneOrEmail) }
     var otpInputCode by remember { mutableStateOf("") }
-    var generatedEmailOtp by remember { mutableStateOf("") }
     var verificationId by remember { mutableStateOf<String?>(null) }
     var isSendingOtp by remember { mutableStateOf(false) }
     var isVerifyingOtp by remember { mutableStateOf(false) }
@@ -112,10 +110,10 @@ fun BiometricDialog(
         if (failedAttemptsCount >= 3) {
             isBiometricLocked = true
             authStateText = "تم قفل البصمة الحيوية مؤقتاً بسبب 3 محاولات خاطئة"
-            otpStatusMessage = "تم قفل البصمة! يرجى إثبات ملكية الحساب عبر رمز OTP (SMS / Gmail)."
+            otpStatusMessage = "تم قفل البصمة! يرجى إثبات ملكية الحساب عبر رمز SMS OTP."
             isOtpErrorBanner = true
             showOtpFallbackScreen = true
-            Toast.makeText(context, "تم قفل البصمة الحيوية! تم الانتقال إلى التحقق عبر OTP", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, "تم قفل البصمة الحيوية! تم الانتقال إلى التحقق عبر SMS", Toast.LENGTH_LONG).show()
         } else {
             val remaining = 3 - failedAttemptsCount
             authStateText = "$reason (المتبقي $remaining محاولات)"
@@ -125,7 +123,7 @@ fun BiometricDialog(
 
     fun triggerNativeBiometric() {
         if (isBiometricLocked) {
-            Toast.makeText(context, "المصادقة بالبصمة مقفلة. يرجى استخدام رمز OTP SMS/Gmail", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "المصادقة بالبصمة مقفلة. يرجى استخدام رمز SMS OTP", Toast.LENGTH_SHORT).show()
             showOtpFallbackScreen = true
             return
         }
@@ -299,13 +297,13 @@ fun BiometricDialog(
                         Spacer(modifier = Modifier.width(8.dp))
                         Column {
                             Text(
-                                text = "إثبات ملكية الحساب (6-Digit OTP)",
+                                text = "إثبات ملكية الحساب (SMS OTP)",
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 15.sp
                             )
                             Text(
-                                text = if (isBiometricLocked) "تم قفل البصمة. أدخل رمز التوثيق المكون من 6 أرقام." else "تحقق بديل عبر رسالة SMS أو البريد الإلكتروني Gmail.",
+                                text = if (isBiometricLocked) "تم قفل البصمة. أدخل رمز التوثيق المرسل عبر SMS." else "تحقق بديل عبر رسالة SMS للتأكد من هويتك.",
                                 color = Color.LightGray,
                                 fontSize = 11.sp
                             )
@@ -313,46 +311,6 @@ fun BiometricDialog(
                     }
 
                     Spacer(modifier = Modifier.height(14.dp))
-
-                    // Channel Tabs: SMS vs Gmail
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color.White.copy(alpha = 0.08f))
-                            .padding(4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        val channels = listOf("sms" to "رسالة SMS", "gmail" to "بريد Gmail")
-                        channels.forEach { (ch, label) ->
-                            val selected = otpChannel == ch
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(if (selected) NeonCyan else Color.Transparent)
-                                    .clickable {
-                                        otpChannel = ch
-                                        if (ch == "gmail" && !destinationInput.contains("@")) {
-                                            destinationInput = "user@gmail.com"
-                                        } else if (ch == "sms" && destinationInput.contains("@")) {
-                                            destinationInput = defaultPhoneOrEmail
-                                        }
-                                    }
-                                    .padding(vertical = 8.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = label,
-                                    color = if (selected) BackgroundDark else Color.LightGray,
-                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                                    fontSize = 11.sp
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
 
                     // OTP Status Banner
                     otpStatusMessage?.let { msg ->
@@ -393,10 +351,10 @@ fun BiometricDialog(
                     OutlinedTextField(
                         value = destinationInput,
                         onValueChange = { destinationInput = it },
-                        label = { Text(if (otpChannel == "sms") "رقم الجوال لتلقي OTP" else "بريد Gmail لتلقي OTP", color = NeonCyan) },
+                        label = { Text("رقم الجوال لتلقي رمز SMS OTP", color = NeonCyan) },
                         leadingIcon = {
                             Icon(
-                                imageVector = if (otpChannel == "sms") Icons.Default.Phone else Icons.Default.Email,
+                                imageVector = Icons.Default.Phone,
                                 contentDescription = null,
                                 tint = NeonCyan
                             )
@@ -426,40 +384,30 @@ fun BiometricDialog(
                                     otpStatusMessage = null
                                     isOtpErrorBanner = false
 
-                                    if (otpChannel == "sms") {
-                                        NexaPhoneAuthManager.sendSmsOtp(
-                                            activity = activity,
-                                            phoneNumber = destinationInput,
-                                            countryCode = "+966",
-                                            onCodeSent = { verId ->
-                                                isSendingOtp = false
-                                                verificationId = verId
-                                                isOtpErrorBanner = false
-                                                otpStatusMessage = "تم إرسال رمز OTP مكون من 6 أرقام عبر SMS"
-                                                resendTimerSeconds = 60
-                                                isTimerActive = true
-                                            },
-                                            onError = { err ->
-                                                isSendingOtp = false
-                                                isOtpErrorBanner = true
-                                                otpStatusMessage = err
-                                            },
-                                            onAutoVerified = {
-                                                isSendingOtp = false
-                                                isOtpErrorBanner = false
-                                                otpStatusMessage = "تم التحقق التلقائي عبر SMS!"
-                                                onSuccess()
-                                            }
-                                        )
-                                    } else {
-                                        // Gmail OTP sending simulation / real trigger
-                                        generatedEmailOtp = "884210"
-                                        isSendingOtp = false
-                                        isOtpErrorBanner = false
-                                        otpStatusMessage = "تم إرسال رمز التوثيق (6 أرقام) إلى بريد $destinationInput"
-                                        resendTimerSeconds = 60
-                                        isTimerActive = true
-                                    }
+                                    NexaPhoneAuthManager.sendSmsOtp(
+                                        activity = activity,
+                                        phoneNumber = destinationInput,
+                                        countryCode = "+966",
+                                        onCodeSent = { verId ->
+                                            isSendingOtp = false
+                                            verificationId = verId
+                                            isOtpErrorBanner = false
+                                            otpStatusMessage = "تم إرسال رمز OTP مكون من 6 أرقام عبر SMS"
+                                            resendTimerSeconds = 60
+                                            isTimerActive = true
+                                        },
+                                        onError = { err ->
+                                            isSendingOtp = false
+                                            isOtpErrorBanner = true
+                                            otpStatusMessage = err
+                                        },
+                                        onAutoVerified = {
+                                            isSendingOtp = false
+                                            isOtpErrorBanner = false
+                                            otpStatusMessage = "تم التحقق التلقائي عبر SMS!"
+                                            onSuccess()
+                                        }
+                                    )
                                 }
                             },
                             enabled = !isTimerActive && !isSendingOtp,
@@ -517,35 +465,21 @@ fun BiometricDialog(
                             isVerifyingOtp = true
                             otpStatusMessage = null
 
-                            if (otpChannel == "sms") {
-                                NexaPhoneAuthManager.verifyOtpCode(
-                                    verificationId = verificationId,
-                                    otpCode = otpInputCode,
-                                    onSuccess = {
-                                        isVerifyingOtp = false
-                                        isOtpErrorBanner = false
-                                        Toast.makeText(context, "تم إثبات ملكية الحساب وتوثيقه بنجاح!", Toast.LENGTH_SHORT).show()
-                                        onSuccess()
-                                    },
-                                    onError = { err ->
-                                        isVerifyingOtp = false
-                                        isOtpErrorBanner = true
-                                        otpStatusMessage = err
-                                    }
-                                )
-                            } else {
-                                // Gmail OTP verification
-                                if (otpInputCode.trim() == generatedEmailOtp || otpInputCode.trim() == "884210" || otpInputCode.trim() == "123456") {
+                            NexaPhoneAuthManager.verifyOtpCode(
+                                verificationId = verificationId,
+                                otpCode = otpInputCode,
+                                onSuccess = {
                                     isVerifyingOtp = false
                                     isOtpErrorBanner = false
-                                    Toast.makeText(context, "تم التحقق من ملكية بريد Gmail بنجاح!", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "تم إثبات ملكية الحساب وتوثيقه بنجاح!", Toast.LENGTH_SHORT).show()
                                     onSuccess()
-                                } else {
+                                },
+                                onError = { err ->
                                     isVerifyingOtp = false
                                     isOtpErrorBanner = true
-                                    otpStatusMessage = "رمز Gmail OTP المدخل غير صحيح! الرمز الافتراضي: 884210"
+                                    otpStatusMessage = err
                                 }
-                            }
+                            )
                         },
                         enabled = !isVerifyingOtp,
                         colors = ButtonDefaults.buttonColors(containerColor = EncryptedGreen),

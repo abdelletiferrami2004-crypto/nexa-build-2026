@@ -36,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -50,6 +51,7 @@ import com.example.ui.theme.NeonPurple
 fun AppBiometricLockScreen(
     onUnlockSuccess: () -> Unit
 ) {
+    val context = LocalContext.current
     var showBiometricDialog by remember { mutableStateOf(true) }
     var pinText by remember { mutableStateOf("") }
     var pinError by remember { mutableStateOf<String?>(null) }
@@ -167,7 +169,7 @@ fun AppBiometricLockScreen(
                         pinText = it
                         pinError = null
                     },
-                    placeholder = { Text("رمز PIN (مثل 1234)", color = Color.Gray) },
+                    placeholder = { Text("رمز PIN الخاص بك", color = Color.Gray) },
                     visualTransformation = PasswordVisualTransformation(),
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
@@ -189,7 +191,8 @@ fun AppBiometricLockScreen(
 
                 Button(
                     onClick = {
-                        if (pinText == "1234" || pinText.length >= 4) {
+                        val savedPin = com.example.util.PinLockManager.getSavedPin(context)
+                        if (savedPin.isNotBlank() && pinText == savedPin) {
                             onUnlockSuccess()
                         } else {
                             pinError = "رمز الـ PIN غير صحيح"

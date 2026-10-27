@@ -20,8 +20,8 @@ data class UserProfile(
     val totalViewsCount: Long = 1_450_000L, // Default 1.45M Views to unlock Creator Monetization Fund
     val points: Int = 450,
     val isVipMember: Boolean = false,
-    val vipTierName: String = "NEXA VIP Diamond",
-    val creditsBalance: Int = 850,
+    val vipTierName: String = "NEXA Standard",
+    val creditsBalance: Int = 0,
     val referralCode: String = "NEXA-8821",
     val claimedDailyRewardDays: Int = 3,
     val lastDailyClaimTimestamp: Long = 0L,

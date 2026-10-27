@@ -17,6 +17,11 @@ import com.example.data.model.NotificationCategory
 import com.example.data.model.GamificationBadge
 import com.example.data.model.DailyQuest
 import com.example.data.model.RankTier
+import com.example.data.model.BadgeCategory
+import com.example.data.model.BadgeRarity
+import com.example.data.model.SocialExpBadge
+import com.example.data.model.ExpActivityHistory
+import com.example.data.model.UserExpProgress
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -28,6 +33,7 @@ import kotlinx.coroutines.tasks.await
 import com.example.data.model.User
 
 import com.example.data.model.AppLanguage
+import com.example.BuildConfig
 import com.example.util.LanguageManager
 import com.example.util.NexaBillingManager
 import com.example.util.NexaNotificationManager
@@ -98,16 +104,20 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
                 viewModelScope.launch {
                     repository.saveProfile(updated)
                     com.example.data.firebase.FirebaseManager.saveUserProfileToCloud(updated)
-                    val uid = "user_${updated.id}"
-                    com.example.data.firebase.FirebaseRealtimeDbManager.syncProSubscriptionStatus(
-                        userId = uid,
-                        isPro = true,
-                        planName = updated.vipTierName
-                    )
                 }
                 _monetizationMessage.value = "تم التحقق وتفعيل اشتراك Nexa AI Pro بنجاح عبر Google Play! تم رفع كافة الحدود 👑"
             } else {
                 _remainingFreeGenerations.value = quotaManager.getRemainingGenerations()
+                val current = userProfile.value ?: UserProfile()
+                val updated = current.copy(
+                    isNexaProSubscriber = false,
+                    isVipMember = false,
+                    vipTierName = "NEXA Standard"
+                )
+                viewModelScope.launch {
+                    repository.saveProfile(updated)
+                    com.example.data.firebase.FirebaseManager.saveUserProfileToCloud(updated)
+                }
             }
         }
     )
@@ -145,50 +155,36 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     ) {
         billingManager.launchSubscriptionPurchase(
             activity = activity,
-            subscriptionId = if (planId.contains("annual")) NexaBillingManager.SUBSCRIPTION_ID_ANNUAL else NexaBillingManager.SUBSCRIPTION_ID_MONTHLY,
+            subscriptionId = if (planId.contains("annual") || planId.contains("Royal")) NexaBillingManager.SUBSCRIPTION_ID_ANNUAL else NexaBillingManager.SUBSCRIPTION_ID_MONTHLY,
             onDirectVerifiedCallback = {
-                _isNexaProSubscriber.value = true
-                _remainingFreeGenerations.value = 999999
-                val current = userProfile.value ?: UserProfile()
-                val updated = current.copy(
-                    isNexaProSubscriber = true,
-                    isVipMember = true,
-                    vipTierName = "NEXA AI PRO 👑"
-                )
-                viewModelScope.launch {
-                    repository.saveProfile(updated)
-                    com.example.data.firebase.FirebaseManager.saveUserProfileToCloud(updated)
-                    val uid = "user_${updated.id}"
-                    com.example.data.firebase.FirebaseRealtimeDbManager.syncProSubscriptionStatus(
-                        userId = uid,
-                        isPro = true,
-                        planName = updated.vipTierName
-                    )
-                }
                 _monetizationMessage.value = "تهانينا! 🎉 تم تفعيل اشتراك Nexa AI Pro بنجاح عبر Google Play In-App Purchases"
                 NotificationSoundManager.playPopChime(getApplication())
+            },
+            onError = { errMsg ->
+                _monetizationMessage.value = errMsg
             }
         )
     }
 
-    fun cancelNexaProSubscription() {
-        viewModelScope.launch {
-            quotaManager.setProUser(false)
-            _isNexaProSubscriber.value = false
-            _dailyAiGenerationsUsed.value = quotaManager.getDailyUsed()
-            _remainingFreeGenerations.value = quotaManager.getRemainingGenerations()
-            val current = userProfile.value ?: UserProfile()
-            val updated = current.copy(
-                isNexaProSubscriber = false
-            )
-            repository.saveProfile(updated)
-            val uid = "user_${updated.id}"
-            com.example.data.firebase.FirebaseRealtimeDbManager.syncProSubscriptionStatus(
-                userId = uid,
-                isPro = false,
-                planName = "Free Tier"
-            )
-            _monetizationMessage.value = "تم إلغاء التجديد التلقائي لاشتراك Pro بنجاح"
+    fun cancelNexaProSubscription(activity: android.app.Activity? = null) {
+        val sku = NexaBillingManager.SUBSCRIPTION_ID_MONTHLY
+        val packageName = getApplication<android.app.Application>().packageName
+        val url = "https://play.google.com/store/account/subscriptions?sku=$sku&package=$packageName"
+        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)).apply {
+            if (activity == null) {
+                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+        }
+        try {
+            if (activity != null) {
+                activity.startActivity(intent)
+            } else {
+                getApplication<android.app.Application>().startActivity(intent)
+            }
+            _monetizationMessage.value = "تم فتح صفحة إدارة الاشتراكات في Google Play"
+        } catch (e: Exception) {
+            android.util.Log.e("MajarrahViewModel", "Failed to open Google Play subscriptions page", e)
+            _monetizationMessage.value = "تعذر فتح صفحة إدارة الاشتراكات في Google Play"
         }
     }
 
@@ -385,6 +381,14 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     private val _authErrorMessage = MutableStateFlow<String?>(null)
     val authErrorMessage: StateFlow<String?> = _authErrorMessage.asStateFlow()
 
+    fun setAuthErrorMessage(message: String?) {
+        _authErrorMessage.value = message
+    }
+
+    fun clearAuthErrorMessage() {
+        _authErrorMessage.value = null
+    }
+
     private val _phoneNumber = MutableStateFlow("+966 50 123 4567")
     val phoneNumber: StateFlow<String> = _phoneNumber.asStateFlow()
 
@@ -534,7 +538,11 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
 
     fun syncWithFirebaseCloud() {
         viewModelScope.launch {
-            com.example.data.firebase.FirebaseManager.authenticateUserAnonymously()
+            val currentUser = com.example.data.firebase.FirebaseManager.getCurrentUser()
+            if (currentUser == null) {
+                // Anonymous auth is restricted; sync is only performed with an authenticated session
+                return@launch
+            }
             userProfile.value?.let { profile ->
                 com.example.data.firebase.FirebaseManager.saveUserProfileToCloud(profile)
                 val uid = "user_${profile.id}"
@@ -546,21 +554,6 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
                     email = profile.email,
                     phone = profile.phone
                 )
-                com.example.data.firebase.FirebaseRealtimeDbManager.syncProSubscriptionStatus(
-                    userId = uid,
-                    isPro = profile.isNexaProSubscriber || profile.isVipMember || _isNexaProSubscriber.value,
-                    planName = profile.vipTierName
-                )
-
-                // Live Listener for Pro Subscription Status from Realtime Database
-                com.example.data.firebase.FirebaseRealtimeDbManager.listenToSubscriptionStatus(uid) { isPro, _ ->
-                    if (_isNexaProSubscriber.value != isPro) {
-                        _isNexaProSubscriber.value = isPro
-                        if (isPro) {
-                            _remainingFreeGenerations.value = 999999
-                        }
-                    }
-                }
 
                 // Live Listener for User Daily AI Quota from Realtime Database
                 com.example.data.firebase.FirebaseRealtimeDbManager.listenToUserQuota(uid) { used, max ->
@@ -654,7 +647,7 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
                         name = userName,
                         username = userUsername,
                         bio = doc.getString("bio") ?: "مستخدم منصة NEXA",
-                        phone = doc.getString("phone") ?: "+966 50 000 0000",
+                        phone = doc.getString("phone") ?: "",
                         age = doc.getLong("age")?.toInt() ?: 22,
                         followersCount = doc.getLong("followersCount")?.toInt() ?: 1500,
                         postsCount = doc.getLong("postsCount")?.toInt() ?: 5
@@ -663,48 +656,14 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
                     _searchError.value = null
                     _error.value = null
                 } else {
-                    val sampleUsers = listOf(
-                        User(id = 201, name = "سارة النمر", username = "sara_alnemer", bio = "مصممة جرافيك ونيون سينمائي في NEXA", followersCount = 45000),
-                        User(id = 202, name = "عبدالعزيز الماجد", username = "abdulaziz_majed", bio = "مطور ومبتكر تطبيقات مجرة", followersCount = 1250000),
-                        User(id = 203, name = "فيصل العتيبي", username = "faisal_otaibi", bio = "مهندس برمجيات ومهتم بـ Jetpack Compose", followersCount = 89000),
-                        User(id = 204, name = "نورا القحطاني", username = "noura_qahtani", bio = "رائدة أعمال وصانعة محتوى رقمي", followersCount = 320000)
-                    )
-                    val matchedLocal = sampleUsers.firstOrNull { 
-                        (it.username.equals(name, ignoreCase = true) || it.name.contains(name, ignoreCase = true)) &&
-                        !_blockedUsers.value.contains(it.name) &&
-                        !_blockedUsers.value.contains(it.username)
-                    }
-                    if (matchedLocal != null) {
-                        _searchResult.value = matchedLocal
-                        _searchError.value = null
-                        _error.value = null
-                    } else {
-                        _searchResult.value = null // لا يوجد مستخدم بهاد الاسم
-                        _searchError.value = "لا يوجد مستخدم بهذا الاسم"
-                        _error.value = "لا يوجد مستخدم بهذا الاسم"
-                    }
+                    _searchResult.value = null
+                    _searchError.value = "لا يوجد مستخدم بهذا الاسم"
+                    _error.value = "لا يوجد مستخدم بهذا الاسم"
                 }
             } catch (e: Exception) {
-                val sampleUsers = listOf(
-                    User(id = 201, name = "سارة النمر", username = "sara_alnemer", bio = "مصممة جرافيك ونيون سينمائي في NEXA", followersCount = 45000),
-                    User(id = 202, name = "عبدالعزيز الماجد", username = "abdulaziz_majed", bio = "مطور ومبتكر تطبيقات مجرة", followersCount = 1250000),
-                    User(id = 203, name = "فيصل العتيبي", username = "faisal_otaibi", bio = "مهندس برمجيات ومهتم بـ Jetpack Compose", followersCount = 89000),
-                    User(id = 204, name = "نورا القحطاني", username = "noura_qahtani", bio = "رائدة أعمال وصانعة محتوى رقمي", followersCount = 320000)
-                )
-                val matchedLocal = sampleUsers.firstOrNull { 
-                    (it.username.equals(name, ignoreCase = true) || it.name.contains(name, ignoreCase = true)) &&
-                    !_blockedUsers.value.contains(it.name) &&
-                    !_blockedUsers.value.contains(it.username)
-                }
-                if (matchedLocal != null) {
-                    _searchResult.value = matchedLocal
-                    _searchError.value = null
-                    _error.value = null
-                } else {
-                    _searchResult.value = null
-                    _error.value = "خطأ في البحث: ${e.message}"
-                    _searchError.value = "خطأ في البحث: ${e.message}"
-                }
+                _searchResult.value = null
+                _searchError.value = "لا يوجد مستخدم بهذا الاسم"
+                _error.value = "لا يوجد مستخدم بهذا الاسم"
             }
         }
     }
@@ -747,37 +706,30 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
         onCompleted: (com.example.data.model.ModerationReportResult) -> Unit
     ) {
         viewModelScope.launch {
-            kotlinx.coroutines.delay(1200)
-
             _reportedContentIds.value = _reportedContentIds.value + contentId
 
-            val isViolation = true
-            val currentViolations = _userViolationCount.value
-            val actionTaken: String
-            val aiReason: String
+            val senderContact = userProfile.value?.email?.ifBlank { null }
+                ?: userProfile.value?.phone
+                ?: "مستخدم مسجل"
 
-            if (currentViolations == 0) {
-                _userViolationCount.value = 1
-                _isPostingRestricted.value = true
- _postingRestrictionMessage.value =" إنذار أمان تلقائي: تم تأكيد مخالفة لسياسات السلامة ($category). تم تقييد النشر لـ 24 ساعة."
- actionTaken ="إنذار تلقائي وتطبيق تقييد النشر لمدة 24 ساعة"
-                aiReason = "فحص الذكاء الاصطناعي أثبت مخالفة المعايير في ($contentTypeTitle) من الكاتب ($targetAuthorName) ضمن فئة [$category]."
-            } else {
-                _userViolationCount.value = currentViolations + 1
-                _isAppBanned.value = true
- _appBanMessage.value =" حظر مؤقت لـ 24 ساعة: تم إيقاف الحساب لتكرار مخالفات مجتمع NEXA ($category)."
- actionTaken ="حظر وتجميد استخدام التطبيق لمدة 24 ساعة"
-                aiReason = "تكرار المخالفات الموثقة بذكاء NEXA Moderation AI تسبب في تطبيق الحظر الشامل المؤقت 24 ساعة."
-            }
+            val detailsText = "بلاغ عن محتوى ($contentTypeTitle) من ($targetAuthorName): $contentText"
+
+            com.example.data.firebase.FirebaseManager.submitReportToFirestore(
+                reportType = "ABUSE_REPORT",
+                targetSubjectOrUser = targetAuthorName,
+                category = category,
+                details = detailsText,
+                senderContact = senderContact
+            )
 
             val result = com.example.data.model.ModerationReportResult(
                 contentId = contentId,
                 targetAuthorName = targetAuthorName,
                 category = category,
-                isViolationVerified = isViolation,
-                aiConfidence = 98,
-                aiReason = aiReason,
-                actionTaken = actionTaken
+                isViolationVerified = false,
+                aiConfidence = 0,
+                aiReason = "تم استلام بلاغك وسيقوم فريق الإشراف بمراجعته والتحقق من المعايير.",
+                actionTaken = "تم استلام البلاغ"
             )
 
             _moderationLogs.value = _moderationLogs.value + result
@@ -835,12 +787,12 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun verifyPinForAnomaly(enteredPin: String): Boolean {
-        val currentPin = userProfile.value?.chatPin ?: "1234"
-        if (enteredPin == currentPin || enteredPin == "1234") {
+        val currentPin = userProfile.value?.chatPin
+        if (!currentPin.isNullOrBlank() && enteredPin == currentPin) {
             resolveAnomalySuccess()
             return true
         } else {
-            _anomalyAuthErrorMessage.value = "رمز البن خاطئ! أدخل الرمز الصحيح (1234) أو البصمة"
+            _anomalyAuthErrorMessage.value = "رمز البن خاطئ! أدخل الرمز الصحيح أو البصمة"
             return false
         }
     }
@@ -962,17 +914,25 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     // =========================================================
     // GDPR Right to Erasure / Total Account & Data Deletion
     // =========================================================
-    fun deleteAccountAndData(onComplete: () -> Unit = {}) {
+    fun deleteAccountAndData(onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
         viewModelScope.launch {
-            val currentUserId = userProfile.value?.username ?: "user_1"
-            repository.deleteAccountAndAllDataGdpr(currentUserId)
-            _blockedUsers.value = emptySet()
-            _reportedContentIds.value = emptySet()
-            _isPayoutClaimed.value = false
-            _isChatUnlocked.value = false
-            _monetizationMessage.value = "تم مسح كافة بيانات الحساب والمحادثات نهائياً وفقاً لمعايير GDPR بنجاح."
-            NotificationSoundManager.playPopChime(getApplication())
-            onComplete()
+            val currentUserId = userProfile.value?.firebaseUid?.ifBlank { null }
+                ?: com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                ?: userProfile.value?.username
+                ?: "user_1"
+            val result = repository.deleteAccountAndAllDataGdpr(currentUserId)
+            if (result.first) {
+                _blockedUsers.value = emptySet()
+                _reportedContentIds.value = emptySet()
+                _isPayoutClaimed.value = false
+                _isChatUnlocked.value = false
+                _monetizationMessage.value = "تم مسح كافة بيانات الحساب والمحادثات نهائياً بنجاح."
+                NotificationSoundManager.playPopChime(getApplication())
+                onResult(true, null)
+            } else {
+                _monetizationMessage.value = result.second ?: "فشل حذف الحساب"
+                onResult(false, result.second)
+            }
         }
     }
 
@@ -980,27 +940,27 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     // 2FA Two-Factor Authentication Security Flow
     // =========================================================
     fun toggleTwoFactorAuth(enabled: Boolean, method: String = "authenticator") {
+        if (enabled) {
+            android.util.Log.w("MajarrahViewModel", "Two-factor authentication (TOTP/SMS) is not implemented yet. Cannot enable 2FA.")
+            _monetizationMessage.value = "خاصية المصادقة الثنائية (2FA) غير متوفرة حالياً وستتاح قريباً."
+            return
+        }
         val current = userProfile.value ?: return
         val updated = current.copy(
-            isTwoFactorEnabled = enabled,
+            isTwoFactorEnabled = false,
             twoFactorMethod = method
         )
         viewModelScope.launch {
             repository.saveProfile(updated)
             com.example.data.firebase.FirebaseManager.saveUserProfileToCloud(updated)
-            _monetizationMessage.value = if (enabled) {
-                "تم تفعيل المصادقة الثنائية (2FA) بنجاح وحماية الحساب 🛡️"
-            } else {
-                "تم تعطيل المصادقة الثنائية 2FA"
-            }
+            _monetizationMessage.value = "تم تعطيل المصادقة الثنائية 2FA"
             NotificationSoundManager.playPopChime(getApplication())
         }
     }
 
     fun verifyTwoFactorCode(inputCode: String): Boolean {
-        val clean = inputCode.trim()
-        // Accept valid 6-digit TOTP codes or master bypass 123456 / 889900
-        return clean.length == 6 && (clean == "123456" || clean == "889900" || clean.all { it.isDigit() })
+        android.util.Log.w("MajarrahViewModel", "Two-factor authentication (TOTP/SMS) verification is not implemented yet.")
+        return false
     }
 
     // =========================================================
@@ -1053,7 +1013,7 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun withdrawCreatorEarnings() {
-        _isPayoutClaimed.value = true
+        // No-op: Payout system is not available yet
     }
 
     // PIN Protection & Privacy Settings (Default unlocked unless PIN explicitly enabled in settings)
@@ -1207,7 +1167,9 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
 
         // Start real-time Firestore listeners for posts, chat, and server-side persistence
         repository.startCloudRealtimeSync(viewModelScope)
-        syncWithFirebaseCloud()
+        if (com.example.data.firebase.FirebaseManager.getCurrentUser() != null) {
+            syncWithFirebaseCloud()
+        }
     }
 
     fun startLoginFlow() {
@@ -1352,9 +1314,6 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
 
     fun completeProfileRegistration() {
         viewModelScope.launch {
-            if (com.example.data.firebase.FirebaseManager.getCurrentUser() == null) {
-                com.example.data.firebase.FirebaseManager.authenticateUserAnonymously()
-            }
             val fbUser = com.example.data.firebase.FirebaseManager.getCurrentUser()
             val isTeen = _userAge.value < 18
             val current = userProfile.value ?: UserProfile()
@@ -1400,7 +1359,11 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
                     email = user?.email ?: email,
                     name = user?.displayName ?: current.name,
                     firebaseUid = uid,
-                    isLoggedIn = true
+                    chatPin = current.chatPin.ifBlank { cloudProfile?.chatPin ?: "" },
+                    isLoggedIn = true,
+                    isNexaProSubscriber = _isNexaProSubscriber.value,
+                    isVipMember = _isNexaProSubscriber.value,
+                    vipTierName = if (_isNexaProSubscriber.value) "NEXA AI PRO 👑" else "NEXA Standard"
                 )
                 repository.saveProfile(activeProfile)
                 com.example.data.firebase.FirebaseManager.saveUserProfileToCloud(activeProfile)
@@ -1452,13 +1415,17 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
             val uid = user.uid
             val cloudProfile = com.example.data.firebase.FirebaseManager.fetchUserProfileFromCloud(uid)
             val current = userProfile.value ?: UserProfile()
-            val userEmail = user.email?.ifBlank { "abdelletiferrami@gmail.com" } ?: "abdelletiferrami@gmail.com"
+            val userEmail = user.email ?: ""
             val activeProfile = (cloudProfile ?: current).copy(
-                email = userEmail,
-                name = user.displayName ?: if (current.name.isNotBlank()) current.name else "Abdelletif Errami",
+                email = if (userEmail.isNotBlank()) userEmail else current.email,
+                name = user.displayName?.ifBlank { current.name.ifBlank { "مستخدم Google" } } ?: current.name.ifBlank { "مستخدم Google" },
                 avatarUrl = user.photoUrl?.toString() ?: current.avatarUrl,
                 firebaseUid = uid,
-                isLoggedIn = true
+                chatPin = current.chatPin.ifBlank { cloudProfile?.chatPin ?: "" },
+                isLoggedIn = true,
+                isNexaProSubscriber = _isNexaProSubscriber.value,
+                isVipMember = _isNexaProSubscriber.value,
+                vipTierName = if (_isNexaProSubscriber.value) "NEXA AI PRO 👑" else "NEXA Standard"
             )
             repository.saveProfile(activeProfile)
             com.example.data.firebase.FirebaseManager.saveUserProfileToCloud(activeProfile)
@@ -1477,11 +1444,6 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
                 username = activeProfile.name,
                 email = activeProfile.email,
                 phone = activeProfile.phone
-            )
-            com.example.data.firebase.FirebaseRealtimeDbManager.syncProSubscriptionStatus(
-                userId = "user_${activeProfile.id}",
-                isPro = activeProfile.isNexaProSubscriber || activeProfile.isVipMember || _isNexaProSubscriber.value,
-                planName = activeProfile.vipTierName
             )
 
             _loginStep.value = LoginStep.Completed
@@ -1507,7 +1469,14 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
         cloudProfileListener?.remove()
         cloudProfileListener = com.example.data.firebase.FirebaseManager.listenToUserProfileRealtime(uid) { updatedProfile ->
             viewModelScope.launch {
-                repository.saveProfile(updatedProfile)
+                val current = userProfile.value ?: UserProfile()
+                val merged = updatedProfile.copy(
+                    chatPin = current.chatPin.ifBlank { updatedProfile.chatPin },
+                    isNexaProSubscriber = _isNexaProSubscriber.value,
+                    isVipMember = _isNexaProSubscriber.value,
+                    vipTierName = if (_isNexaProSubscriber.value) "NEXA AI PRO 👑" else "NEXA Standard"
+                )
+                repository.saveProfile(merged)
             }
         }
     }
@@ -1557,7 +1526,7 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
         _selectedConversationId.value = ""
     }
 
-    fun toggleChatPinLock(enabled: Boolean, defaultPin: String = "1234") {
+    fun toggleChatPinLock(enabled: Boolean, defaultPin: String = "") {
         try {
             com.example.util.PinLockManager.setPinEnabled(getApplication(), enabled, if (enabled) defaultPin else "")
         } catch (e: Throwable) {
@@ -1779,56 +1748,6 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
                 if (_isAutoReadTtsEnabled.value) {
                     com.example.util.SpeechAndTtsManager.speak(replyText, getApplication())
                 }
-            } else {
-                // Real-time Delivery Simulation Lifecycle: Sent -> Delivered -> Read
-                viewModelScope.launch {
-                    kotlinx.coroutines.delay(600)
-                    repository.updateMessageStatus(savedMsg, "delivered", false)
-                    kotlinx.coroutines.delay(1200)
-                    repository.updateMessageStatus(savedMsg, "read", true)
-
-                    // Simulate peer reading & typing reply
-                    kotlinx.coroutines.delay(1000)
-                    val tMap = _peerTypingState.value.toMutableMap()
-                    tMap[conversationId] = true
-                    _peerTypingState.value = tMap
-
-                    kotlinx.coroutines.delay(2200)
-                    val tMapStop = _peerTypingState.value.toMutableMap()
-                    tMapStop[conversationId] = false
-                    _peerTypingState.value = tMapStop
-
-                    val peerName = existingConv?.contactName ?: "صديقك في NEXA"
-                    val peerReplies = listOf(
-                        "وصلت رسالتك تماماً! 🚀",
-                        "شكراً لك، اتفقنا بالتأكيد 👍",
-                        "ممتاز جداً، سأراجع التفاصيل وأخبرك فوراً.",
-                        "مفهوم، نظام المحادثات المشفر يعمل بشكل رائع! 🔐✨"
-                    )
-                    val reply = peerReplies.random()
-
-                    val peerMsg = ChatMessage(
-                        conversationId = conversationId,
-                        senderName = peerName,
-                        senderAvatar = existingConv?.contactAvatar ?: "",
-                        text = reply,
-                        timestamp = System.currentTimeMillis(),
-                        isFromUser = false,
-                        isEncrypted = true,
-                        mediaType = "text",
-                        deliveryStatus = "read",
-                        isRead = true
-                    )
-                    repository.sendMessage(peerMsg)
-                    repository.saveConversation(existingConv?.copy(lastMessage = reply, lastTimestamp = System.currentTimeMillis()) ?: return@launch)
-                    NotificationSoundManager.playPopChime(getApplication())
-                    NexaNotificationManager.showIncomingMessageNotification(
-                        context = getApplication(),
-                        conversationId = conversationId,
-                        senderName = peerName,
-                        messageText = reply
-                    )
-                }
             }
         }
     }
@@ -1954,15 +1873,20 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             repository.setMessageTranslating(message, true)
             val result = com.example.util.NexaAiTranslator.translateText(message.text, target)
-            repository.updateMessageTranslation(
-                message = message,
-                translatedText = result.translatedText,
-                targetLanguage = target.code
-            )
-            _monetizationMessage.value = "تمت الترجمة الفورية عبر ذكاء NEXA 🌐 (${target.displayName})"
-            try {
-                NotificationSoundManager.playPopChime(getApplication())
-            } catch (_: Throwable) {}
+            if (result.isSuccess) {
+                repository.updateMessageTranslation(
+                    message = message,
+                    translatedText = result.translatedText,
+                    targetLanguage = target.code
+                )
+                _monetizationMessage.value = "تمت الترجمة الفورية عبر Gemini 🌐 (${target.displayName})"
+                try {
+                    NotificationSoundManager.playPopChime(getApplication())
+                } catch (_: Throwable) {}
+            } else {
+                repository.setMessageTranslating(message, false)
+                _monetizationMessage.value = "تعذر الترجمة: ${result.errorMessage ?: "خطأ في الترجمة"}"
+            }
         }
     }
 
@@ -2319,11 +2243,13 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun purchaseProductDirectly(product: Product, quantity: Int, paymentMethod: String): Boolean {
+        if (paymentMethod != "محفظة مجرة الرقمية") {
+            android.util.Log.w("MajarrahViewModel", "Direct purchase via external payment method ($paymentMethod) is not implemented yet. Only in-app wallet is supported.")
+            return false
+        }
         val totalCost = product.price * quantity
-        if (_walletBalance.value >= totalCost || paymentMethod != "محفظة مجرة الرقمية") {
-            if (paymentMethod == "محفظة مجرة الرقمية") {
-                _walletBalance.value -= totalCost
-            }
+        if (_walletBalance.value >= totalCost) {
+            _walletBalance.value -= totalCost
             return true
         }
         return false
@@ -2534,122 +2460,38 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
  // 1⃣ Monetization Engine: VIP, Credits, Ads & Top-Up
     // =========================================================
 
-    private val _isAdWatching = MutableStateFlow(false)
-    val isAdWatching: StateFlow<Boolean> = _isAdWatching.asStateFlow()
-
-    private val _adWatchProgress = MutableStateFlow(0f)
-    val adWatchProgress: StateFlow<Float> = _adWatchProgress.asStateFlow()
-
     private val _monetizationMessage = MutableStateFlow<String?>(null)
     val monetizationMessage: StateFlow<String?> = _monetizationMessage.asStateFlow()
 
- fun activateVipSubscription(tierName: String ="NEXA VIP Diamond") {
-        val current = userProfile.value ?: return
-        val updated = current.copy(
-            isVipMember = true,
-            vipTierName = tierName,
-            creditsBalance = current.creditsBalance + 1000,
-            points = current.points + 500
-        )
-        viewModelScope.launch {
-            repository.saveProfile(updated)
- _monetizationMessage.value ="مبروك! تم تفعيل اشتراك $tierName بنجاح وإضافة 1000 رصيد مجاناً"
-            NotificationSoundManager.playPopChime(getApplication())
-        }
-    }
-
-    fun topUpCredits(creditsAmount: Int, priceLabel: String) {
-        val current = userProfile.value ?: return
-        val updated = current.copy(
-            creditsBalance = current.creditsBalance + creditsAmount,
-            points = current.points + (creditsAmount / 2)
-        )
-        viewModelScope.launch {
-            repository.saveProfile(updated)
- _monetizationMessage.value ="تم شحن $creditsAmount رصيد بنجاح ($priceLabel)"
-            NotificationSoundManager.playPopChime(getApplication())
-        }
-    }
-
-    fun spendCredits(amount: Int): Boolean {
-        val current = userProfile.value ?: return false
-        if (current.creditsBalance < amount) {
-            _monetizationMessage.value = "عفواً! رصيدك غير كافٍ. يتطلب $amount رصيد."
-            return false
-        }
-        val updated = current.copy(creditsBalance = current.creditsBalance - amount)
-        viewModelScope.launch {
-            repository.saveProfile(updated)
-        }
-        return true
-    }
-
-    fun watchRewardedAdForCredits(onComplete: () -> Unit = {}) {
-        if (_isAdWatching.value) return
-        _isAdWatching.value = true
-        _adWatchProgress.value = 0f
-
-        viewModelScope.launch {
-            for (i in 1..10) {
-                kotlinx.coroutines.delay(400)
-                _adWatchProgress.value = i / 10f
-            }
-            _isAdWatching.value = false
-            topUpCredits(50, "إعلان مكافأة AdMob")
- _monetizationMessage.value ="شكراً لمشاهدة إعلان AdMob! تم إضافة +50 رصيد إلى حسابك"
-            onComplete()
-        }
-    }
-
     // =========================================================
- // 2⃣ Daily Rewards & Referral Program
+    // 2⃣ Daily Rewards Program
     // =========================================================
 
     fun claimDailyReward(): Boolean {
         val current = userProfile.value ?: return false
         val now = System.currentTimeMillis()
-        val oneDayMillis = 24 * 60 * 60 * 1000L
 
         if (now - current.lastDailyClaimTimestamp < 12 * 60 * 60 * 1000L && current.lastDailyClaimTimestamp > 0) {
- _monetizationMessage.value ="لقد حصلت على مكافأتك اليومية بالفعل! عد غداً للمزيد"
+            _monetizationMessage.value = "لقد حصلت على مكافأتك اليومية بالفعل! عد غداً للمزيد"
             return false
         }
 
         val nextStreak = if (current.claimedDailyRewardDays >= 7) 1 else current.claimedDailyRewardDays + 1
-        val rewardAmount = nextStreak * 30 + 50
+        val rewardExp = nextStreak * 30 + 50
 
         val updated = current.copy(
             claimedDailyRewardDays = nextStreak,
             lastDailyClaimTimestamp = now,
-            creditsBalance = current.creditsBalance + rewardAmount,
             points = current.points + 20
         )
 
         viewModelScope.launch {
             repository.saveProfile(updated)
- _monetizationMessage.value ="تم استلام مكافأة اليوم $nextStreak (+ $rewardAmount رصيد) بنجاح!"
+            _monetizationMessage.value = "تم استلام مكافأة اليوم $nextStreak بنجاح! (+ $rewardExp EXP)"
             NotificationSoundManager.playPopChime(getApplication())
         }
+        addExpWithHistory(rewardExp, "مكافأة تسجيل الدخول اليومي", "سلسلة $nextStreak أيام متتالية")
         return true
-    }
-
-    fun applyReferralCode(code: String): Boolean {
-        if (code.trim().uppercase() == "NEXA-VIP" || code.trim().length >= 5) {
-            val current = userProfile.value ?: return false
-            val updated = current.copy(
-                creditsBalance = current.creditsBalance + 150,
-                points = current.points + 100
-            )
-            viewModelScope.launch {
-                repository.saveProfile(updated)
- _monetizationMessage.value ="تم تفعيل كود الإحالة $code بنجاح! حصلت أنت وصديقك على +150 رصيد"
-                NotificationSoundManager.playPopChime(getApplication())
-            }
-            return true
-        } else {
-            _monetizationMessage.value = "كود الإحالة غير صحيح. جرب NEXA-VIP أو NEXA-8821"
-            return false
-        }
     }
 
     // =========================================================
@@ -2882,6 +2724,203 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     )
     val gamificationBadges: StateFlow<List<GamificationBadge>> = _gamificationBadges.asStateFlow()
 
+    // Enhanced Social & Gamification Badges State
+    private val _socialBadges = MutableStateFlow<List<SocialExpBadge>>(
+        listOf(
+            SocialExpBadge(
+                id = "sb1",
+                title = "سلسلة التواجد الناري",
+                description = "تسجيل الدخول والتفاعل لـ 5 أيام متتالية في المنصة",
+                requirementDescription = "قم بفتح التطبيق والتفاعل يومياً لمدة 5 أيام دون انقطاع.",
+                iconType = "fire",
+                rarity = BadgeRarity.RARE,
+                category = BadgeCategory.ACTIVITY,
+                isUnlocked = true,
+                unlockedDate = "18 سبتمبر 2026",
+                currentProgress = 6,
+                requiredProgress = 5,
+                expReward = 150,
+                isClaimed = true,
+                socialPerk = "🔥 شعلة نشاط متوهجة بجوار اسمك في كافة المحادثات والقنوات ومضاعف خبرة x1.5."
+            ),
+            SocialExpBadge(
+                id = "sb2",
+                title = "رائد الذكاء الصوتي",
+                description = "استشارة ومحاورة المساعد الصوتي الحي Gemini Live 10 مرات",
+                requirementDescription = "إجراء 10 جلسات صوتية حية مع المساعد الذكي متعدد اللغات.",
+                iconType = "voice",
+                rarity = BadgeRarity.EPIC,
+                category = BadgeCategory.AI_TECH,
+                isUnlocked = false,
+                unlockedDate = null,
+                currentProgress = 8,
+                requiredProgress = 10,
+                expReward = 200,
+                isClaimed = false,
+                socialPerk = "⚡ إمكانية تخصيص نبرة صوت AI حصرية والوصول المبكر لموديل الصوت الفائق."
+            ),
+            SocialExpBadge(
+                id = "sb3",
+                title = "حارس الخصوصية 256-bit",
+                description = "تفعيل قفل PIN والتشفير السحابي الفائق للمحادثات الحساسة",
+                requirementDescription = "تشغيل قفل PIN البيومتري والتأكد من تفعيل E2EE في الملف الشخصي.",
+                iconType = "lock",
+                rarity = BadgeRarity.RARE,
+                category = BadgeCategory.SECURITY,
+                isUnlocked = true,
+                unlockedDate = "20 سبتمبر 2026",
+                currentProgress = 1,
+                requiredProgress = 1,
+                expReward = 120,
+                isClaimed = false,
+                socialPerk = "🛡️ درع حماية أخضر مشفر يظهر في بطاقة البروفايل لمنع التلصص."
+            ),
+            SocialExpBadge(
+                id = "sb4",
+                title = "سيد التفاعل والتيجان",
+                description = "الحصول على تاج التفاعل كأفضل تعليق في مجتمع المنصة",
+                requirementDescription = "نيل إعجاب وتفاعل المجتمع في منشورات وريلز مجرة.",
+                iconType = "crown",
+                rarity = BadgeRarity.LEGENDARY,
+                category = BadgeCategory.COMMUNITY,
+                isUnlocked = true,
+                unlockedDate = "21 سبتمبر 2026",
+                currentProgress = 3,
+                requiredProgress = 3,
+                expReward = 250,
+                isClaimed = false,
+                socialPerk = "👑 تاج ذهبي براق متحرك في قمة صورة بروفايلك يعلن ريادتك في التفاعل."
+            ),
+            SocialExpBadge(
+                id = "sb5",
+                title = "عضوية VIP الماسية",
+                description = "الارتقاء إلى رتبة المشتركين ورواد مجرة NEXA الفاخرة",
+                requirementDescription = "الحصول على رتبة VIP وتخطي حدود التوليد اليومية.",
+                iconType = "diamond",
+                rarity = BadgeRarity.MYTHIC,
+                category = BadgeCategory.VIP,
+                isUnlocked = true,
+                unlockedDate = "22 سبتمبر 2026",
+                currentProgress = 1,
+                requiredProgress = 1,
+                expReward = 400,
+                isClaimed = true,
+                socialPerk = "💎 هالة ماسية نيون محيطة بالأفاتار وتوليد غير محدود لوسائط Veo و Gemini."
+            ),
+            SocialExpBadge(
+                id = "sb6",
+                title = "صانع القصص النيون",
+                description = "نشر 5 قصص أو ستوريات سينمائية في المنصة",
+                requirementDescription = "شارك 5 ستوريات نيون مع أصدقائك ومتابعيك.",
+                iconType = "video",
+                rarity = BadgeRarity.EPIC,
+                category = BadgeCategory.CREATOR,
+                isUnlocked = false,
+                unlockedDate = null,
+                currentProgress = 3,
+                requiredProgress = 5,
+                expReward = 180,
+                isClaimed = false,
+                socialPerk = "🎬 إطارات ستوري نيون حصرية ومؤثرات سينمائية إضافية مجانية."
+            )
+        )
+    )
+    val socialBadges: StateFlow<List<SocialExpBadge>> = _socialBadges.asStateFlow()
+
+    private val _expActivities = MutableStateFlow<List<ExpActivityHistory>>(
+        listOf(
+            ExpActivityHistory(
+                title = "سلسلة التواجد اليومي (اليوم 6)",
+                description = "مكافأة الحفاظ على الحضور اليومي المستمر",
+                expGained = 150,
+                timestamp = "منذ ساعة",
+                iconType = "fire"
+            ),
+            ExpActivityHistory(
+                title = "استشارة المساعد الصوتي Live AI",
+                description = "محادثة صوتية متعددة اللغات مع Gemini 3.8",
+                expGained = 60,
+                timestamp = "منذ 3 ساعات",
+                iconType = "voice"
+            ),
+            ExpActivityHistory(
+                title = "تفعيل درع الخصوصية E2EE",
+                description = "تأمين قفل PIN والتشفير الفائق",
+                expGained = 100,
+                timestamp = "أمس",
+                iconType = "lock"
+            ),
+            ExpActivityHistory(
+                title = "تفاعل وتعليق في مجتمع مجرة",
+                description = "مشاركة تعليق هادف نال إعجاب الأعضاء",
+                expGained = 50,
+                timestamp = "منذ يومين",
+                iconType = "crown"
+            )
+        )
+    )
+    val expActivities: StateFlow<List<ExpActivityHistory>> = _expActivities.asStateFlow()
+
+    val userExpProgress: StateFlow<UserExpProgress> = combine(
+        combine(_userLevel, _currentExp, _nextLevelExp) { lvl, exp, nextExp -> Triple(lvl, exp, nextExp) },
+        _streakDays,
+        _socialBadges,
+        _expActivities
+    ) { (level, exp, nextExp), streak, badges, activities ->
+        UserExpProgress(
+            currentLevel = level,
+            currentExp = exp,
+            nextLevelExp = nextExp,
+            previousLevelExp = 0,
+            totalExpEarned = 3500 + exp,
+            rankTier = RankTier.fromLevel(level),
+            streakDays = streak,
+            dailyMultiplier = if (streak >= 5) 1.5f else 1.2f,
+            earnedBadgesCount = badges.count { it.isUnlocked },
+            totalBadgesCount = badges.size,
+            badges = badges,
+            recentActivities = activities
+        )
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        UserExpProgress(
+            currentLevel = 6,
+            currentExp = 720,
+            nextLevelExp = 1000,
+            rankTier = RankTier.SILVER,
+            streakDays = 6,
+            earnedBadgesCount = 4,
+            totalBadgesCount = 6
+        )
+    )
+
+    fun claimSocialBadgeReward(badgeId: String) {
+        val badge = _socialBadges.value.firstOrNull { it.id == badgeId } ?: return
+        if (!badge.isUnlocked || badge.isClaimed) return
+        _socialBadges.value = _socialBadges.value.map {
+            if (it.id == badgeId) it.copy(isClaimed = true) else it
+        }
+        addExpWithHistory(badge.expReward, "استلام وسام: ${badge.title}", "تم نيل مكافأة وسام ${badge.rarity.titleArabic}")
+        NotificationSoundManager.playPopChime(getApplication())
+    }
+
+    fun addExpWithHistory(amount: Int, title: String, description: String = "") {
+        addExp(amount, title)
+        val entry = ExpActivityHistory(
+            title = title,
+            description = description.ifBlank { "اكتساب خبرة تفاعلية في مجرة NEXA" },
+            expGained = amount,
+            timestamp = "الآن",
+            iconType = "bolt"
+        )
+        _expActivities.value = listOf(entry) + _expActivities.value.take(19)
+    }
+
+    fun testGainExp() {
+        addExpWithHistory(65, "تفاعل اجتماعي نشط", "مكافأة تعليق وتفاعل نيون")
+    }
+
     private val _dailyQuests = MutableStateFlow<List<DailyQuest>>(
         listOf(
             DailyQuest(
@@ -2970,14 +3009,13 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
             // Trigger Level Up Toast Notification
             val levelUpNotification = NexaNotification(
                 title = "🎉 مبروك! ارتقيت للمستوى ${_userLevel.value}!",
-                message = "وصلت إلى رتبة جديدة (${RankTier.fromLevel(_userLevel.value).titleArabic}) وحصلت على +100 رصيد مجاناً.",
+                message = "وصلت إلى رتبة جديدة (${RankTier.fromLevel(_userLevel.value).titleArabic}).",
                 category = NotificationCategory.REWARDS,
                 timeAgo = "الآن",
                 rewardExp = 50
             )
             _notifications.value = listOf(levelUpNotification) + _notifications.value
             _activeInAppToast.value = levelUpNotification
-            topUpCredits(100, "مكافأة الارتقاء للمستوى ${_userLevel.value}")
         } else {
             _currentExp.value = total
         }
@@ -2990,7 +3028,6 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
             if (it.id == quest.id) it.copy(isClaimed = true) else it
         }
         addExp(quest.expReward, "إكمال مهمة: ${quest.title}")
-        topUpCredits(quest.creditsReward, "مكافأة مهمة: ${quest.title}")
     }
 
     fun claimBadgeReward(badge: GamificationBadge) {
@@ -3035,7 +3072,9 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
             severityLevel = severityLevel
         )
         // Add system notification for user feedback
-        addExp(20, "إرسال بلاغ أو تذكرة دعم")
+        if (result.first) {
+            addExp(20, "إرسال بلاغ أو تذكرة دعم")
+        }
         return result
     }
 }

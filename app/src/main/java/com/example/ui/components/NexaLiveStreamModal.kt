@@ -104,21 +104,7 @@ fun NexaLiveStreamModal(
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
 
-    // Simulate incoming viewers & chat messages periodically
-    LaunchedEffect(Unit) {
-        val sampleUsers = listOf("خالد المصري", "ياسمين تونس", "محمد جدة", "ريم عمان", "طارق بغداد")
-        val sampleTexts = listOf("تحياتي من الجزائر 🇩🇿", "تصميم الواجهة عالمي!", "NEXA أفضل منصة اجتماعية 🚀", "شكراً لكم على هذا الإبداع", "رائع جداً 🔥")
-        while (true) {
-            delay(3500)
-            viewerCount += (-5..15).random()
-            heartCount += (1..8).random()
-            val user = sampleUsers.random()
-            val txt = sampleTexts.random()
-            chatMessages.add(LiveChatMessage(System.currentTimeMillis().toString(), user, txt))
-            if (chatMessages.size > 25) chatMessages.removeAt(0)
-            listState.animateScrollToItem(chatMessages.size - 1)
-        }
-    }
+
 
     // Live indicator pulsing animation
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")

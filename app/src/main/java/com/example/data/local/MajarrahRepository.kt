@@ -124,9 +124,15 @@ class MajarrahRepository(private val dao: MajarrahDao) {
     }
 
     fun startCloudRealtimeSync(scope: kotlinx.coroutines.CoroutineScope) {
-        FirebaseManager.listenToPostsRealtime { fetchedPosts ->
-            scope.launch {
-                dao.insertPosts(fetchedPosts)
+        scope.launch {
+            FirebaseManager.currentFirebaseUser.collect { user ->
+                if (user != null) {
+                    FirebaseManager.listenToPostsRealtime { fetchedPosts ->
+                        scope.launch {
+                            dao.insertPosts(fetchedPosts)
+                        }
+                    }
+                }
             }
         }
     }
@@ -178,14 +184,19 @@ class MajarrahRepository(private val dao: MajarrahDao) {
         dao.clearCart()
     }
 
-    suspend fun deleteAccountAndAllDataGdpr(userId: String) {
-        dao.deleteAllProfiles()
-        dao.deleteAllPosts()
-        dao.deleteAllConversations()
-        dao.deleteAllMessages()
-        dao.clearCart()
-        dao.deleteAllProducts()
-        FirebaseManager.deleteUserCloudData(userId)
+    suspend fun deleteAccountAndAllDataGdpr(userId: String): Pair<Boolean, String?> {
+        val success = FirebaseManager.deleteUserCloudData(userId)
+        return if (success) {
+            dao.deleteAllProfiles()
+            dao.deleteAllPosts()
+            dao.deleteAllConversations()
+            dao.deleteAllMessages()
+            dao.clearCart()
+            dao.deleteAllProducts()
+            Pair(true, null)
+        } else {
+            Pair(false, FirebaseManager.lastDeletionErrorMessage)
+        }
     }
 
     suspend fun populateInitialDataIfEmpty() {

@@ -1516,10 +1516,8 @@ fun ModernTabbedAuthView(
 
     // OTP Fallback for Login
     var showOtpFallbackSection by remember { mutableStateOf(false) }
-    var otpChannel by remember { mutableStateOf("sms") }
     var otpDestinationInput by remember { mutableStateOf(loginInput) }
     var otpInputCode by remember { mutableStateOf("") }
-    var generatedEmailOtp by remember { mutableStateOf("884210") }
     var verificationId by remember { mutableStateOf<String?>(null) }
     var isSendingOtp by remember { mutableStateOf(false) }
     var isVerifyingOtp by remember { mutableStateOf(false) }
@@ -1763,57 +1761,72 @@ fun ModernTabbedAuthView(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Real Google Sign In Button with Firebase Auth
-            OutlinedButton(
-                onClick = {
-                    coroutineScope.launch {
-                        com.example.data.firebase.NexaGoogleAuthManager.signInWithGoogle(
-                            context = context,
-                            preferredEmail = "abdelletiferrami@gmail.com",
-                            preferredName = "Abdelletif Errami",
-                            onSuccess = { firebaseUser ->
-                                viewModel.onGoogleSignInSuccess(firebaseUser, onAuthSuccess)
-                            },
-                            onError = { _ ->
-                                // Graceful fallback
-                                viewModel.completeProfileRegistration()
-                                onAuthSuccess()
-                            }
-                        )
-                    }
-                },
-                enabled = !isAuthLoading,
-                shape = RoundedCornerShape(14.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan.copy(alpha = 0.6f)),
-                colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White.copy(alpha = 0.05f)),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
+            // Google Sign In Button with Firebase Auth
+            if (com.example.data.firebase.NexaGoogleAuthManager.isGoogleAuthConfigured) {
+                OutlinedButton(
+                    onClick = {
+                        coroutineScope.launch {
+                            viewModel.clearAuthErrorMessage()
+                            com.example.data.firebase.NexaGoogleAuthManager.signInWithGoogle(
+                                context = context,
+                                onSuccess = { firebaseUser ->
+                                    viewModel.onGoogleSignInSuccess(firebaseUser, onAuthSuccess)
+                                },
+                                onError = { errorMsg ->
+                                    viewModel.setAuthErrorMessage(errorMsg)
+                                }
+                            )
+                        }
+                    },
+                    enabled = !isAuthLoading,
+                    shape = RoundedCornerShape(14.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan.copy(alpha = 0.6f)),
+                    colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White.copy(alpha = 0.05f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.AccountCircle,
-                        contentDescription = "Google Sign In",
-                        tint = NeonCyan,
-                        modifier = Modifier.size(22.dp)
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column(horizontalAlignment = Alignment.Start) {
-                        Text(
-                            text = "تسجيل الدخول عبر Google (Firebase Auth)",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AccountCircle,
+                            contentDescription = "Google Sign In",
+                            tint = NeonCyan,
+                            modifier = Modifier.size(22.dp)
                         )
-                        Text(
-                            text = "مصادقة مشفرة وحفظ دائم للملف والمحادثات في Firestore ☁️",
-                            color = Color.LightGray.copy(alpha = 0.8f),
-                            fontSize = 10.sp
-                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(horizontalAlignment = Alignment.Start) {
+                            Text(
+                                text = "تسجيل الدخول عبر Google (Firebase Auth)",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
+                            Text(
+                                text = "الرسائل مخزنة على خوادم Firebase ☁️",
+                                color = Color.LightGray.copy(alpha = 0.8f),
+                                fontSize = 10.sp
+                            )
+                        }
                     }
+                }
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color.White.copy(alpha = 0.05f))
+                        .padding(vertical = 12.dp, horizontal = 16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "تسجيل الدخول بـ Google غير مُعد",
+                        color = Color.LightGray,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             }
 
@@ -1897,41 +1910,8 @@ fun ModernTabbedAuthView(
                             Icon(imageVector = Icons.Default.Shield, contentDescription = null, tint = NeonPink, modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.width(8.dp))
                             Column {
-                                Text("إثبات ملكية الحساب (6-Digit OTP)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                Text("تم قفل البصمة مؤقتاً. استخدم رمز OTP لتأكيد ملكية الحساب.", color = Color.LightGray, fontSize = 10.sp)
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        // Channel Tabs
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(Color.White.copy(alpha = 0.08f))
-                                .padding(3.dp)
-                        ) {
-                            listOf("sms" to "رسالة SMS", "gmail" to "بريد Gmail").forEach { (ch, label) ->
-                                val selected = otpChannel == ch
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(if (selected) NeonCyan else Color.Transparent)
-                                        .clickable {
-                                            otpChannel = ch
-                                            if (ch == "gmail" && !otpDestinationInput.contains("@")) {
-                                                otpDestinationInput = "user@gmail.com"
-                                            } else if (ch == "sms" && otpDestinationInput.contains("@")) {
-                                                otpDestinationInput = loginInput.ifBlank { "+966 50 123 4567" }
-                                            }
-                                        }
-                                        .padding(vertical = 6.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(label, color = if (selected) BackgroundDark else Color.LightGray, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                                }
+                                Text("إثبات ملكية الحساب (SMS OTP)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                Text("تم قفل البصمة مؤقتاً. استخدم رمز SMS OTP لتأكيد ملكية الحساب.", color = Color.LightGray, fontSize = 10.sp)
                             }
                         }
 
@@ -1949,7 +1929,7 @@ fun ModernTabbedAuthView(
                         OutlinedTextField(
                             value = otpDestinationInput,
                             onValueChange = { otpDestinationInput = it },
-                            label = { Text(if (otpChannel == "sms") "رقم الجوال لتلقي OTP" else "بريد Gmail لتلقي OTP", color = NeonCyan) },
+                            label = { Text("رقم الجوال لتلقي رمز SMS OTP", color = NeonCyan) },
                             singleLine = true,
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedBorderColor = NeonCyan,
@@ -1970,35 +1950,27 @@ fun ModernTabbedAuthView(
                                     otpStatusMessage = null
                                     isOtpErrorBanner = false
 
-                                    if (otpChannel == "sms") {
-                                        NexaPhoneAuthManager.sendSmsOtp(
-                                            activity = activity,
-                                            phoneNumber = otpDestinationInput,
-                                            countryCode = "+966",
-                                            onCodeSent = { verId ->
-                                                isSendingOtp = false
-                                                verificationId = verId
-                                                otpStatusMessage = "تم إرسال رمز OTP المكون من 6 أرقام عبر SMS"
-                                                resendTimerSeconds = 60
-                                                isTimerActive = true
-                                            },
-                                            onError = { err ->
-                                                isSendingOtp = false
-                                                isOtpErrorBanner = true
-                                                otpStatusMessage = err
-                                            },
-                                            onAutoVerified = {
-                                                isSendingOtp = false
-                                                onAuthSuccess()
-                                            }
-                                        )
-                                    } else {
-                                        generatedEmailOtp = "884210"
-                                        isSendingOtp = false
-                                        otpStatusMessage = "تم إرسال رمز التوثيق (6 أرقام) إلى بريد $otpDestinationInput"
-                                        resendTimerSeconds = 60
-                                        isTimerActive = true
-                                    }
+                                    NexaPhoneAuthManager.sendSmsOtp(
+                                        activity = activity,
+                                        phoneNumber = otpDestinationInput,
+                                        countryCode = "+966",
+                                        onCodeSent = { verId ->
+                                            isSendingOtp = false
+                                            verificationId = verId
+                                            otpStatusMessage = "تم إرسال رمز OTP المكون من 6 أرقام عبر SMS"
+                                            resendTimerSeconds = 60
+                                            isTimerActive = true
+                                        },
+                                        onError = { err ->
+                                            isSendingOtp = false
+                                            isOtpErrorBanner = true
+                                            otpStatusMessage = err
+                                        },
+                                        onAutoVerified = {
+                                            isSendingOtp = false
+                                            onAuthSuccess()
+                                        }
+                                    )
                                 }
                             },
                             enabled = !isTimerActive && !isSendingOtp,
@@ -2043,30 +2015,19 @@ fun ModernTabbedAuthView(
 
                                 isVerifyingOtp = true
 
-                                if (otpChannel == "sms") {
-                                    NexaPhoneAuthManager.verifyOtpCode(
-                                        verificationId = verificationId,
-                                        otpCode = otpInputCode,
-                                        onSuccess = {
-                                            isVerifyingOtp = false
-                                            onAuthSuccess()
-                                        },
-                                        onError = { err ->
-                                            isVerifyingOtp = false
-                                            isOtpErrorBanner = true
-                                            otpStatusMessage = err
-                                        }
-                                    )
-                                } else {
-                                    if (otpInputCode.trim() == generatedEmailOtp || otpInputCode.trim() == "884210" || otpInputCode.trim() == "123456") {
+                                NexaPhoneAuthManager.verifyOtpCode(
+                                    verificationId = verificationId,
+                                    otpCode = otpInputCode,
+                                    onSuccess = {
                                         isVerifyingOtp = false
                                         onAuthSuccess()
-                                    } else {
+                                    },
+                                    onError = { err ->
                                         isVerifyingOtp = false
                                         isOtpErrorBanner = true
-                                        otpStatusMessage = "رمز Gmail OTP غير صحيح! الرمز الافتراضي: 884210"
+                                        otpStatusMessage = err
                                     }
-                                }
+                                )
                             },
                             enabled = !isVerifyingOtp,
                             colors = ButtonDefaults.buttonColors(containerColor = EncryptedGreen),
@@ -2136,48 +2097,82 @@ fun ModernTabbedAuthView(
                     // STEP 1: First & Last Name
                     // ------------------------------------------
                     1 -> {
-                        // Fast One-Tap Google Registration option
-                        OutlinedButton(
-                            onClick = {
-                                coroutineScope.launch {
-                                    com.example.data.firebase.NexaGoogleAuthManager.signInWithGoogle(
-                                        context = context,
-                                        preferredEmail = "abdelletiferrami@gmail.com",
-                                        preferredName = "Abdelletif Errami",
-                                        onSuccess = { firebaseUser ->
-                                            viewModel.onGoogleSignInSuccess(firebaseUser, onAuthSuccess)
-                                        },
-                                        onError = { _ ->
-                                            viewModel.completeProfileRegistration()
-                                            onAuthSuccess()
-                                        }
+                        // Google Registration option
+                        if (com.example.data.firebase.NexaGoogleAuthManager.isGoogleAuthConfigured) {
+                            OutlinedButton(
+                                onClick = {
+                                    coroutineScope.launch {
+                                        viewModel.clearAuthErrorMessage()
+                                        com.example.data.firebase.NexaGoogleAuthManager.signInWithGoogle(
+                                            context = context,
+                                            onSuccess = { firebaseUser ->
+                                                viewModel.onGoogleSignInSuccess(firebaseUser, onAuthSuccess)
+                                            },
+                                            onError = { errorMsg ->
+                                                viewModel.setAuthErrorMessage(errorMsg)
+                                            }
+                                        )
+                                    }
+                                },
+                                enabled = !isAuthLoading,
+                                shape = RoundedCornerShape(14.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan.copy(alpha = 0.6f)),
+                                colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White.copy(alpha = 0.05f)),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(50.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.AccountCircle,
+                                        contentDescription = "Google Fast Sign-Up",
+                                        tint = NeonCyan,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        text = "التسجيل الفوري بحساب Google (Firebase Auth)",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp
                                     )
                                 }
-                            },
-                            enabled = !isAuthLoading,
-                            shape = RoundedCornerShape(14.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan.copy(alpha = 0.6f)),
-                            colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White.copy(alpha = 0.05f)),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(50.dp)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
+                            }
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(Color.White.copy(alpha = 0.05f))
+                                    .padding(vertical = 12.dp, horizontal = 16.dp),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.AccountCircle,
-                                    contentDescription = "Google Fast Sign-Up",
-                                    tint = NeonCyan,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                                Spacer(modifier = Modifier.width(10.dp))
                                 Text(
-                                    text = "التسجيل الفوري بحساب Google (Firebase Auth)",
+                                    text = "تسجيل الدخول بـ Google غير مُعد",
+                                    color = Color.LightGray,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+
+                        if (authErrorMsg != null) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                color = NeonPink.copy(alpha = 0.15f),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, NeonPink.copy(alpha = 0.5f))
+                            ) {
+                                Text(
+                                    text = authErrorMsg ?: "",
                                     color = Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 12.sp
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.padding(10.dp),
+                                    textAlign = TextAlign.Center
                                 )
                             }
                         }
@@ -2616,9 +2611,9 @@ fun ModernTabbedAuthView(
 
                             Button(
                                 onClick = {
-                                    signUpStep = 6
-                                    // Trigger OTP sending for step 6
                                     if (signUpChannel == "phone") {
+                                        signUpStep = 6
+                                        // Trigger Phone OTP sending for step 6
                                         isSendingSignUpOtp = true
                                         NexaPhoneAuthManager.sendSmsOtp(
                                             activity = activity,
@@ -2642,9 +2637,8 @@ fun ModernTabbedAuthView(
                                             }
                                         )
                                     } else {
-                                        signUpOtpStatusMessage = "تم إرسال رمز التوثيق (6 أرقام) إلى بريد $signUpInputAddress"
-                                        signUpResendTimerSeconds = 60
-                                        isSignUpTimerActive = true
+                                        // For email registration, advance directly to finalization step without fake OTP
+                                        signUpStep = 7
                                     }
                                 },
                                 enabled = password.length >= 6,
@@ -2736,13 +2730,32 @@ fun ModernTabbedAuthView(
                                         signUpOtpStatusMessage = "يرجى أدخال رمز التحقق كاملاً المكون من 6 أرقام!"
                                         return@Button
                                     }
-                                    signUpStep = 7
+                                    isSendingSignUpOtp = true
+                                    NexaPhoneAuthManager.verifyOtpCode(
+                                        verificationId = signUpVerificationId,
+                                        otpCode = signUpOtpCode,
+                                        onSuccess = {
+                                            isSendingSignUpOtp = false
+                                            isSignUpOtpErrorBanner = false
+                                            signUpStep = 7
+                                        },
+                                        onError = { err ->
+                                            isSendingSignUpOtp = false
+                                            isSignUpOtpErrorBanner = true
+                                            signUpOtpStatusMessage = err
+                                        }
+                                    )
                                 },
+                                enabled = !isSendingSignUpOtp,
                                 colors = ButtonDefaults.buttonColors(containerColor = EncryptedGreen),
                                 shape = RoundedCornerShape(14.dp),
                                 modifier = Modifier.weight(1f)
                             ) {
-                                Text("تأكيد الرمز والتالي", color = BackgroundDark, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                                if (isSendingSignUpOtp) {
+                                    CircularProgressIndicator(modifier = Modifier.size(16.dp), color = BackgroundDark, strokeWidth = 2.dp)
+                                } else {
+                                    Text("تأكيد الرمز والتالي", color = BackgroundDark, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                                }
                             }
                         }
                     }
@@ -2911,26 +2924,6 @@ fun TwoFactorAuthStepView(
                 color = NeonPink,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold
-            )
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Quick test helper badge
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
-                .background(EncryptedGreen.copy(alpha = 0.12f))
-                .border(1.dp, EncryptedGreen.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
-                .clickable { codeInput = "123456" }
-                .padding(8.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "💡 رمز تجريبي سريع: 123456 أو 889900 (انقر للملء)",
-                color = EncryptedGreen,
-                fontSize = 11.sp
             )
         }
 

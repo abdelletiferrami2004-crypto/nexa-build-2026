@@ -12,7 +12,6 @@ object PinLockManager {
     private const val PREFS_NAME = "nexa_pin_lock_prefs"
     private const val KEY_IS_PIN_ENABLED = "is_pin_enabled"
     private const val KEY_SAVED_PIN = "saved_pin"
-    private const val MASTER_PIN = "0000"
 
     private fun getPrefs(context: Context): SharedPreferences {
         return context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -60,12 +59,11 @@ object PinLockManager {
     }
 
     /**
-     * Verify entered PIN against saved PIN, Master PIN 0000, or fallback.
+     * Verify entered PIN against saved PIN.
      */
     fun verifyPin(context: Context, enteredPin: String, fallbackPin: String = ""): Boolean {
-        if (enteredPin == MASTER_PIN) return true
         val saved = getSavedPin(context).ifBlank { fallbackPin }
-        if (saved.isBlank()) return true // No PIN configured
+        if (saved.isBlank()) return false
         return enteredPin == saved
     }
 }

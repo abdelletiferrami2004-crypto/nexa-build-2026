@@ -549,11 +549,16 @@ fun SupportAndReportScreen(
                                                     severityLevel = "HIGH"
                                                 )
                                                 isSubmitting = false
-                                                lastSubmittedTicketId = repId
-                                                submissionSuccessMessage = "تم تسجيل بلاغ الإساءة وتخزينه في Firebase Firestore بمجلد reports، وتم تفعيل نظام الرقابة لحظر الحساب المخالف."
-                                                try {
-                                                    NotificationSoundManager.playPopChime(context)
-                                                } catch (_: Throwable) {}
+                                                if (success) {
+                                                    lastSubmittedTicketId = repId
+                                                    submissionSuccessMessage = "تم تسجيل بلاغ الإساءة وتخزينه في Firebase Firestore بمجلد reports، وتم تفعيل نظام الرقابة لحظر الحساب المخالف."
+                                                    try {
+                                                        NotificationSoundManager.playPopChime(context)
+                                                    } catch (_: Throwable) {}
+                                                } else {
+                                                    lastSubmittedTicketId = null
+                                                    Toast.makeText(context, "فشل إرسال البلاغ: $repId", Toast.LENGTH_LONG).show()
+                                                }
                                             }
                                         }
                                     },
@@ -746,11 +751,16 @@ fun SupportAndReportScreen(
                                                     severityLevel = "NORMAL"
                                                 )
                                                 isSubmitting = false
-                                                lastSubmittedTicketId = repId
-                                                submissionSuccessMessage = "تم فتح تذكرة دعم فني وحفظها في Firestore (reports) برقم تتبع $repId. سيقوم فريق الدعم بالرد خلال 24 ساعة."
-                                                try {
-                                                    NotificationSoundManager.playPopChime(context)
-                                                } catch (_: Throwable) {}
+                                                if (success) {
+                                                    lastSubmittedTicketId = repId
+                                                    submissionSuccessMessage = "تم فتح تذكرة دعم فني وحفظها في Firestore (reports) برقم تتبع $repId. سيقوم فريق الدعم بالرد خلال 24 ساعة."
+                                                    try {
+                                                        NotificationSoundManager.playPopChime(context)
+                                                    } catch (_: Throwable) {}
+                                                } else {
+                                                    lastSubmittedTicketId = null
+                                                    Toast.makeText(context, "فشل إرسال التذكرة: $repId", Toast.LENGTH_LONG).show()
+                                                }
                                             }
                                         }
                                     },

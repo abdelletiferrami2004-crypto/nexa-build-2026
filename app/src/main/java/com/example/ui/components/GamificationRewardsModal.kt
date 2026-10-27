@@ -519,7 +519,7 @@ fun DailyQuestCard(
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "+${quest.expReward} EXP • +${quest.creditsReward} رصيد",
+                        text = "+${quest.expReward} EXP",
                         fontSize = 11.sp,
                         color = NeonAmber,
                         fontWeight = FontWeight.SemiBold

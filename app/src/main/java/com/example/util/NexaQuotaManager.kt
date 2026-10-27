@@ -80,6 +80,11 @@ class NexaQuotaManager private constructor(context: Context) {
         return prefs.getString(KEY_SUBSCRIPTION_ID, null)
     }
 
+    @Synchronized
+    fun getPurchaseToken(): String? {
+        return prefs.getString(KEY_PURCHASE_TOKEN, null)
+    }
+
     /**
      * Returns the count of generations used today.
      * Automatically resets to 0 if the calendar day has rolled over.

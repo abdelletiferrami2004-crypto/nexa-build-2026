@@ -276,10 +276,10 @@ fun ReportAndBlockDialog(
                                         contentId = contentId,
                                         targetAuthorName = targetAuthorName,
                                         category = selectedCategory,
-                                        isViolationVerified = true,
-                                        aiConfidence = 98,
-                                        aiReason = "تم تأكيد مخالفة $selectedCategory عن طريق فحص الذكاء الاصطناعي.",
- actionTaken ="إنذار تلقائي وتطبيق تقييد النشر لمدة 24 ساعة"
+                                        isViolationVerified = false,
+                                        aiConfidence = 0,
+                                        aiReason = "تم استلام البلاغ وسيقوم فريق الإشراف بمراجعته والتحقق من المعايير.",
+                                        actionTaken = "تم استلام البلاغ"
                                     )
                                 }
                             },

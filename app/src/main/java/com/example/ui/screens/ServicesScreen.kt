@@ -219,8 +219,11 @@ fun ServicesScreen(
     if (showVipModal) {
         com.example.ui.components.NexaVipSubscriptionModal(
             isCurrentlyVip = isVipMember,
-            onSubscribe = { tier ->
-                viewModel.activateVipSubscription(tier)
+            onSubscribe = { planId ->
+                viewModel.subscribeToNexaPro(
+                    planId = planId,
+                    activity = context as? android.app.Activity
+                )
                 showVipModal = false
             },
             onDismiss = { showVipModal = false }
@@ -321,7 +324,7 @@ fun ServicesScreen(
     if (showNexaAccountsHubModal) {
         NexaAccountsHubDialog(
             profileName = profile?.name ?: "مستخدم NEXA",
-            profilePhone = profile?.phone ?: "+212 600000000",
+            profilePhone = profile?.phone ?: "",
             onDismiss = { showNexaAccountsHubModal = false }
         )
     }
@@ -998,8 +1001,8 @@ fun ServicesScreen(
                         SettingsDivider()
 
                         SettingsListTile(
-                            title = "إعلانات AdMob وعضوية VIP بدون إعلانات",
-                            subtitle = if (isVipMember) "عضوية VIP نشطة: تصفح بدون إعلانات ✨" else "انقر للتجديد أو مشاهدة إعلان مكافأة",
+                            title = "عضوية NEXA VIP الملكية",
+                            subtitle = if (isVipMember) "عضوية VIP نشطة: تصفح فائق بدون إعلانات ✨" else "انقر للاشتراك والترقية لعضوية VIP الملكية",
                             icon = Icons.Default.Star,
                             iconColor = NeonPink,
                             onClick = { showVipModal = true }

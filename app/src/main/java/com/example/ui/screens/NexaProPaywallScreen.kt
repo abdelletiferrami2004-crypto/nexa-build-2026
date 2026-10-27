@@ -696,7 +696,7 @@ fun NexaProPaywallScreen(
                             Spacer(modifier = Modifier.width(10.dp))
                             Column {
                                 Text(
-                                    text = "بطاقة مدى / Visa •••• 8842",
+                                    text = "بطاقة مدى / Visa •••• 7654",
                                     color = Color.White,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold

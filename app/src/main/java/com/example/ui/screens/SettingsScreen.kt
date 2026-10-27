@@ -134,8 +134,12 @@ fun SettingsScreen(
                 Button(
                     onClick = {
                         showDeleteAccountDialog = false
-                        viewModel.deleteAccountAndData {
-                            onLogoutClick()
+                        viewModel.deleteAccountAndData { success, errorMsg ->
+                            if (success) {
+                                onLogoutClick()
+                            } else {
+                                android.widget.Toast.makeText(context, errorMsg ?: "فشل في حذف الحساب", android.widget.Toast.LENGTH_LONG).show()
+                            }
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
@@ -370,7 +374,7 @@ fun SettingsScreen(
                 icon = Icons.Default.Lock,
                 iconTint = NeonCyan,
                 title = "قفل المحادثات برمز PIN",
-                subtitle = if (isChatPinEnabled) "مفعل (الرمز محدد) • انقر للتعديل • ماستر 0000 متاح" else "معطل: تفتح الدردشات مباشرة بدون طلب رمز PIN",
+                subtitle = if (isChatPinEnabled) "مفعل (الرمز محدد) • انقر للتعديل" else "معطل: تفتح الدردشات مباشرة بدون طلب رمز PIN",
                 onClick = {
                     showSetPinDialog = true
                 },
@@ -399,23 +403,20 @@ fun SettingsScreen(
             // 2FA Tile
             SettingsItemTile(
                 icon = Icons.Default.PhonelinkLock,
-                iconTint = EncryptedGreen,
+                iconTint = Color.Gray,
                 title = "المصادقة الثنائية (2FA)",
-                subtitle = if (profile.isTwoFactorEnabled) "مفعل: حماية الحساب برمز تحقق إضافي عند الدخول" else "معطل: انقر لتفعيل طبقة الأمان الإضافية",
-                onClick = {
-                    showSecurityModal = true
-                },
+                subtitle = "قريباً",
+                onClick = {},
                 trailing = {
                     Switch(
-                        checked = profile.isTwoFactorEnabled,
-                        onCheckedChange = { isChecked ->
-                            viewModel.toggleTwoFactorAuth(isChecked)
-                        },
+                        checked = false,
+                        enabled = false,
+                        onCheckedChange = null,
                         colors = SwitchDefaults.colors(
-                            checkedThumbColor = BackgroundDark,
-                            checkedTrackColor = EncryptedGreen,
-                            uncheckedThumbColor = Color.Gray,
-                            uncheckedTrackColor = Color.DarkGray
+                            disabledCheckedThumbColor = Color.Gray,
+                            disabledCheckedTrackColor = Color.DarkGray,
+                            disabledUncheckedThumbColor = Color.Gray,
+                            disabledUncheckedTrackColor = Color.DarkGray
                         )
                     )
                 }
@@ -828,26 +829,6 @@ fun SetChatPinModal(
                             }
                         }
                     }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Developer note
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(NeonCyan.copy(alpha = 0.1f))
-                        .border(1.dp, NeonCyan.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "وضع المطور: رمز الماستر 0000 سيفتح القفل دائماً",
-                        color = NeonCyan,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium
-                    )
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))

@@ -1,9 +1,8 @@
 package com.example.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -25,14 +24,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Block
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Gavel
 import androidx.compose.material.icons.filled.GppGood
-import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MarkEmailRead
 import androidx.compose.material.icons.filled.PrivacyTip
@@ -49,12 +45,12 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
@@ -69,7 +65,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -85,6 +80,7 @@ import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonPink
 import com.example.ui.theme.NeonPurple
 import com.example.util.NotificationSoundManager
+import com.google.firebase.auth.FirebaseAuth
 
 enum class SupportPolicySection {
     ENCRYPTION_PRIVACY,
@@ -109,9 +105,11 @@ fun PrivacyPolicyAndSupportScreen(
     var showCategoryDropdown by remember { mutableStateOf(false) }
     var reportSubject by remember { mutableStateOf("") }
     var reportMessage by remember { mutableStateOf("") }
-    var contactEmail by remember { mutableStateOf(userProfile?.phone ?: "user@nexa.app") }
-    var attachedFileUri by remember { mutableStateOf<String?>(null) }
+    val initialContactEmail = remember { FirebaseAuth.getInstance().currentUser?.email ?: "" }
+    var contactEmail by remember { mutableStateOf(initialContactEmail) }
     var isSubmittedSuccess by remember { mutableStateOf(false) }
+    var isSubmitting by remember { mutableStateOf(false) }
+    var showAiAssistantModal by remember { mutableStateOf(false) }
     var generatedTicketId by remember { mutableStateOf("") }
 
     val reportCategories = listOf(
@@ -335,26 +333,39 @@ fun PrivacyPolicyAndSupportScreen(
                         contactEmail = contactEmail,
                         onEmailChange = { contactEmail = it },
                         isSubmittedSuccess = isSubmittedSuccess,
+                        isSubmitting = isSubmitting,
                         generatedTicketId = generatedTicketId,
                         onSubmit = {
+                            if (isSubmitting) return@SupportComplaintFormContent
                             if (reportSubject.isBlank() || reportMessage.isBlank()) {
                                 Toast.makeText(context, "يرجى تعبئة عنوان البلاغ والوصف بالتفصيل", Toast.LENGTH_SHORT).show()
+                            } else if (contactEmail.isBlank()) {
+                                Toast.makeText(context, "يرجى إدخال البريد الإلكتروني للتواصل", Toast.LENGTH_SHORT).show()
                             } else {
+                                isSubmitting = true
                                 scope.launch {
-                                    val (success, ticketNum) = viewModel.submitSupportOrAbuseReport(
-                                        reportType = if (reportCategory.contains("مسيء")) "ABUSE_REPORT" else "TECH_SUPPORT",
-                                        targetSubjectOrUser = reportSubject,
-                                        category = reportCategory,
-                                        details = reportMessage,
-                                        senderContact = contactEmail,
-                                        severityLevel = "NORMAL"
-                                    )
-                                    generatedTicketId = ticketNum
-                                    isSubmittedSuccess = true
                                     try {
-                                        NotificationSoundManager.playPopChime(context)
-                                    } catch (_: Throwable) {}
-                                    Toast.makeText(context, "تم حفظ بلاغك سحابياً في Firestore (reports) برقم: $ticketNum", Toast.LENGTH_LONG).show()
+                                        val (success, ticketNum) = viewModel.submitSupportOrAbuseReport(
+                                            reportType = if (reportCategory.contains("مسيء")) "ABUSE_REPORT" else "TECH_SUPPORT",
+                                            targetSubjectOrUser = reportSubject,
+                                            category = reportCategory,
+                                            details = reportMessage,
+                                            senderContact = contactEmail,
+                                            severityLevel = "NORMAL"
+                                        )
+                                        if (success) {
+                                            generatedTicketId = ticketNum
+                                            isSubmittedSuccess = true
+                                            try {
+                                                NotificationSoundManager.playPopChime(context)
+                                            } catch (_: Throwable) {}
+                                            Toast.makeText(context, "تم حفظ بلاغك سحابياً في Firestore (reports) برقم: $ticketNum", Toast.LENGTH_LONG).show()
+                                        } else {
+                                            Toast.makeText(context, "فشل إرسال البلاغ: $ticketNum", Toast.LENGTH_LONG).show()
+                                        }
+                                    } finally {
+                                        isSubmitting = false
+                                    }
                                 }
                             }
                         },
@@ -363,6 +374,20 @@ fun PrivacyPolicyAndSupportScreen(
                             reportMessage = ""
                             isSubmittedSuccess = false
                             generatedTicketId = ""
+                        },
+                        onOpenAiAssistant = {
+                            showAiAssistantModal = true
+                        },
+                        onSendEmail = {
+                            val emailIntent = Intent(Intent.ACTION_SENDTO).apply {
+                                data = Uri.parse("mailto:support@nexa.app")
+                                putExtra(Intent.EXTRA_SUBJECT, "طلب دعم فني - تطبيق NEXA")
+                            }
+                            try {
+                                context.startActivity(emailIntent)
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "لا يوجد تطبيق بريد مثبت على الجهاز", Toast.LENGTH_SHORT).show()
+                            }
                         }
                     )
                 }
@@ -370,6 +395,13 @@ fun PrivacyPolicyAndSupportScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
         }
+    }
+
+    if (showAiAssistantModal) {
+        com.example.ui.components.AiAssistantModal(
+            viewModel = viewModel,
+            onDismiss = { showAiAssistantModal = false }
+        )
     }
 }
 
@@ -403,13 +435,13 @@ private fun EncryptionAndPrivacyContent() {
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text(
-                        text = "حماية وتشفير البيانات (End-to-End)",
+                        text = "حماية وتشفير الرسائل في التطبيق",
                         color = Color.White,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "بروتوكول أمان متقدم لا يتيح لأي طرف ثالث قراءة بياناتك",
+                        text = "تشفير محتوى الرسائل قبل إرسالها إلى قاعدة البيانات",
                         color = EncryptedGreen,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium
@@ -420,7 +452,7 @@ private fun EncryptionAndPrivacyContent() {
             Spacer(modifier = Modifier.height(14.dp))
 
             Text(
-                text = "في تطبيق NEXA، نعتبر خصوصيتك وأمانك حقاً أساسياً غير قابل للمساومة. تم تصميم معمارية التطبيق على مبدأ (Zero-Knowledge Architecture)، بحيث يتم تشفير جميع المحادثات والملفات محلياً على جهازك قبل إرسالها عبر خوادم السحابة.",
+                text = "في تطبيق NEXA، نهتم بحماية خصوصيتك وبياناتك. يتم تشفير نصوص الرسائل في المحادثات محلياً باستخدام تشفير AES-GCM المتوافق قبل حفظها أو مزامنتها في السحابة.",
                 color = Color(0xFFE2E8F0),
                 fontSize = 12.sp,
                 lineHeight = 18.sp
@@ -442,32 +474,32 @@ private fun EncryptionAndPrivacyContent() {
         SecurityFeatureCard(
             icon = Icons.Default.Lock,
             iconTint = NeonCyan,
-            title = "1. تشفير المحادثات والمكالمات من طرف لطرف",
-            description = "يتم تشفير جميع الرسائل النصية، الصوتية، الصور، ومكالمات الفيديو بتقنيات AES-256 و RSA 4096-bit العسكرية. المفاتيح مشفرة ومحفوظة حصراً على هاتفك وهاتف المستلم فقط."
+            title = "1. تشفير الرسائل النصية المتبادلة",
+            description = "يتم تشفير نصوص الرسائل في المحادثات باستخدام خوارزمية AES-GCM مع مفتاح مشتق لكل محادثة، بحيث تُخزن وتُرسل الرسائل بصيغة مشفرة."
         )
 
         // Point 2
         SecurityFeatureCard(
             icon = Icons.Default.Fingerprint,
             iconTint = EncryptedGreen,
-            title = "2. الحماية البيومترية والمصادقة المزدوجة",
-            description = "إمكانية قفل التطبيق أو المحادثات الفردية الحساسة ببصمة الإصبع أو تقنية التعرف على الوجه، مع تفعيل نظام كشف الأنشطة المشبوهة (AI Anomaly Security) لتنبيهك عند أي محاولة اختراق."
+            title = "2. قفل التطبيق برمز PIN والمصادقة المزدوجة",
+            description = "إمكانية تعيين رمز PIN لقفل المحادثات أو تفعيل المصادقة الثنائية (2FA) لتعزيز أمان حسابك على جهازك."
         )
 
         // Point 3
         SecurityFeatureCard(
             icon = Icons.Default.GppGood,
             iconTint = NeonPurple,
-            title = "3. عدم بيع أو مشاركة البيانات الشخصية",
-            description = "نلتزم بشكل قاطع بعدم بيع أو مشاركة أرقام الهواتف أو سجلات المحادثات أو تفضيلات التسوق مع أي شبكات إعلانية أو جهات خارجية. التطبيق متوافق مع معايير GDPR و Google Play Safety 2026."
+            title = "3. خصوصية البيانات وعدم بيعها",
+            description = "نلتزم بعدم بيع أو مشاركة بياناتك الشخصية أو سجلاتك مع أي شبكات إعلانية أو جهات خارجية بغرض الترويج التجاري."
         )
 
         // Point 4
         SecurityFeatureCard(
             icon = Icons.Default.PrivacyTip,
             iconTint = NeonAmber,
-            title = "4. الحذف الفوري وتصفير الحساب بضغطة واحدة",
-            description = "يحق لك في أي وقت حذف حسابك ومسح كافة الوسائط والرسائل المخزنة محلياً وسحابياً من خلال الإعدادات، وسيتم إتلاف كافة السجلات المشفرة بشكل نهائي لا يمكن استرجاعه."
+            title = "4. حذف الحساب والبيانات المرتبطة",
+            description = "عند طلب حذف الحساب من الإعدادات، يتم حذف حساب المصادقة (Firebase Auth)، وسجل الملف الشخصي ومجموعات الأنشطة والإعدادات من السحابة، بالإضافة إلى مسح كافة البيانات المخزنة محلياً على جهازك (الملف الشخصي، المنشورات، المحادثات، والرسائل)."
         )
     }
 }
@@ -565,7 +597,7 @@ private fun TermsAndAntiAbuseContent() {
             icon = Icons.Default.Gavel,
             iconTint = NeonPurple,
             title = "4. آلية الإبلاغ وحظر المستخدمين بنقرة واحدة",
-            description = "يمكن لأي مستخدم حظر أي شخص مسيء أو تقديم بلاغ فوري من داخل أي محادثة أو منشور، ويتم التعامل مع البلاغات ومراجعتها خلال أقل من 24 ساعة."
+            description = "يمكن لأي مستخدم حظر أي شخص مسيء أو تقديم بلاغ فوري من داخل أي محادثة أو منشور، وسيتم مراجعة بلاغك واتخاذ الإجراء المناسب."
         )
     }
 }
@@ -584,9 +616,12 @@ private fun SupportComplaintFormContent(
     contactEmail: String,
     onEmailChange: (String) -> Unit,
     isSubmittedSuccess: Boolean,
+    isSubmitting: Boolean = false,
     generatedTicketId: String,
     onSubmit: () -> Unit,
-    onResetForm: () -> Unit
+    onResetForm: () -> Unit,
+    onOpenAiAssistant: () -> Unit = {},
+    onSendEmail: () -> Unit = {}
 ) {
     if (isSubmittedSuccess) {
         // SUCCESS CARD
@@ -640,7 +675,7 @@ private fun SupportComplaintFormContent(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 Text(
-                    text = "يقوم فريق الدعم الفني والأمان في NEXA بمراجعة البلاغ واتخاذ الإجراءات اللازمة خلال 24 ساعة كحد أقصى. سيتم إشعارك داخل التطبيق بالنتيجة.",
+                    text = "سيتم مراجعة بلاغك واتخاذ الإجراءات اللازمة من قبل فريق الدعم الفني والأمان في NEXA.",
                     color = Color.LightGray,
                     fontSize = 12.sp,
                     textAlign = TextAlign.Center,
@@ -807,7 +842,12 @@ private fun SupportComplaintFormContent(
 
                 // Submit Button
                 Button(
-                    onClick = onSubmit,
+                    onClick = {
+                        if (!isSubmitting) {
+                            onSubmit()
+                        }
+                    },
+                    enabled = !isSubmitting,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(48.dp),
@@ -816,15 +856,23 @@ private fun SupportComplaintFormContent(
                         containerColor = NeonPink
                     )
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(imageVector = Icons.Default.Send, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "إرسال البلاغ إلى فريق الدعم 🚀",
+                    if (isSubmitting) {
+                        CircularProgressIndicator(
                             color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp
                         )
+                    } else {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(imageVector = Icons.Default.Send, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "إرسال البلاغ إلى فريق الدعم 🚀",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
+                        }
                     }
                 }
             }
@@ -841,7 +889,9 @@ private fun SupportComplaintFormContent(
     ) {
         // AI Bot Support
         Card(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .clickable { onOpenAiAssistant() },
             colors = CardDefaults.cardColors(containerColor = Color(0xFF131A2B)),
             border = BorderStroke(1.dp, NeonCyan.copy(alpha = 0.3f)),
             shape = RoundedCornerShape(14.dp)
@@ -853,13 +903,15 @@ private fun SupportComplaintFormContent(
                 Icon(Icons.Default.SmartToy, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(24.dp))
                 Spacer(modifier = Modifier.height(4.dp))
                 Text("المساعد الذكي", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                Text("رد فوري 24/7", color = NeonCyan, fontSize = 9.sp)
+                Text("مساعدة فورية", color = NeonCyan, fontSize = 9.sp)
             }
         }
 
         // Email Support
         Card(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .clickable { onSendEmail() },
             colors = CardDefaults.cardColors(containerColor = Color(0xFF131A2B)),
             border = BorderStroke(1.dp, NeonPurple.copy(alpha = 0.3f)),
             shape = RoundedCornerShape(14.dp)

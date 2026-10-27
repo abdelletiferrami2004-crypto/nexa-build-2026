@@ -6,6 +6,7 @@ import com.example.data.model.ChatMessage
 import com.example.data.model.Post
 import com.example.data.model.UserProfile
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthRecentLoginRequiredException
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.AuthCredential
@@ -14,6 +15,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreSettings
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.SetOptions
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -55,6 +57,9 @@ object FirebaseManager {
 
             _isFirebaseAvailable.value = true
             _currentFirebaseUser.value = auth?.currentUser
+            auth?.addAuthStateListener { fa ->
+                _currentFirebaseUser.value = fa.currentUser
+            }
             Log.d(TAG, "Firebase initialized successfully with Server-Side Persistence enabled.")
         } catch (e: Throwable) {
             _isFirebaseAvailable.value = false
@@ -67,6 +72,7 @@ object FirebaseManager {
 
     suspend fun authenticateUserAnonymously(): Boolean {
         val authInstance = auth ?: return false
+        if (authInstance.currentUser != null) return true
         return try {
             val result = authInstance.signInAnonymously().await()
             _currentFirebaseUser.value = result.user
@@ -74,8 +80,8 @@ object FirebaseManager {
             Log.d(TAG, "Signed in anonymously to Firebase Auth: ${result.user?.uid}")
             true
         } catch (e: Exception) {
-            Log.e(TAG, "Firebase Auth sign-in failed", e)
-            _cloudSyncStatus.value = "خطأ في تسجيل الدخول سحابياً (Fallback Mode Active)"
+            Log.w(TAG, "Anonymous sign-in unavailable on current backend (Google Sign-In required): ${e.message}")
+            _cloudSyncStatus.value = "يتطلب تسجيل الدخول بحساب Google (Fallback Mode Active)"
             false
         }
     }
@@ -141,38 +147,6 @@ object FirebaseManager {
         }
     }
 
-    suspend fun signInWithGoogleFallback(
-        email: String = "abdelletiferrami@gmail.com",
-        displayName: String = "Abdelletif Errami",
-        photoUrl: String? = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150"
-    ): Result<FirebaseUser> {
-        val authInstance = auth ?: return Result.failure(Exception("خدمة Firebase Auth غير مفعلة"))
-        return try {
-            var user = authInstance.currentUser
-            if (user == null) {
-                // Securely authenticate via Firebase Auth
-                val authResult = authInstance.signInAnonymously().await()
-                user = authResult.user
-            }
-            if (user != null) {
-                val profileUpdates = UserProfileChangeRequest.Builder()
-                    .setDisplayName(displayName)
-                    .setPhotoUri(photoUrl?.let { Uri.parse(it) })
-                    .build()
-                user.updateProfile(profileUpdates).await()
-                _currentFirebaseUser.value = user
-                _cloudSyncStatus.value = "تم تسجيل الدخول عبر Google (Firebase Auth): $email"
-                Log.d(TAG, "Authenticated Firebase Auth user for Google: ${user.uid}")
-                Result.success(user)
-            } else {
-                Result.failure(Exception("تعذر إنشاء حساب Firebase Auth للمستخدم"))
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "signInWithGoogleFallback error", e)
-            Result.failure(e)
-        }
-    }
-
     fun signOut() {
         try {
             auth?.signOut()
@@ -201,29 +175,25 @@ object FirebaseManager {
                 "isTeenMode" to profile.isTeenMode,
                 "isBiometricEnabled" to profile.isBiometricEnabled,
                 "isChatPinEnabled" to profile.isChatPinEnabled,
-                "chatPin" to profile.chatPin,
                 "postsCount" to profile.postsCount,
                 "followersCount" to profile.followersCount,
                 "totalViewsCount" to profile.totalViewsCount,
                 "points" to profile.points,
-                "creditsBalance" to profile.creditsBalance,
-                "isVipMember" to profile.isVipMember,
-                "vipTierName" to profile.vipTierName,
                 "isVerified" to profile.isVerified,
                 "verificationBadgeCategory" to profile.verificationBadgeCategory,
                 "isTwoFactorEnabled" to profile.isTwoFactorEnabled,
                 "twoFactorMethod" to profile.twoFactorMethod,
-                "isNexaProSubscriber" to profile.isNexaProSubscriber,
                 "dailyAiGenerationsUsed" to profile.dailyAiGenerationsUsed,
                 "lastAiGenerationDate" to profile.lastAiGenerationDate,
                 "fcmToken" to profile.fcmToken,
                 "isLoggedIn" to true,
-                "updatedAt" to System.currentTimeMillis()
+                "updatedAt" to System.currentTimeMillis(),
+                "chatPin" to FieldValue.delete()
             )
             db.collection("nexa_users").document(userId)
                 .set(profileMap, SetOptions.merge()).await()
             _cloudSyncStatus.value = "تمت مزامنة الملف الشخصي سحابياً في Firestore Cloud ☁️"
-            Log.d(TAG, "Profile saved to Firestore for $userId")
+            Log.d(TAG, "Profile saved to Firestore for $userId without chatPin")
             true
         } catch (e: Exception) {
             Log.e(TAG, "Failed to save profile to Firestore", e)
@@ -240,8 +210,8 @@ object FirebaseManager {
                 UserProfile(
                     id = doc.getLong("id")?.toInt() ?: 1,
                     firebaseUid = userId,
-                    phone = doc.getString("phone") ?: "+966 50 123 4567",
-                    name = doc.getString("name") ?: "مستخدم NEXA",
+                    phone = doc.getString("phone") ?: "",
+                    name = doc.getString("name") ?: (auth?.currentUser?.displayName ?: ""),
                     age = doc.getLong("age")?.toInt() ?: 20,
                     isTeenMode = doc.getBoolean("isTeenMode") ?: false,
                     isBiometricEnabled = doc.getBoolean("isBiometricEnabled") ?: true,
@@ -250,21 +220,21 @@ object FirebaseManager {
                     isLoggedIn = true,
                     avatarUrl = doc.getString("avatarUrl") ?: "",
                     postsCount = doc.getLong("postsCount")?.toInt() ?: 0,
-                    followersCount = doc.getLong("followersCount")?.toInt() ?: 100,
-                    totalViewsCount = doc.getLong("totalViewsCount") ?: 1000L,
-                    points = doc.getLong("points")?.toInt() ?: 500,
-                    isVipMember = doc.getBoolean("isVipMember") ?: false,
-                    vipTierName = doc.getString("vipTierName") ?: "NEXA Standard",
-                    creditsBalance = doc.getLong("creditsBalance")?.toInt() ?: 100,
-                    bio = doc.getString("bio") ?: "مستخدم نشط في مجتمع NEXA",
+                    followersCount = doc.getLong("followersCount")?.toInt() ?: 0,
+                    totalViewsCount = doc.getLong("totalViewsCount") ?: 0L,
+                    points = doc.getLong("points")?.toInt() ?: 0,
+                    isVipMember = false,
+                    vipTierName = "NEXA Standard",
+                    creditsBalance = doc.getLong("creditsBalance")?.toInt() ?: 0,
+                    bio = doc.getString("bio") ?: "",
                     username = doc.getString("username") ?: "user_${userId.take(6)}",
                     isContactsSynced = doc.getBoolean("isContactsSynced") ?: false,
                     isVerified = doc.getBoolean("isVerified") ?: false,
                     verificationBadgeCategory = doc.getString("verificationBadgeCategory") ?: "عضو موثق",
                     isTwoFactorEnabled = doc.getBoolean("isTwoFactorEnabled") ?: false,
                     twoFactorMethod = doc.getString("twoFactorMethod") ?: "authenticator",
-                    isNexaProSubscriber = doc.getBoolean("isNexaProSubscriber") ?: false,
-                    email = doc.getString("email") ?: (auth?.currentUser?.email ?: "user@nexa.ai"),
+                    isNexaProSubscriber = false,
+                    email = doc.getString("email") ?: (auth?.currentUser?.email ?: ""),
                     fcmToken = doc.getString("fcmToken") ?: "",
                     dailyAiGenerationsUsed = doc.getLong("dailyAiGenerationsUsed")?.toInt() ?: 0,
                     lastAiGenerationDate = doc.getString("lastAiGenerationDate") ?: ""
@@ -280,10 +250,14 @@ object FirebaseManager {
 
     fun listenToUserProfileRealtime(userId: String, onUpdate: (UserProfile) -> Unit): ListenerRegistration? {
         val db = firestore ?: return null
+        if (auth?.currentUser == null) {
+            Log.d(TAG, "Postponing listenToUserProfileRealtime: waiting for authenticated session")
+            return null
+        }
         return db.collection("nexa_users").document(userId)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
-                    Log.e(TAG, "Real-time user profile error", error)
+                    Log.w(TAG, "Real-time user profile notice: ${error.message}")
                     return@addSnapshotListener
                 }
                 if (snapshot != null && snapshot.exists()) {
@@ -291,8 +265,8 @@ object FirebaseManager {
                         val profile = UserProfile(
                             id = snapshot.getLong("id")?.toInt() ?: 1,
                             firebaseUid = userId,
-                            phone = snapshot.getString("phone") ?: "+966 50 123 4567",
-                            name = snapshot.getString("name") ?: "مستخدم NEXA",
+                            phone = snapshot.getString("phone") ?: "",
+                            name = snapshot.getString("name") ?: (auth?.currentUser?.displayName ?: ""),
                             age = snapshot.getLong("age")?.toInt() ?: 20,
                             isTeenMode = snapshot.getBoolean("isTeenMode") ?: false,
                             isBiometricEnabled = snapshot.getBoolean("isBiometricEnabled") ?: true,
@@ -301,21 +275,21 @@ object FirebaseManager {
                             isLoggedIn = true,
                             avatarUrl = snapshot.getString("avatarUrl") ?: "",
                             postsCount = snapshot.getLong("postsCount")?.toInt() ?: 0,
-                            followersCount = snapshot.getLong("followersCount")?.toInt() ?: 100,
-                            totalViewsCount = snapshot.getLong("totalViewsCount") ?: 1000L,
-                            points = snapshot.getLong("points")?.toInt() ?: 500,
-                            isVipMember = snapshot.getBoolean("isVipMember") ?: false,
-                            vipTierName = snapshot.getString("vipTierName") ?: "NEXA Standard",
-                            creditsBalance = snapshot.getLong("creditsBalance")?.toInt() ?: 100,
-                            bio = snapshot.getString("bio") ?: "مستخدم نشط في مجتمع NEXA",
+                            followersCount = snapshot.getLong("followersCount")?.toInt() ?: 0,
+                            totalViewsCount = snapshot.getLong("totalViewsCount") ?: 0L,
+                            points = snapshot.getLong("points")?.toInt() ?: 0,
+                            isVipMember = false,
+                            vipTierName = "NEXA Standard",
+                            creditsBalance = snapshot.getLong("creditsBalance")?.toInt() ?: 0,
+                            bio = snapshot.getString("bio") ?: "",
                             username = snapshot.getString("username") ?: "user_${userId.take(6)}",
                             isContactsSynced = snapshot.getBoolean("isContactsSynced") ?: false,
                             isVerified = snapshot.getBoolean("isVerified") ?: false,
                             verificationBadgeCategory = snapshot.getString("verificationBadgeCategory") ?: "عضو موثق",
                             isTwoFactorEnabled = snapshot.getBoolean("isTwoFactorEnabled") ?: false,
                             twoFactorMethod = snapshot.getString("twoFactorMethod") ?: "authenticator",
-                            isNexaProSubscriber = snapshot.getBoolean("isNexaProSubscriber") ?: false,
-                            email = snapshot.getString("email") ?: (auth?.currentUser?.email ?: "user@nexa.ai"),
+                            isNexaProSubscriber = false,
+                            email = snapshot.getString("email") ?: (auth?.currentUser?.email ?: ""),
                             fcmToken = snapshot.getString("fcmToken") ?: "",
                             dailyAiGenerationsUsed = snapshot.getLong("dailyAiGenerationsUsed")?.toInt() ?: 0,
                             lastAiGenerationDate = snapshot.getString("lastAiGenerationDate") ?: ""
@@ -418,10 +392,14 @@ object FirebaseManager {
 
     fun listenToStoriesRealtime(onStoriesUpdated: (List<com.example.data.model.StoryItem>) -> Unit) {
         val db = firestore ?: return
+        if (auth?.currentUser == null) {
+            Log.d(TAG, "Postponing listenToStoriesRealtime: waiting for authenticated session")
+            return
+        }
         db.collection("nexa_stories")
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
-                    Log.e(TAG, "Real-time Stories Firestore error", error)
+                    Log.w(TAG, "Real-time Stories Firestore notice: ${error.message}")
                     return@addSnapshotListener
                 }
                 if (snapshot != null && !snapshot.isEmpty) {
@@ -452,11 +430,15 @@ object FirebaseManager {
 
     fun listenToPostsRealtime(onPostsUpdated: (List<Post>) -> Unit) {
         val db = firestore ?: return
+        if (auth?.currentUser == null) {
+            Log.d(TAG, "Postponing listenToPostsRealtime: waiting for authenticated session")
+            return
+        }
         postsListenerRegistration?.remove()
         postsListenerRegistration = db.collection("nexa_posts")
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
-                    Log.e(TAG, "Real-time Posts Firestore error", error)
+                    Log.w(TAG, "Real-time Posts Firestore notice: ${error.message}")
                     return@addSnapshotListener
                 }
                 if (snapshot != null && !snapshot.isEmpty) {
@@ -498,10 +480,8 @@ object FirebaseManager {
 
         val storageInst = storage
         if (storageInst == null) {
-            // Local / Demo Fallback Cloud Media URL
-            val mockCloudUrl = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop"
-            Log.w(TAG, "Storage SDK fallback active. Generated cloud URL: $mockCloudUrl")
-            onSuccess(mockCloudUrl)
+            Log.w(TAG, "Storage SDK is unavailable")
+            onError("خدمة التخزين السحابي غير متوفرة")
             return
         }
 
@@ -521,9 +501,7 @@ object FirebaseManager {
             onSuccess(downloadUrl)
         } catch (e: Exception) {
             Log.e(TAG, "Cloud media upload failed", e)
-            // Resilient fallback URL for robust experience
-            val fallbackUrl = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop"
-            onSuccess(fallbackUrl)
+            onError(e.localizedMessage ?: "فشل في رفع الوسائط إلى السحابة")
         }
     }
 
@@ -569,6 +547,10 @@ object FirebaseManager {
         onMessagesUpdated: (List<ChatMessage>) -> Unit
     ) {
         val db = firestore ?: return
+        if (auth?.currentUser == null) {
+            Log.d(TAG, "Postponing listenToMessagesRealtime: waiting for authenticated session")
+            return
+        }
         activeChatListeners[conversationId]?.remove()
 
         val listener = db.collection("nexa_conversations")
@@ -576,7 +558,7 @@ object FirebaseManager {
             .collection("messages")
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
-                    Log.e(TAG, "Real-time Chat Firestore error for $conversationId", error)
+                    Log.w(TAG, "Real-time Chat Firestore notice for $conversationId: ${error.message}")
                     return@addSnapshotListener
                 }
                 if (snapshot != null && !snapshot.isEmpty) {
@@ -686,14 +668,45 @@ object FirebaseManager {
         }
     }
 
+    var lastDeletionErrorMessage: String? = null
+        private set
+
     suspend fun deleteUserCloudData(userId: String): Boolean {
-        val db = firestore ?: return true
+        lastDeletionErrorMessage = null
+        val db = firestore
         return try {
-            db.collection("nexa_users").document(userId).delete().await()
-            Log.d(TAG, "GDPR cloud profile erased for $userId")
+            if (db != null) {
+                val userDocRef = db.collection("nexa_users").document(userId)
+
+                // Delete documents in activities subcollection
+                val activitiesDocs = userDocRef.collection("activities").get().await()
+                for (doc in activitiesDocs.documents) {
+                    doc.reference.delete().await()
+                }
+
+                // Delete documents in settings subcollection
+                val settingsDocs = userDocRef.collection("settings").get().await()
+                for (doc in settingsDocs.documents) {
+                    doc.reference.delete().await()
+                }
+
+                // Delete root user document
+                userDocRef.delete().await()
+                Log.d(TAG, "GDPR cloud profile and subcollections erased for $userId")
+            }
+
+            // Delete the FirebaseAuth account
+            val user = auth?.currentUser
+            user?.delete()?.await()
+            Log.d(TAG, "FirebaseAuth user account deleted successfully")
             true
+        } catch (e: FirebaseAuthRecentLoginRequiredException) {
+            Log.e(TAG, "Re-authentication required to delete account for $userId", e)
+            lastDeletionErrorMessage = "يتطلب حذف الحساب إعادة تسجيل الدخول لدواعي الأمان. يرجى تسجيل الدخول مجدداً ثم إعادة المحاولة."
+            false
         } catch (e: Exception) {
             Log.e(TAG, "Failed to erase cloud data for $userId", e)
+            lastDeletionErrorMessage = e.localizedMessage ?: "فشل في حذف بيانات الحساب"
             false
         }
     }
@@ -706,35 +719,38 @@ object FirebaseManager {
         senderContact: String,
         severityLevel: String = "NORMAL"
     ): Pair<Boolean, String> {
-        val reportId = "REP-" + (10000..99999).random()
-        val reportData = hashMapOf(
-            "reportId" to reportId,
-            "reportType" to reportType,
-            "target" to targetSubjectOrUser,
-            "category" to category,
-            "details" to details,
-            "senderContact" to senderContact,
-            "severityLevel" to severityLevel,
-            "timestamp" to System.currentTimeMillis(),
-            "status" to "PENDING_REVIEW",
-            "appVersion" to "NEXA 2026.1.0",
-            "platform" to "Android Jetpack Compose"
-        )
-
         val db = firestore
-        return if (db != null) {
-            try {
-                db.collection("reports").document(reportId)
-                    .set(reportData, SetOptions.merge()).await()
-                Log.d(TAG, "Report $reportId saved to Firestore collection 'reports' successfully")
-                Pair(true, reportId)
-            } catch (e: Exception) {
-                Log.w(TAG, "Firestore write error for report $reportId (Local fallback accepted)", e)
-                Pair(true, reportId) // Return success with ID so user journey continues seamlessly
-            }
-        } else {
-            Log.i(TAG, "Local report $reportId queued successfully")
-            Pair(true, reportId)
+        if (db == null) {
+            Log.e(TAG, "Firestore is unavailable for report")
+            return Pair(false, "خدمة قاعدة البيانات السحابية (Firestore) غير متوفرة")
+        }
+
+        return try {
+            val docRef = db.collection("reports").document()
+            val docId = docRef.id
+            val ticketCode = "REP-" + docId.take(8).uppercase()
+
+            val reportData = hashMapOf(
+                "reportId" to docId,
+                "ticketCode" to ticketCode,
+                "reportType" to reportType,
+                "target" to targetSubjectOrUser,
+                "category" to category,
+                "details" to details,
+                "senderContact" to senderContact,
+                "severityLevel" to severityLevel,
+                "timestamp" to System.currentTimeMillis(),
+                "status" to "PENDING_REVIEW",
+                "appVersion" to "NEXA 2026.1.0",
+                "platform" to "Android Jetpack Compose"
+            )
+
+            docRef.set(reportData).await()
+            Log.d(TAG, "Report $ticketCode ($docId) saved to Firestore collection 'reports' successfully")
+            Pair(true, ticketCode)
+        } catch (e: Exception) {
+            Log.e(TAG, "Firestore write error for report", e)
+            Pair(false, e.localizedMessage ?: "فشل إرسال البلاغ إلى السحابة")
         }
     }
 

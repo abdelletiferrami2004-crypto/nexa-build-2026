@@ -84,7 +84,7 @@ import kotlin.math.roundToInt
  * EncryptedChatPinDialog:
  * Comprehensive, production-grade security modal displayed when opening any encrypted conversation.
  * Supports:
- * 1. 4-digit PIN verification (with custom PIN, Master PIN 0000, and saved device PIN).
+ * 1. 4-digit PIN verification (with user saved PIN).
  * 2. Biometric Prompt (Fingerprint / Face Recognition / Device Credential) via AndroidX Biometric.
  * 3. Contact identity header with avatar, verification status, and E2EE encryption badge.
  * 4. Error feedback and tactile acoustic feedback.
@@ -92,7 +92,7 @@ import kotlin.math.roundToInt
 @Composable
 fun EncryptedChatPinDialog(
     conversation: Conversation?,
-    correctPin: String = "1234",
+    correctPin: String = "",
     title: String? = null,
     subtitle: String? = null,
     autoPromptBiometrics: Boolean = true,
@@ -170,10 +170,8 @@ fun EncryptedChatPinDialog(
                 coroutineScope.launch {
                     delay(150)
                     val savedPin = PinLockManager.getSavedPin(context)
-                    val isValid = enteredPin == "0000" ||
-                            (correctPin.isNotBlank() && enteredPin == correctPin) ||
-                            (savedPin.isNotBlank() && enteredPin == savedPin) ||
-                            (correctPin.isBlank() && savedPin.isBlank() && enteredPin == "1234")
+                    val targetPin = correctPin.ifBlank { savedPin }
+                    val isValid = targetPin.isNotBlank() && enteredPin == targetPin
 
                     if (isValid) {
                         try {
@@ -182,11 +180,7 @@ fun EncryptedChatPinDialog(
                         onUnlockSuccess()
                     } else {
                         attemptsCount++
-                        errorMessage = if (attemptsCount >= 3) {
-                            "رمز PIN غير صحيح! يمكنك استخدام البصمة أو رمز الماستر 0000"
-                        } else {
-                            "رمز PIN غير صحيح! حاول مجدداً"
-                        }
+                        errorMessage = "رمز PIN غير صحيح! حاول مجدداً"
 
                         // Trigger shake animation
                         shakeOffset.animateTo(
@@ -544,35 +538,6 @@ fun EncryptedChatPinDialog(
                     Spacer(modifier = Modifier.height(14.dp))
 
                     // Master Key Hint for Testing & Dev
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(NeonCyan.copy(alpha = 0.10f))
-                            .border(1.dp, NeonCyan.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
-                            .clickable {
-                                try {
-                                    NotificationSoundManager.playPopChime(context)
-                                } catch (e: Throwable) {}
-                                onUnlockSuccess()
-                            }
-                            .padding(horizontal = 10.dp, vertical = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.VpnKey,
-                            contentDescription = null,
-                            tint = NeonCyan,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "رمز الماستر السريع: 0000 (أو انقر هنا للتخطي الفوري)",
-                            color = NeonCyan,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-
                     Spacer(modifier = Modifier.height(8.dp))
 
                     TextButton(

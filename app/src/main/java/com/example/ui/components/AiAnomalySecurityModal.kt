@@ -305,7 +305,7 @@ fun AiAnomalySecurityModal(
                     OutlinedTextField(
                         value = enteredPin,
                         onValueChange = { if (it.length <= 6) enteredPin = it },
-                        placeholder = { Text("أو أدخل رمز الـ PIN الخاص بك (1234)", color = Color.Gray, fontSize = 11.sp) },
+                        placeholder = { Text("أو أدخل رمز الـ PIN الخاص بك", color = Color.Gray, fontSize = 11.sp) },
                         leadingIcon = {
                             Icon(
                                 imageVector = Icons.Default.Lock,

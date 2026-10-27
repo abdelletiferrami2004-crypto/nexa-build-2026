@@ -84,7 +84,7 @@ object NexaPhoneAuthManager {
                                     }
                                 }
                         } catch (e: Exception) {
-                            onAutoVerified()
+                            onError("فشل التوثيق الآلي: ${e.localizedMessage ?: "حدث خطأ غير متوقع"}")
                         }
                     }
 
@@ -93,7 +93,7 @@ object NexaPhoneAuthManager {
                         val message = when (e) {
                             is FirebaseAuthInvalidCredentialsException -> "رقم الجوال المدخل غير صالح أو تنسيقه غير مدعوم في خدمة Firebase."
                             is FirebaseTooManyRequestsException -> "تجاوزت الحد المسموح لرسائل SMS لليوم! يرجى الانتظار والمحاولة لاحقاً."
-                            else -> "خطأ في إرسال SMS عبر Firebase: ${e.localizedMessage ?: "تأكد من الاتصال بالأنتدنت"}"
+                            else -> "خطأ في إرسال SMS عبر Firebase: ${e.localizedMessage ?: "تأكد من الاتصال بالإنترنت"}"
                         }
                         onError(message)
                     }
@@ -120,10 +120,7 @@ object NexaPhoneAuthManager {
             PhoneAuthProvider.verifyPhoneNumber(optionsBuilder.build())
         } catch (e: Throwable) {
             Log.e(TAG, "Firebase Phone Auth Exception", e)
-            val demoVerifId = "nexa_demo_verif_${System.currentTimeMillis()}"
-            currentVerificationId = demoVerifId
-            Log.w(TAG, "Fallback demo mode activated with ID: $demoVerifId")
-            onCodeSent(demoVerifId)
+            onError("فشل إرسال رمز التحقق عبر Firebase Phone Auth: ${e.localizedMessage ?: "تأكد من إعدادات الخدمة والاتصال بالإنترنت"}")
         }
     }
 
@@ -134,22 +131,15 @@ object NexaPhoneAuthManager {
         onError: (errorMessage: String) -> Unit
     ) {
         val cleanCode = otpCode.trim()
-        if (cleanCode.length < 4) {
-            onError("رمز OTP غير مكتمل! يرجى أدخال 6 أرقام كاملة.")
+        if (cleanCode.length < 6) {
+            onError("رمز OTP غير مكتمل! يرجى إدخال 6 أرقام كاملة.")
             return
         }
 
         val verId = verificationId ?: currentVerificationId
 
-        if ((verId?.startsWith("nexa_demo_") == true || verId == null) &&
-            (cleanCode == "884210" || cleanCode == "8842" || cleanCode == "123456" || cleanCode.length == 6)
-        ) {
-            onSuccess()
-            return
-        }
-
-        if (verId == null) {
-            onError("انتهت جلسة التحقق من الرمز! يرجى طلب إرسال رمز SMS جديد.")
+        if (verId.isNullOrBlank() || verId.startsWith("nexa_demo_")) {
+            onError("لم يتم العثور على جلسة تحقق Firebase صالحة. يرجى إعادة طلب رمز التحقق عبر SMS.")
             return
         }
 
@@ -172,11 +162,7 @@ object NexaPhoneAuthManager {
                 }
         } catch (e: Throwable) {
             Log.e(TAG, "Error verifying Firebase OTP credential", e)
-            if (cleanCode == "884210" || cleanCode == "8842" || cleanCode == "123456") {
-                onSuccess()
-            } else {
-                onError("رمز OTP المدخل غير صحيح! يرجى التحقق من الرسالة النصية وإعادة المحاولة.")
-            }
+            onError("فشل التحقق من رمز OTP عبر Firebase: ${e.localizedMessage ?: "رمز غير صحيح أو جلسة منتهية"}")
         }
     }
 }
