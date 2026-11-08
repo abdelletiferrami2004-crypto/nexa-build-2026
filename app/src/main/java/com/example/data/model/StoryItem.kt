@@ -2,6 +2,8 @@ package com.example.data.model
 
 data class StoryItem(
     val id: String = "",
+    val remoteId: String = "",
+    val authorUid: String = "",
     val authorName: String = "",
     val authorAvatarUrl: String = "",
     val timestamp: String = "الآن",

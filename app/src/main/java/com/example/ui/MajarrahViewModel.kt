@@ -86,6 +86,74 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
         emptyList()
     )
 
+    val settingsRepository = com.example.data.local.SettingsRepository.getInstance(application)
+
+    val isNotificationsEnabled: StateFlow<Boolean> = settingsRepository.notificationsEnabled.stateIn(
+        viewModelScope, SharingStarted.Eagerly, true
+    )
+    val isScreenshotProtectionEnabled: StateFlow<Boolean> = settingsRepository.screenshotProtectionEnabled.stateIn(
+        viewModelScope, SharingStarted.Eagerly, false
+    )
+    val isProfileLocked: StateFlow<Boolean> = settingsRepository.profileLocked.stateIn(
+        viewModelScope, SharingStarted.Eagerly, false
+    )
+    val isSoundsEnabled: StateFlow<Boolean> = settingsRepository.soundsEnabled.stateIn(
+        viewModelScope, SharingStarted.Eagerly, true
+    )
+    val isReactionsCountVisible: StateFlow<Boolean> = settingsRepository.reactionsCountVisible.stateIn(
+        viewModelScope, SharingStarted.Eagerly, true
+    )
+    val isAutoBlockEnabled: StateFlow<Boolean> = settingsRepository.autoBlockEnabled.stateIn(
+        viewModelScope, SharingStarted.Eagerly, true
+    )
+
+    fun setNotificationsEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setNotificationsEnabled(enabled)
+        }
+    }
+
+    fun setDarkModeEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setDarkModeEnabled(enabled)
+            _isDarkTheme.value = enabled
+        }
+    }
+
+    fun setScreenshotProtectionEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setScreenshotProtectionEnabled(enabled)
+        }
+    }
+
+    fun setProfileLocked(locked: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setProfileLocked(locked)
+            val current = userProfile.value ?: com.example.data.model.UserProfile()
+            val updated = current.copy(isProfileLocked = locked)
+            repository.saveProfile(updated)
+            com.example.data.firebase.FirebaseManager.saveUserProfileToCloud(updated)
+        }
+    }
+
+    fun setSoundsEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setSoundsEnabled(enabled)
+        }
+    }
+
+    fun setReactionsCountVisible(visible: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setReactionsCountVisible(visible)
+        }
+    }
+
+    fun setAutoBlockEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setAutoBlockEnabled(enabled)
+        }
+    }
+
     // Quota and Google Play Billing Managers
     val quotaManager = NexaQuotaManager.getInstance(application)
     val billingManager = NexaBillingManager(
@@ -325,15 +393,17 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
             )
             repository.sendMessage(aiMsg)
 
-            val uid = "user_${userProfile.value?.id ?: 1}"
-            com.example.data.firebase.FirebaseRealtimeDbManager.logAiGeneration(
-                userId = uid,
-                prompt = prompt,
-                modelName = if (isVideo) "veo-3.1-fast-generate-preview" else "gemini-3.1-flash-image-preview",
-                mediaType = if (isVideo) "video" else "image",
-                isPro = isPro,
-                usedCount = _dailyAiGenerationsUsed.value
-            )
+            val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+            if (uid != null) {
+                com.example.data.firebase.FirebaseRealtimeDbManager.logAiGeneration(
+                    userId = uid,
+                    prompt = prompt,
+                    modelName = if (isVideo) "veo-3.1-fast-generate-preview" else "gemini-3.1-flash-image-preview",
+                    mediaType = if (isVideo) "video" else "image",
+                    isPro = isPro,
+                    usedCount = _dailyAiGenerationsUsed.value
+                )
+            }
 
             val existingConv = conversations.value.firstOrNull { it.id == conversationId }
             if (existingConv != null) {
@@ -389,7 +459,7 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
         _authErrorMessage.value = null
     }
 
-    private val _phoneNumber = MutableStateFlow("+966 50 123 4567")
+    private val _phoneNumber = MutableStateFlow("")
     val phoneNumber: StateFlow<String> = _phoneNumber.asStateFlow()
 
     private val _otpCode = MutableStateFlow("")
@@ -417,7 +487,7 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     private val _regBirthYear = MutableStateFlow(2009)
     val regBirthYear: StateFlow<Int> = _regBirthYear.asStateFlow()
 
-    private val _regCredentialType = MutableStateFlow("username") // "username", "phone", "google"
+    private val _regCredentialType = MutableStateFlow("email") // "email", "phone", "google"
     val regCredentialType: StateFlow<String> = _regCredentialType.asStateFlow()
 
     private val _regUsername = MutableStateFlow("abdulaziz_nexa")
@@ -543,16 +613,13 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
                 // Anonymous auth is restricted; sync is only performed with an authenticated session
                 return@launch
             }
+            val uid = currentUser.uid
             userProfile.value?.let { profile ->
                 com.example.data.firebase.FirebaseManager.saveUserProfileToCloud(profile)
-                val uid = "user_${profile.id}"
 
                 // Live Sync directly with Firebase Realtime Database
                 com.example.data.firebase.FirebaseRealtimeDbManager.syncUserSession(
-                    userId = uid,
-                    username = profile.name,
-                    email = profile.email,
-                    phone = profile.phone
+                    userId = uid
                 )
 
                 // Live Listener for User Daily AI Quota from Realtime Database
@@ -610,20 +677,13 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             try {
                 val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                var querySnapshot = db.collection("users")
-                    .whereEqualTo("username", name) // البحث بالاسم
+                var querySnapshot = db.collection("public_profiles")
+                    .whereEqualTo("username", name)
                     .get()
                     .await()
 
                 if (querySnapshot.isEmpty) {
-                    querySnapshot = db.collection("nexa_users")
-                        .whereEqualTo("username", name)
-                        .get()
-                        .await()
-                }
-
-                if (querySnapshot.isEmpty) {
-                    querySnapshot = db.collection("nexa_users")
+                    querySnapshot = db.collection("public_profiles")
                         .whereEqualTo("name", name)
                         .get()
                         .await()
@@ -642,15 +702,20 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
                         return@launch
                     }
 
+                    val isLocked = doc.getBoolean("isProfileLocked") ?: false
                     val user = User(
                         id = doc.getLong("id")?.toInt() ?: 100,
                         name = userName,
                         username = userUsername,
-                        bio = doc.getString("bio") ?: "مستخدم منصة NEXA",
-                        phone = doc.getString("phone") ?: "",
-                        age = doc.getLong("age")?.toInt() ?: 22,
-                        followersCount = doc.getLong("followersCount")?.toInt() ?: 1500,
-                        postsCount = doc.getLong("postsCount")?.toInt() ?: 5
+                        avatarUrl = doc.getString("avatarUrl") ?: "",
+                        bio = if (isLocked) "🔒 هذا الملف الشخصي مقفل وخاص لحماية الخصوصية" else (doc.getString("bio") ?: "مستخدم منصة NEXA"),
+                        followersCount = if (isLocked) 0 else (doc.getLong("followersCount")?.toInt() ?: 0),
+                        isProfileLocked = isLocked,
+                        isVerified = doc.getBoolean("isVerified") ?: false,
+                        phone = "",
+                        email = "",
+                        age = 0,
+                        isTeenMode = false
                     )
                     _searchResult.value = user
                     _searchError.value = null
@@ -816,10 +881,36 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun blockUser(userName: String, conversationId: String? = null) {
+    fun loadBlockedUsersList() {
+        viewModelScope.launch {
+            val localBlocked = repository.getLocalBlockedTargets().toSet()
+            _blockedUsers.value = _blockedUsers.value + localBlocked
+            val myUid = com.example.data.firebase.FirebaseManager.getCurrentUser()?.uid
+                ?: userProfile.value?.uid?.ifBlank { userProfile.value?.firebaseUid } ?: ""
+            if (myUid.isNotBlank()) {
+                val cloudBlocked = com.example.data.firebase.FirebaseManager.fetchBlockedUsersFromCloud(myUid)
+                cloudBlocked.forEach { targetId ->
+                    repository.addLocalBlockedTarget(targetId)
+                }
+                _blockedUsers.value = _blockedUsers.value + cloudBlocked
+            }
+        }
+    }
+
+    fun blockUser(userName: String, conversationId: String? = null, targetUid: String? = null) {
         if (userName.isNotBlank()) {
-            _blockedUsers.value = _blockedUsers.value + userName
+            val resolvedUid = targetUid ?: conversations.value.firstOrNull { it.id == conversationId || it.contactName == userName }?.targetUserId ?: userName
+            _blockedUsers.value = _blockedUsers.value + userName + resolvedUid
             viewModelScope.launch {
+                val myUid = com.example.data.firebase.FirebaseManager.getCurrentUser()?.uid
+                    ?: userProfile.value?.uid?.ifBlank { userProfile.value?.firebaseUid } ?: ""
+                repository.addLocalBlockedTarget(userName)
+                if (resolvedUid.isNotBlank() && resolvedUid != userName) {
+                    repository.addLocalBlockedTarget(resolvedUid)
+                }
+                if (myUid.isNotBlank()) {
+                    com.example.data.firebase.FirebaseManager.blockUserInCloud(myUid, resolvedUid, userName)
+                }
                 val targetConv = conversations.value.firstOrNull { 
                     it.id == conversationId || it.contactName == userName 
                 }
@@ -834,9 +925,19 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun unblockUser(userName: String, conversationId: String? = null) {
-        _blockedUsers.value = _blockedUsers.value - userName
+    fun unblockUser(userName: String, conversationId: String? = null, targetUid: String? = null) {
+        val resolvedUid = targetUid ?: conversations.value.firstOrNull { it.id == conversationId || it.contactName == userName }?.targetUserId ?: userName
+        _blockedUsers.value = _blockedUsers.value - userName - resolvedUid
         viewModelScope.launch {
+            val myUid = com.example.data.firebase.FirebaseManager.getCurrentUser()?.uid
+                ?: userProfile.value?.uid?.ifBlank { userProfile.value?.firebaseUid } ?: ""
+            repository.removeLocalBlockedTarget(userName)
+            if (resolvedUid.isNotBlank() && resolvedUid != userName) {
+                repository.removeLocalBlockedTarget(resolvedUid)
+            }
+            if (myUid.isNotBlank()) {
+                com.example.data.firebase.FirebaseManager.unblockUserInCloud(myUid, resolvedUid)
+            }
             val targetConv = conversations.value.firstOrNull { 
                 it.id == conversationId || it.contactName == userName 
             }
@@ -899,11 +1000,12 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
             val updated = current.copy(
                 name = accountName,
                 username = if (isBusiness) "nexa_business_official" else accountName.lowercase().replace(" ", "_"),
-                followersCount = if (isBusiness) 3_400_000 else 1_250_000,
-                postsCount = if (isBusiness) 84 else 18,
+                followersCount = current.followersCount,
+                postsCount = current.postsCount,
                 bio = if (isBusiness) "الحساب التجاري الرسمي لشركة مجرة للحلول الذكية" else "عاشق للتقنية والابتكار ومصمم محتوى في منصة NEXA"
             )
             repository.saveProfile(updated)
+            com.example.data.firebase.FirebaseManager.saveUserProfileToCloud(updated)
         }
     }
 
@@ -916,10 +1018,12 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     // =========================================================
     fun deleteAccountAndData(onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
         viewModelScope.launch {
-            val currentUserId = userProfile.value?.firebaseUid?.ifBlank { null }
-                ?: com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
-                ?: userProfile.value?.username
-                ?: "user_1"
+            val currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                ?: userProfile.value?.firebaseUid?.ifBlank { null }
+            if (currentUserId == null) {
+                onResult(false, "لا يوجد مستخدم مسجل حالياً")
+                return@launch
+            }
             val result = repository.deleteAccountAndAllDataGdpr(currentUserId)
             if (result.first) {
                 _blockedUsers.value = emptySet()
@@ -966,50 +1070,59 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     // =========================================================
     // Blue Badge Verification System (نظام التوثيق بالعلامة الزرقاء)
     // =========================================================
-    fun requestBlueBadgeVerification(category: String, note: String = "") {
-        val current = userProfile.value ?: return
-        val updated = current.copy(
-            isVerified = true,
-            verificationBadgeCategory = category.ifBlank { "حساب موثق رسمي" }
-        )
+    // Blue Badge Verification Request (Support Ticket)
+    // =========================================================
+    fun requestVerificationSupportTicket() {
         viewModelScope.launch {
-            repository.saveProfile(updated)
-            com.example.data.firebase.FirebaseManager.saveUserProfileToCloud(updated)
-            
-            val notif = NexaNotification(
-                title = "🎉 تهانينا! تم توثيق حسابك بالعلامة الزرقاء",
-                message = "أصبح ملفك الشخصي موثقاً رسمياً بشارة التحقق الزرقاء في كافة المحادثات والمنشورات.",
-                category = NotificationCategory.SECURITY,
-                timeAgo = "الآن"
+            val profile = userProfile.value ?: UserProfile()
+            val (success, ticketNum) = submitSupportOrAbuseReport(
+                reportType = "TECH_SUPPORT",
+                targetSubjectOrUser = profile.name,
+                category = "طلب توثيق الحساب",
+                details = "طلب رسمي لتوثيق الحساب بالعلامة الزرقاء للمستخدم @${profile.username}",
+                senderContact = profile.email.ifBlank { profile.phone }
             )
-            _notifications.value = listOf(notif) + _notifications.value
-            _activeInAppToast.value = notif
-            _monetizationMessage.value = "تم توثيق الحساب بالعلامة الزرقاء بنجاح! 🔷"
-            NotificationSoundManager.playPopChime(getApplication())
+            if (success) {
+                _monetizationMessage.value = "تم إرسال طلب التوثيق وفتح تذكرة دعم برقم: $ticketNum"
+            } else {
+                _monetizationMessage.value = "فشل إرسال طلب التوثيق: $ticketNum"
+            }
         }
     }
 
-    fun toggleVerificationBadge(verified: Boolean) {
+    fun registerRealView() {
         val current = userProfile.value ?: return
-        val updated = current.copy(isVerified = verified)
         viewModelScope.launch {
+            val updated = current.copy(totalViewsCount = current.totalViewsCount + 1L)
             repository.saveProfile(updated)
             com.example.data.firebase.FirebaseManager.saveUserProfileToCloud(updated)
         }
     }
 
-    fun updateFollowersCount(count: Int) {
-        val current = userProfile.value ?: return
+    fun followUser(targetUid: String) {
+        val myUid = com.example.data.firebase.FirebaseManager.getCurrentUser()?.uid
+            ?: userProfile.value?.uid?.ifBlank { userProfile.value?.firebaseUid } ?: return
         viewModelScope.launch {
-            repository.saveProfile(current.copy(followersCount = count))
+            com.example.data.firebase.FirebaseManager.followUser(myUid, targetUid)
         }
     }
 
-    fun updateViewsCount(views: Long) {
-        val current = userProfile.value ?: return
+    fun unfollowUser(targetUid: String) {
+        val myUid = com.example.data.firebase.FirebaseManager.getCurrentUser()?.uid
+            ?: userProfile.value?.uid?.ifBlank { userProfile.value?.firebaseUid } ?: return
         viewModelScope.launch {
-            repository.saveProfile(current.copy(totalViewsCount = views))
+            com.example.data.firebase.FirebaseManager.unfollowUser(myUid, targetUid)
         }
+    }
+
+    fun isFollowingUser(targetUid: String): kotlinx.coroutines.flow.Flow<Boolean> {
+        val myUid = com.example.data.firebase.FirebaseManager.getCurrentUser()?.uid
+            ?: userProfile.value?.uid?.ifBlank { userProfile.value?.firebaseUid } ?: ""
+        return com.example.data.firebase.FirebaseManager.listenToFollowStatus(myUid, targetUid)
+    }
+
+    suspend fun getTargetFollowersCount(targetUid: String): Int? {
+        return com.example.data.firebase.FirebaseManager.fetchTargetFollowersCount(targetUid)
     }
 
     fun withdrawCreatorEarnings() {
@@ -1161,6 +1274,8 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
         // Initialize direct connection to Firebase Realtime Database primary backend
         com.example.data.firebase.FirebaseRealtimeDbManager.init()
 
+        loadBlockedUsersList()
+
         viewModelScope.launch {
             repository.populateInitialDataIfEmpty()
         }
@@ -1169,6 +1284,12 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
         repository.startCloudRealtimeSync(viewModelScope)
         if (com.example.data.firebase.FirebaseManager.getCurrentUser() != null) {
             syncWithFirebaseCloud()
+        }
+
+        viewModelScope.launch {
+            settingsRepository.darkModeEnabled.collect {
+                _isDarkTheme.value = it
+            }
         }
     }
 
@@ -1313,8 +1434,8 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun completeProfileRegistration() {
+        val fbUser = com.example.data.firebase.FirebaseManager.getCurrentUser() ?: return
         viewModelScope.launch {
-            val fbUser = com.example.data.firebase.FirebaseManager.getCurrentUser()
             val isTeen = _userAge.value < 18
             val current = userProfile.value ?: UserProfile()
             val fullName = "${_regFirstName.value} ${_regLastName.value}".trim().ifBlank { current.name }
@@ -1327,20 +1448,20 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
                 bio = _regBio.value,
                 username = _regUsername.value,
                 isContactsSynced = _isContactsSynced.value,
-                firebaseUid = fbUser?.uid ?: current.firebaseUid,
+                firebaseUid = fbUser.uid,
+                uid = fbUser.uid,
                 isLoggedIn = true
             )
             repository.saveProfile(updated)
             com.example.data.firebase.FirebaseManager.saveUserProfileToCloud(updated)
-            fbUser?.uid?.let { uid ->
-                attachCloudProfileListener(uid)
-                com.example.data.firebase.FirebaseManager.recordUserActivityInFirestore(
-                    userId = uid,
-                    title = "إتمام التسجيل وإنشاء الحساب",
-                    type = "ACCOUNT_REGISTRATION",
-                    details = "تم حفظ بيانات الحساب في قاعدة بيانات Firestore السحابية بنجاح"
-                )
-            }
+            val uid = fbUser.uid
+            attachCloudProfileListener(uid)
+            com.example.data.firebase.FirebaseManager.recordUserActivityInFirestore(
+                userId = uid,
+                title = "إتمام التسجيل وإنشاء الحساب",
+                type = "ACCOUNT_REGISTRATION",
+                details = "تم حفظ بيانات الحساب في قاعدة بيانات Firestore السحابية بنجاح"
+            )
             _loginStep.value = LoginStep.Completed
         }
     }
@@ -1440,10 +1561,7 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
 
             // Live sync with Firebase Realtime Database
             com.example.data.firebase.FirebaseRealtimeDbManager.syncUserSession(
-                userId = "user_${activeProfile.id}",
-                username = activeProfile.name,
-                email = activeProfile.email,
-                phone = activeProfile.phone
+                userId = uid
             )
 
             _loginStep.value = LoginStep.Completed
@@ -1618,11 +1736,28 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun startConversationWithUser(user: User) {
-        if (_blockedUsers.value.contains(user.name) || _blockedUsers.value.contains(user.username)) {
+        val targetUid = user.uid.ifBlank { user.firebaseUid }
+        if (_blockedUsers.value.contains(user.name) || _blockedUsers.value.contains(user.username) || (targetUid.isNotBlank() && _blockedUsers.value.contains(targetUid))) {
             _monetizationMessage.value = "لا يمكنك مراسلة هذا المستخدم (محظور) 🚫"
             return
         }
-        val convId = "user_${user.id}"
+        val isAi = targetUid == "nexa_ai" || targetUid == "ai_bot" || user.name.contains("NEXA AI", ignoreCase = true)
+        val myUid = com.example.data.firebase.FirebaseManager.getCurrentUser()?.uid 
+            ?: userProfile.value?.uid?.ifBlank { userProfile.value?.firebaseUid } ?: ""
+
+        val convId = when {
+            isAi -> "ai_bot"
+            myUid.isNotBlank() && targetUid.isNotBlank() -> listOf(myUid, targetUid).sorted().joinToString("_")
+            targetUid.isNotBlank() -> "conv_${targetUid}"
+            else -> "conv_${System.currentTimeMillis()}"
+        }
+        val participants = when {
+            isAi -> listOfNotNull(myUid.ifBlank { null }, "ai_bot")
+            myUid.isNotBlank() && targetUid.isNotBlank() -> listOf(myUid, targetUid).sorted()
+            myUid.isNotBlank() -> listOf(myUid)
+            else -> emptyList()
+        }
+
         val existing = conversations.value.firstOrNull { it.id == convId || it.contactName == user.name }
         if (existing == null) {
             val newConv = Conversation(
@@ -1635,10 +1770,13 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
                 isPinRequired = false,
                 isMessageRequest = true,
                 requestStatus = "pending",
-                targetUserId = "user_${user.id}"
+                targetUserId = targetUid
             )
             viewModelScope.launch {
                 repository.saveConversation(newConv)
+                if (participants.isNotEmpty()) {
+                    com.example.data.firebase.FirebaseManager.saveConversationSummary(newConv, participants)
+                }
             }
         }
         selectConversation(existing?.id ?: convId)
@@ -1648,13 +1786,14 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
         if (text.isBlank()) return
         val isAiChat = conversationId == "nexa_ai" || conversationId == "ai_bot"
 
-        // Smart Real-time Safety Check via NEXA Guard
+        // Smart Real-time Safety Check via NEXA Guard (Always run on every outgoing message)
         val modCheck = com.example.util.NexaSafetyModerator.evaluateContent(text)
         if (!modCheck.isAllowed) {
             _monetizationMessage.value = "⚠️ تم حظر الرسالة بواسطة NEXA Guard: ${modCheck.reason}"
             try {
                 NotificationSoundManager.playPopChime(getApplication())
             } catch (_: Throwable) {}
+            return
         }
 
         val existingConv = conversations.value.firstOrNull { it.id == conversationId }
@@ -1721,15 +1860,17 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
                 )
                 repository.sendMessage(aiMsg)
 
-                val uid = "user_${userProfile.value?.id ?: 1}"
-                com.example.data.firebase.FirebaseRealtimeDbManager.logAiGeneration(
-                    userId = uid,
-                    prompt = text,
-                    modelName = "Gemini-2.5-Flash",
-                    mediaType = "chat",
-                    isPro = _isNexaProSubscriber.value,
-                    usedCount = _dailyAiGenerationsUsed.value
-                )
+                val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                if (uid != null) {
+                    com.example.data.firebase.FirebaseRealtimeDbManager.logAiGeneration(
+                        userId = uid,
+                        prompt = text,
+                        modelName = "Gemini-2.5-Flash",
+                        mediaType = "chat",
+                        isPro = _isNexaProSubscriber.value,
+                        usedCount = _dailyAiGenerationsUsed.value
+                    )
+                }
 
                 _isAiThinking.value = false
 
@@ -1910,8 +2051,8 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     fun uploadProfileImage(imageUri: android.net.Uri) {
         viewModelScope.launch {
             try {
+                val currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return@launch
                 val storageRef = com.google.firebase.storage.FirebaseStorage.getInstance().reference
-                val currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: "user_local_100"
                 val imageRef = storageRef.child("profile_images/$currentUserId.jpg")
 
                 val downloadUrl = try {
@@ -1922,7 +2063,7 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
                 }
 
                 try {
-                    com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users")
+                    com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("public_profiles")
                         .document(currentUserId)
                         .update("avatarUrl", downloadUrl)
                         .await()
@@ -2019,7 +2160,7 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     fun sharePostToStory(post: Post) {
         val user = userProfile.value
         val storyItem = com.example.data.model.StoryItem(
-            id = "story_post_${post.id}_${System.currentTimeMillis()}",
+            id = "story_origin_item_${post.remoteId.ifBlank { post.id.toString() }}_${System.currentTimeMillis()}",
             authorName = user?.name ?: "أنت",
             text = "مشاركة منشور @${post.authorName}: ${post.content.take(60)}...",
             isReelShare = false,
@@ -2092,6 +2233,12 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
                 isAuthorVerified = isVerified
             )
             repository.addPost(newPost)
+            val current = userProfile.value
+            if (current != null) {
+                val updated = current.copy(postsCount = current.postsCount + 1)
+                repository.saveProfile(updated)
+                com.example.data.firebase.FirebaseManager.saveUserProfileToCloud(updated)
+            }
             _monetizationMessage.value = "تم نشر منشورك بنجاح ومراجعته بالذكاء الاصطناعي ✨"
             NotificationSoundManager.playPopChime(getApplication())
         }
@@ -2518,7 +2665,8 @@ class MajarrahViewModel(application: Application) : AndroidViewModel(application
     val isDarkTheme: StateFlow<Boolean> = _isDarkTheme.asStateFlow()
 
     fun toggleTheme(isDark: Boolean? = null) {
-        _isDarkTheme.value = isDark ?: !_isDarkTheme.value
+        val target = isDark ?: !_isDarkTheme.value
+        setDarkModeEnabled(target)
         NotificationSoundManager.playPopChime(getApplication())
     }
 

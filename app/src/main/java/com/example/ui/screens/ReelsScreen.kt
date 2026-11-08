@@ -58,6 +58,7 @@ import com.example.ui.components.NexaVoiceAssistantModal
 import com.example.ui.components.NexaPrivateVaultModal
 import com.example.ui.components.QuickActionRadialOverlay
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -186,555 +187,628 @@ fun ReelsScreen(
                 .fillMaxSize()
                 .background(BackgroundDark)
         ) { page ->
-            val reel = filteredReels[page]
-        val haptic = LocalHapticFeedback.current
-        var showVoiceAssistantModal by remember { mutableStateOf(false) }
-        var showPrivateVaultModal by remember { mutableStateOf(false) }
-        var showQuickActionRadialOverlay by remember { mutableStateOf(false) }
-
-        var isLiked by remember { mutableStateOf(false) }
-        var isBookmarked by remember { mutableStateOf(false) }
-        var isFollowing by remember { mutableStateOf(false) }
-        var isPlayingVideo by remember(isDataSaverEnabled) { mutableStateOf(!isDataSaverEnabled) }
-        var showStoryReplyModal by remember { mutableStateOf(false) }
-        var showReportModal by remember { mutableStateOf(false) }
-        var showCommentsModal by remember { mutableStateOf(false) }
-        var showNotificationBanner by remember { mutableStateOf<String?>(null) }
-
-        // Double-Tap Heart Animation states
-        var showDoubleTapHeart by remember { mutableStateOf(false) }
-        val heartScale = remember { Animatable(0.2f) }
-        val heartAlpha = remember { Animatable(1f) }
-        val coroutineScope = rememberCoroutineScope()
-
-        fun triggerDoubleTapLike() {
-            isLiked = true
-            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-            coroutineScope.launch {
-                showDoubleTapHeart = true
-                heartScale.snapTo(0.3f)
-                heartAlpha.snapTo(1f)
-                launch {
-                    heartScale.animateTo(
-                        targetValue = 1.3f,
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                            stiffness = Spring.StiffnessLow
-                        )
-                    )
-                }
-                delay(600)
-                heartAlpha.animateTo(0f, animationSpec = tween(300))
-                showDoubleTapHeart = false
-            }
-        }
-
-        // Vinyl Disc rotation transition
-        val infiniteTransition = rememberInfiniteTransition(label = "vinylDisc")
-        val discAngle by infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 360f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 4000, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "discRotation"
-        )
-
-        if (showReportModal) {
-            ReportAndBlockDialog(
-                targetAuthorName = reel.author,
-                contentId = "reel_${page}_${reel.author}",
-                contentTypeTitle = "فيديو الريلز (${reel.title})",
-                onReport = { reason ->
-                    viewModel.reportContent("reel_${page}", reason)
-                },
-                onReportWithAi = { category, onFinished ->
-                    viewModel.submitReportWithAiModeration(
-                        targetAuthorName = reel.author,
-                        contentId = "reel_${page}",
-                        contentTypeTitle = "فيديو الريلز (${reel.title})",
-                        category = category,
-                        contentText = reel.description,
-                        onCompleted = onFinished
-                    )
-                },
-                onBlock = {
-                    viewModel.blockUser(reel.author)
-                },
-                onDismiss = { showReportModal = false }
+            ReelItemPage(
+                page = page,
+                reel = filteredReels[page],
+                viewModel = viewModel,
+                isDataSaverEnabled = isDataSaverEnabled
             )
         }
+    }
+}
 
-        if (showStoryReplyModal) {
-            com.example.ui.components.StoryCreatorModal(
-                initialReplyAuthor = reel.author,
-                initialReplyText = reel.description,
-                onDismiss = { showStoryReplyModal = false },
-                onPublishStory = { story ->
-                    viewModel.publishStory(story)
-                }
-            )
-        }
+@Composable
+fun ReelItemPage(
+    page: Int,
+    reel: ReelItem,
+    viewModel: MajarrahViewModel,
+    isDataSaverEnabled: Boolean
+) {
+    val haptic = LocalHapticFeedback.current
+    var showVoiceAssistantModal by remember { mutableStateOf(false) }
+    var showPrivateVaultModal by remember { mutableStateOf(false) }
+    var showQuickActionRadialOverlay by remember { mutableStateOf(false) }
 
-        if (showCommentsModal) {
-            val dummyPost = remember(reel) {
-                Post(
-                    id = page + 1,
-                    authorName = reel.author,
-                    content = reel.description,
-                    timestamp = System.currentTimeMillis(),
-                    likesCount = 12400,
-                    commentsCount = 1847
+    var isLiked by remember { mutableStateOf(false) }
+    var isBookmarked by remember { mutableStateOf(false) }
+    val targetUid = remember(reel.author) { reel.author.removePrefix("@") }
+    val isFollowing by viewModel.isFollowingUser(targetUid).collectAsState(initial = false)
+    var targetFollowersCount by remember(reel.author) { mutableStateOf<Int?>(null) }
+    LaunchedEffect(targetUid) {
+        targetFollowersCount = viewModel.getTargetFollowersCount(targetUid)
+    }
+    var isPlayingVideo by remember(isDataSaverEnabled) { mutableStateOf(!isDataSaverEnabled) }
+    var showStoryReplyModal by remember { mutableStateOf(false) }
+    var showReportModal by remember { mutableStateOf(false) }
+    var showCommentsModal by remember { mutableStateOf(false) }
+    var showNotificationBanner by remember { mutableStateOf<String?>(null) }
+
+    // Double-Tap Heart Animation states
+    var showDoubleTapHeart by remember { mutableStateOf(false) }
+    val heartScale = remember { Animatable(0.2f) }
+    val heartAlpha = remember { Animatable(1f) }
+    val coroutineScope = rememberCoroutineScope()
+
+    fun triggerDoubleTapLike() {
+        isLiked = true
+        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        coroutineScope.launch {
+            showDoubleTapHeart = true
+            heartScale.snapTo(0.3f)
+            heartAlpha.snapTo(1f)
+            launch {
+                heartScale.animateTo(
+                    targetValue = 1.3f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessLow
+                    )
                 )
             }
-            PostCommentsModal(
-                post = dummyPost,
-                viewModel = viewModel,
-                onDismiss = { showCommentsModal = false },
-                onReplyWithStory = { authorName, commentText ->
-                    showCommentsModal = false
-                    showStoryReplyModal = true
-                }
+            delay(600)
+            heartAlpha.animateTo(0f, animationSpec = tween(300))
+            showDoubleTapHeart = false
+        }
+    }
+
+    val infiniteTransition = rememberInfiniteTransition(label = "vinylDisc")
+    val discAngle by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 4000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "discRotation"
+    )
+
+    if (showReportModal) {
+        ReportAndBlockDialog(
+            targetAuthorName = reel.author,
+            contentId = "reel_${page}_${reel.author}",
+            contentTypeTitle = "فيديو الريلز (${reel.title})",
+            onReport = { reason ->
+                viewModel.reportContent("reel_${page}", reason)
+            },
+            onReportWithAi = { category, onFinished ->
+                viewModel.submitReportWithAiModeration(
+                    targetAuthorName = reel.author,
+                    contentId = "reel_${page}",
+                    contentTypeTitle = "فيديو الريلز (${reel.title})",
+                    category = category,
+                    contentText = reel.description,
+                    onCompleted = onFinished
+                )
+            },
+            onBlock = {
+                viewModel.blockUser(reel.author)
+            },
+            onDismiss = { showReportModal = false }
+        )
+    }
+
+    if (showStoryReplyModal) {
+        com.example.ui.components.StoryCreatorModal(
+            initialReplyAuthor = reel.author,
+            initialReplyText = reel.description,
+            onDismiss = { showStoryReplyModal = false },
+            onPublishStory = { story ->
+                viewModel.publishStory(story)
+            }
+        )
+    }
+
+    if (showCommentsModal) {
+        val dummyPost = remember(reel) {
+            Post(
+                id = page + 1,
+                authorName = reel.author,
+                content = reel.description,
+                timestamp = System.currentTimeMillis(),
+                likesCount = 12400,
+                commentsCount = 1847
             )
         }
+        PostCommentsModal(
+            post = dummyPost,
+            viewModel = viewModel,
+            onDismiss = { showCommentsModal = false },
+            onReplyWithStory = { _, _ ->
+                showCommentsModal = false
+                showStoryReplyModal = true
+            }
+        )
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(brush = Brush.verticalGradient(colors = reel.gradientColors))
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onDoubleTap = { triggerDoubleTapLike() },
+                    onTap = { isPlayingVideo = !isPlayingVideo },
+                    onLongPress = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        showQuickActionRadialOverlay = true
+                    }
+                )
+            }
+    ) {
+        if (!isPlayingVideo) {
+            Box(
+                modifier = Modifier
+                    .size(80.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.4f))
+                    .border(1.5.dp, Color.White.copy(alpha = 0.6f), CircleShape)
+                    .align(Alignment.Center),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = "Play Reel",
+                    tint = Color.White,
+                    modifier = Modifier.size(48.dp)
+                )
+            }
+        }
+
+        if (showDoubleTapHeart) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .graphicsLayer {
+                        scaleX = heartScale.value
+                        scaleY = heartScale.value
+                        alpha = heartAlpha.value
+                    }
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Favorite,
+                    contentDescription = "Double Tap Heart",
+                    tint = NeonPink,
+                    modifier = Modifier.size(110.dp)
+                )
+            }
+        }
+
+        ReelTopBarControls(
+            onVoiceClick = { showVoiceAssistantModal = true },
+            onVaultClick = { showPrivateVaultModal = true },
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(top = 40.dp, start = 16.dp)
+        )
+
+        if (showNotificationBanner != null) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 40.dp, start = 20.dp, end = 20.dp),
+                shape = RoundedCornerShape(20.dp),
+                color = Color.Black.copy(alpha = 0.85f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan)
+            ) {
+                Text(
+                    text = showNotificationBanner ?: "",
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+                )
+            }
+        }
+
+        ReelFloatingActionsColumn(
+            reel = reel,
+            isLiked = isLiked,
+            isBookmarked = isBookmarked,
+            discAngle = discAngle,
+            isPlayingVideo = isPlayingVideo,
+            onLikeToggle = { isLiked = !isLiked },
+            onCommentsClick = { showCommentsModal = true },
+            onRepostClick = {
+                viewModel.publishReelToStory(
+                    reelTitle = reel.title,
+                    reelAuthor = reel.author,
+                    reelLikesCount = reel.likesCount,
+                    reelCommentsCount = reel.commentsCount,
+                    reelSoundTrack = reel.soundTrack,
+                    userCaption = "شاهدوا هذا المقطع الرهيب في مجرة!"
+                )
+                showNotificationBanner = "تمت إعادة نشر الريلز إلى قصتك بنجاح"
+                coroutineScope.launch {
+                    delay(2000)
+                    showNotificationBanner = null
+                }
+            },
+            onShareClick = { showStoryReplyModal = true },
+            onBookmarkToggle = { isBookmarked = !isBookmarked },
+            onOptionsClick = { showReportModal = true },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 12.dp, bottom = 28.dp)
+        )
+
+        ReelCreatorInfoBar(
+            reel = reel,
+            targetUid = targetUid,
+            isFollowing = isFollowing,
+            targetFollowersCount = targetFollowersCount,
+            onFollowClick = {
+                if (isFollowing) {
+                    viewModel.unfollowUser(targetUid)
+                } else {
+                    viewModel.followUser(targetUid)
+                }
+            },
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = 16.dp, bottom = 28.dp, end = 85.dp)
+        )
+
+        if (showVoiceAssistantModal) {
+            NexaVoiceAssistantModal(
+                onDismiss = { showVoiceAssistantModal = false },
+                onNavigateToReels = { showVoiceAssistantModal = false },
+                onOpenVault = {
+                    showVoiceAssistantModal = false
+                    showPrivateVaultModal = true
+                },
+                onOpenChat = { showVoiceAssistantModal = false },
+                onSearchPosts = { showVoiceAssistantModal = false }
+            )
+        }
+
+        if (showPrivateVaultModal) {
+            NexaPrivateVaultModal(
+                onDismiss = { showPrivateVaultModal = false }
+            )
+        }
+
+        if (showQuickActionRadialOverlay) {
+            QuickActionRadialOverlay(
+                targetTitle = reel.title,
+                authorName = reel.author,
+                onDismiss = { showQuickActionRadialOverlay = false },
+                onLike = { isLiked = !isLiked },
+                onBookmark = { isBookmarked = !isBookmarked },
+                onShare = { showNotificationBanner = "تم مشاركة فيديو الريلز بنجاح! 🚀" },
+                onSendDirectMessage = { showStoryReplyModal = true },
+                onMoveToVault = { showPrivateVaultModal = true }
+            )
+        }
+    }
+}
+
+@Composable
+fun ReelTopBarControls(
+    onVoiceClick: () -> Unit,
+    onVaultClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        IconButton(
+            onClick = onVoiceClick,
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(Color.Black.copy(alpha = 0.5f))
+                .border(1.dp, NeonCyan, CircleShape)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Mic,
+                contentDescription = "Voice Assistant",
+                tint = NeonCyan,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+
+        IconButton(
+            onClick = onVaultClick,
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(Color.Black.copy(alpha = 0.5f))
+                .border(1.dp, EncryptedGreen, CircleShape)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Lock,
+                contentDescription = "Encrypted Vault",
+                tint = EncryptedGreen,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+}
+
+@Composable
+fun ReelFloatingActionsColumn(
+    reel: ReelItem,
+    isLiked: Boolean,
+    isBookmarked: Boolean,
+    discAngle: Float,
+    isPlayingVideo: Boolean,
+    onLikeToggle: () -> Unit,
+    onCommentsClick: () -> Unit,
+    onRepostClick: () -> Unit,
+    onShareClick: () -> Unit,
+    onBookmarkToggle: () -> Unit,
+    onOptionsClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(18.dp)
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            IconButton(
+                onClick = onLikeToggle,
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.25f))
+            ) {
+                Icon(
+                    imageVector = if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    contentDescription = "Like",
+                    tint = if (isLiked) NeonPink else Color.White,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = if (isLiked) "205 ألف" else reel.likesCount,
+                color = Color.White,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            IconButton(
+                onClick = onCommentsClick,
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.25f))
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ChatBubbleOutline,
+                    contentDescription = "Comments",
+                    tint = Color.White,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = reel.commentsCount,
+                color = Color.White,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            IconButton(
+                onClick = onRepostClick,
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.25f))
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Repeat,
+                    contentDescription = "Repost",
+                    tint = Color.White,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = reel.repostsCount,
+                color = Color.White,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            IconButton(
+                onClick = onShareClick,
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.25f))
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Send,
+                    contentDescription = "Share",
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = reel.sharesCount,
+                color = Color.White,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            IconButton(
+                onClick = onBookmarkToggle,
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.25f))
+            ) {
+                Icon(
+                    imageVector = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                    contentDescription = "Save",
+                    tint = if (isBookmarked) NeonCyan else Color.White,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = reel.savesCount,
+                color = Color.White,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        IconButton(
+            onClick = onOptionsClick,
+            modifier = Modifier
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(Color.Black.copy(alpha = 0.25f))
+        ) {
+            Icon(
+                imageVector = Icons.Default.MoreVert,
+                contentDescription = "More Options",
+                tint = Color.White,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
 
         Box(
             modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    brush = Brush.verticalGradient(colors = reel.gradientColors)
-                )
-                .pointerInput(Unit) {
-                    detectTapGestures(
-                        onDoubleTap = { triggerDoubleTapLike() },
-                        onTap = { isPlayingVideo = !isPlayingVideo },
-                        onLongPress = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            showQuickActionRadialOverlay = true
-                        }
-                    )
-                }
+                .size(42.dp)
+                .graphicsLayer { rotationZ = if (isPlayingVideo) discAngle else 0f }
+                .clip(CircleShape)
+                .background(Color.Black)
+                .border(2.dp, Color.White.copy(alpha = 0.8f), CircleShape),
+            contentAlignment = Alignment.Center
         ) {
-            // Play/Pause Center Overlay Indicator when paused
-            if (!isPlayingVideo) {
-                Box(
-                    modifier = Modifier
-                        .size(80.dp)
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.4f))
-                        .border(1.5.dp, Color.White.copy(alpha = 0.6f), CircleShape)
-                        .align(Alignment.Center),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = "Play Reel",
-                        tint = Color.White,
-                        modifier = Modifier.size(48.dp)
-                    )
-                }
-            }
-
-            // Double Tap Heart Center Animation
-            if (showDoubleTapHeart) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .graphicsLayer {
-                            scaleX = heartScale.value
-                            scaleY = heartScale.value
-                            alpha = heartAlpha.value
-                        }
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Favorite,
-                        contentDescription = "Double Tap Heart",
-                        tint = NeonPink,
-                        modifier = Modifier.size(110.dp)
-                    )
-                }
-            }
-
-            // Top Bar Floating Voice Assistant & Vault Shortcuts
-            Row(
+            Box(
                 modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(top = 40.dp, start = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    .size(26.dp)
+                    .clip(CircleShape)
+                    .background(Brush.radialGradient(listOf(NeonCyan, NeonPurple))),
+                contentAlignment = Alignment.Center
             ) {
-                IconButton(
-                    onClick = { showVoiceAssistantModal = true },
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.5f))
-                        .border(1.dp, NeonCyan, CircleShape)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Mic,
-                        contentDescription = "Voice Assistant",
-                        tint = NeonCyan,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-
-                IconButton(
-                    onClick = { showPrivateVaultModal = true },
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.5f))
-                        .border(1.dp, EncryptedGreen, CircleShape)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Lock,
-                        contentDescription = "Encrypted Vault",
-                        tint = EncryptedGreen,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
-            if (showNotificationBanner != null) {
-                Surface(
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(top = 40.dp, start = 20.dp, end = 20.dp),
-                    shape = RoundedCornerShape(20.dp),
-                    color = Color.Black.copy(alpha = 0.85f),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan)
-                ) {
-                    Text(
-                        text = showNotificationBanner ?: "",
-                        color = Color.White,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
-                    )
-                }
-            }
-
-            // 2. Right-Aligned Interactive Floating Action Bar (Instagram Reels Style)
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 12.dp, bottom = 28.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(18.dp)
-            ) {
-                // Like Button (Heart Icon) + Count
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    IconButton(
-                        onClick = { isLiked = !isLiked },
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(Color.Black.copy(alpha = 0.25f))
-                    ) {
-                        Icon(
-                            imageVector = if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                            contentDescription = "Like",
-                            tint = if (isLiked) NeonPink else Color.White,
-                            modifier = Modifier.size(28.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = if (isLiked) "205 ألف" else reel.likesCount,
-                        color = Color.White,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                // Comment Button (Speech Bubble Icon) + Count
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    IconButton(
-                        onClick = { showCommentsModal = true },
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(Color.Black.copy(alpha = 0.25f))
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ChatBubbleOutline,
-                            contentDescription = "Comments",
-                            tint = Color.White,
-                            modifier = Modifier.size(26.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = reel.commentsCount,
-                        color = Color.White,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                // Repost / Repost Story Button (Retweet Icon) + Count
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    IconButton(
-                        onClick = {
-                            viewModel.publishReelToStory(
-                                reelTitle = reel.title,
-                                reelAuthor = reel.author,
-                                reelLikesCount = reel.likesCount,
-                                reelCommentsCount = reel.commentsCount,
-                                reelSoundTrack = reel.soundTrack,
-                                userCaption = "شاهدوا هذا المقطع الرهيب في مجرة!"
-                            )
-                            showNotificationBanner = "تمت إعادة نشر الريلز إلى قصتك بنجاح"
-                            coroutineScope.launch {
-                                delay(2000)
-                                showNotificationBanner = null
-                            }
-                        },
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(Color.Black.copy(alpha = 0.25f))
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Repeat,
-                            contentDescription = "Repost",
-                            tint = Color.White,
-                            modifier = Modifier.size(26.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = reel.repostsCount,
-                        color = Color.White,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                // Share / DM Button (Paper Plane Send Icon) + Count
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    IconButton(
-                        onClick = { showStoryReplyModal = true },
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(Color.Black.copy(alpha = 0.25f))
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Send,
-                            contentDescription = "Share",
-                            tint = Color.White,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = reel.sharesCount,
-                        color = Color.White,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                // Bookmark / Save Button + Count
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    IconButton(
-                        onClick = { isBookmarked = !isBookmarked },
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(Color.Black.copy(alpha = 0.25f))
-                    ) {
-                        Icon(
-                            imageVector = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                            contentDescription = "Save",
-                            tint = if (isBookmarked) NeonCyan else Color.White,
-                            modifier = Modifier.size(26.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = reel.savesCount,
-                        color = Color.White,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                // More Options Button (3-dots)
-                IconButton(
-                    onClick = { showReportModal = true },
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.25f))
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.MoreVert,
-                        contentDescription = "More Options",
-                        tint = Color.White,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                // Audio Disc Thumb / Creator Avatar Preview
-                Box(
-                    modifier = Modifier
-                        .size(42.dp)
-                        .graphicsLayer { rotationZ = if (isPlayingVideo) discAngle else 0f }
-                        .clip(CircleShape)
-                        .background(Color.Black)
-                        .border(2.dp, Color.White.copy(alpha = 0.8f), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(26.dp)
-                            .clip(CircleShape)
-                            .background(
-                                Brush.radialGradient(
-                                    listOf(NeonCyan, NeonPurple)
-                                )
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.MusicNote,
-                            contentDescription = "Music Disc",
-                            tint = Color.White,
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
-                }
-            }
-
-            // 3. Bottom Creator Info Bar (Overlay at Bottom-Start)
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(start = 16.dp, bottom = 28.dp, end = 85.dp)
-            ) {
-                // Creator Avatar, Username & Follow Button
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Start
-                ) {
-                    CreatorAvatarWithAura(
-                        followersCount = if (reel.author.contains("majarrah")) 1_250_000 else 600_000,
-                        authorInitial = reel.author,
-                        size = 38.dp,
-                        showBadgeChip = false
-                    )
-
-                    Spacer(modifier = Modifier.width(10.dp))
-
-                    Text(
-                        text = reel.author,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-
-                    Spacer(modifier = Modifier.width(10.dp))
-
-                    // "متابعة / Follow" Button
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(if (isFollowing) Color.White.copy(alpha = 0.15f) else Color.Transparent)
-                            .border(
-                                width = 1.dp,
-                                color = if (isFollowing) Color.White.copy(alpha = 0.4f) else Color.White,
-                                shape = RoundedCornerShape(20.dp)
-                            )
-                            .clickable { isFollowing = !isFollowing }
-                            .padding(horizontal = 12.dp, vertical = 5.dp)
-                    ) {
-                        Text(
-                            text = if (isFollowing) "تمت المتابعة" else "متابعة",
-                            color = Color.White,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Video Description / Caption
-                Text(
-                    text = reel.description,
-                    color = Color.White,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Normal,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Audio Track Ticker
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color.Black.copy(alpha = 0.3f))
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.MusicNote,
-                        contentDescription = "Sound Track",
-                        tint = Color.White,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = reel.soundTrack,
-                        color = Color.White,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-
-            if (showVoiceAssistantModal) {
-                NexaVoiceAssistantModal(
-                    onDismiss = { showVoiceAssistantModal = false },
-                    onNavigateToReels = { showVoiceAssistantModal = false },
-                    onOpenVault = {
-                        showVoiceAssistantModal = false
-                        showPrivateVaultModal = true
-                    },
-                    onOpenChat = { showVoiceAssistantModal = false },
-                    onSearchPosts = { showVoiceAssistantModal = false }
-                )
-            }
-
-            if (showPrivateVaultModal) {
-                NexaPrivateVaultModal(
-                    onDismiss = { showPrivateVaultModal = false }
-                )
-            }
-
-            if (showQuickActionRadialOverlay) {
-                QuickActionRadialOverlay(
-                    targetTitle = reel.title,
-                    authorName = reel.author,
-                    onDismiss = { showQuickActionRadialOverlay = false },
-                    onLike = { isLiked = !isLiked },
-                    onBookmark = { isBookmarked = !isBookmarked },
-                    onShare = { showNotificationBanner = "تم مشاركة فيديو الريلز بنجاح! 🚀" },
-                    onSendDirectMessage = { showStoryReplyModal = true },
-                    onMoveToVault = { showPrivateVaultModal = true }
+                Icon(
+                    imageVector = Icons.Default.MusicNote,
+                    contentDescription = "Music Disc",
+                    tint = Color.White,
+                    modifier = Modifier.size(14.dp)
                 )
             }
         }
     }
 }
+
+@Composable
+fun ReelCreatorInfoBar(
+    reel: ReelItem,
+    targetUid: String,
+    isFollowing: Boolean,
+    targetFollowersCount: Int?,
+    onFollowClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Start
+        ) {
+            CreatorAvatarWithAura(
+                followersCount = targetFollowersCount ?: 0,
+                authorInitial = reel.author,
+                size = 38.dp,
+                showBadgeChip = targetFollowersCount != null
+            )
+
+            Spacer(modifier = Modifier.width(10.dp))
+
+            Column {
+                Text(
+                    text = reel.author,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (targetFollowersCount != null) {
+                    Text(
+                        text = "$targetFollowersCount متابع",
+                        color = Color.LightGray,
+                        fontSize = 11.sp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(10.dp))
+
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(if (isFollowing) Color.White.copy(alpha = 0.15f) else Color.Transparent)
+                    .border(
+                        width = 1.dp,
+                        color = if (isFollowing) Color.White.copy(alpha = 0.4f) else Color.White,
+                        shape = RoundedCornerShape(20.dp)
+                    )
+                    .clickable { onFollowClick() }
+                    .padding(horizontal = 12.dp, vertical = 5.dp)
+            ) {
+                Text(
+                    text = if (isFollowing) "تمت المتابعة" else "متابعة",
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Text(
+            text = reel.description,
+            color = Color.White,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Normal,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color.Black.copy(alpha = 0.3f))
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.MusicNote,
+                contentDescription = "Sound Track",
+                tint = Color.White,
+                modifier = Modifier.size(14.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = reel.soundTrack,
+                color = Color.White,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
 }

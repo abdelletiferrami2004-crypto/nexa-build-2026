@@ -17,6 +17,7 @@ import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.storage.FirebaseStorage
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -160,26 +161,34 @@ object FirebaseManager {
 
     suspend fun saveUserProfileToCloud(profile: UserProfile): Boolean {
         val db = firestore ?: return false
-        val userId = auth?.currentUser?.uid ?: profile.firebaseUid.ifBlank { "user_${profile.id}" }
+        val userId = auth?.currentUser?.uid ?: return false
         return try {
-            val profileMap = hashMapOf(
-                "id" to profile.id,
-                "firebaseUid" to userId,
+            val publicProfileMap = hashMapOf<String, Any?>(
+                "uid" to userId,
                 "name" to profile.name,
                 "username" to profile.username,
-                "email" to profile.email,
+                "avatarUrl" to profile.avatarUrl,
                 "bio" to profile.bio,
+                "followersCount" to profile.followersCount,
+                "isProfileLocked" to profile.isProfileLocked,
+                "updatedAt" to System.currentTimeMillis()
+            )
+            db.collection("public_profiles").document(userId)
+                .set(publicProfileMap, SetOptions.merge()).await()
+
+            val privateProfileMap = hashMapOf<String, Any?>(
+                "uid" to userId,
+                "firebaseUid" to userId,
+                "email" to profile.email,
                 "phone" to profile.phone,
                 "age" to profile.age,
-                "avatarUrl" to profile.avatarUrl,
                 "isTeenMode" to profile.isTeenMode,
                 "isBiometricEnabled" to profile.isBiometricEnabled,
                 "isChatPinEnabled" to profile.isChatPinEnabled,
+                "isProfileLocked" to profile.isProfileLocked,
                 "postsCount" to profile.postsCount,
-                "followersCount" to profile.followersCount,
                 "totalViewsCount" to profile.totalViewsCount,
                 "points" to profile.points,
-                "isVerified" to profile.isVerified,
                 "verificationBadgeCategory" to profile.verificationBadgeCategory,
                 "isTwoFactorEnabled" to profile.isTwoFactorEnabled,
                 "twoFactorMethod" to profile.twoFactorMethod,
@@ -191,7 +200,7 @@ object FirebaseManager {
                 "chatPin" to FieldValue.delete()
             )
             db.collection("nexa_users").document(userId)
-                .set(profileMap, SetOptions.merge()).await()
+                .set(privateProfileMap, SetOptions.merge()).await()
             _cloudSyncStatus.value = "تمت مزامنة الملف الشخصي سحابياً في Firestore Cloud ☁️"
             Log.d(TAG, "Profile saved to Firestore for $userId without chatPin")
             true
@@ -208,8 +217,9 @@ object FirebaseManager {
             val doc = db.collection("nexa_users").document(userId).get().await()
             if (doc.exists()) {
                 UserProfile(
-                    id = doc.getLong("id")?.toInt() ?: 1,
+                    id = 1,
                     firebaseUid = userId,
+                    uid = doc.getString("uid") ?: userId,
                     phone = doc.getString("phone") ?: "",
                     name = doc.getString("name") ?: (auth?.currentUser?.displayName ?: ""),
                     age = doc.getLong("age")?.toInt() ?: 20,
@@ -217,6 +227,7 @@ object FirebaseManager {
                     isBiometricEnabled = doc.getBoolean("isBiometricEnabled") ?: true,
                     isChatPinEnabled = doc.getBoolean("isChatPinEnabled") ?: false,
                     chatPin = doc.getString("chatPin") ?: "",
+                    isProfileLocked = doc.getBoolean("isProfileLocked") ?: false,
                     isLoggedIn = true,
                     avatarUrl = doc.getString("avatarUrl") ?: "",
                     postsCount = doc.getLong("postsCount")?.toInt() ?: 0,
@@ -227,7 +238,7 @@ object FirebaseManager {
                     vipTierName = "NEXA Standard",
                     creditsBalance = doc.getLong("creditsBalance")?.toInt() ?: 0,
                     bio = doc.getString("bio") ?: "",
-                    username = doc.getString("username") ?: "user_${userId.take(6)}",
+                    username = doc.getString("username") ?: "nexa_${userId.take(6)}",
                     isContactsSynced = doc.getBoolean("isContactsSynced") ?: false,
                     isVerified = doc.getBoolean("isVerified") ?: false,
                     verificationBadgeCategory = doc.getString("verificationBadgeCategory") ?: "عضو موثق",
@@ -263,8 +274,9 @@ object FirebaseManager {
                 if (snapshot != null && snapshot.exists()) {
                     try {
                         val profile = UserProfile(
-                            id = snapshot.getLong("id")?.toInt() ?: 1,
+                            id = 1,
                             firebaseUid = userId,
+                            uid = snapshot.getString("uid") ?: userId,
                             phone = snapshot.getString("phone") ?: "",
                             name = snapshot.getString("name") ?: (auth?.currentUser?.displayName ?: ""),
                             age = snapshot.getLong("age")?.toInt() ?: 20,
@@ -272,6 +284,7 @@ object FirebaseManager {
                             isBiometricEnabled = snapshot.getBoolean("isBiometricEnabled") ?: true,
                             isChatPinEnabled = snapshot.getBoolean("isChatPinEnabled") ?: false,
                             chatPin = snapshot.getString("chatPin") ?: "",
+                            isProfileLocked = snapshot.getBoolean("isProfileLocked") ?: false,
                             isLoggedIn = true,
                             avatarUrl = snapshot.getString("avatarUrl") ?: "",
                             postsCount = snapshot.getLong("postsCount")?.toInt() ?: 0,
@@ -282,7 +295,7 @@ object FirebaseManager {
                             vipTierName = "NEXA Standard",
                             creditsBalance = snapshot.getLong("creditsBalance")?.toInt() ?: 0,
                             bio = snapshot.getString("bio") ?: "",
-                            username = snapshot.getString("username") ?: "user_${userId.take(6)}",
+                            username = snapshot.getString("username") ?: "nexa_${userId.take(6)}",
                             isContactsSynced = snapshot.getBoolean("isContactsSynced") ?: false,
                             isVerified = snapshot.getBoolean("isVerified") ?: false,
                             verificationBadgeCategory = snapshot.getString("verificationBadgeCategory") ?: "عضو موثق",
@@ -338,36 +351,79 @@ object FirebaseManager {
         }
     }
 
-    suspend fun savePostToCloud(post: Post): Boolean {
-        val db = firestore ?: return false
+    suspend fun savePostToCloud(post: Post): String? {
+        val db = firestore ?: return null
         return try {
-            val postMap = hashMapOf(
-                "id" to post.id,
+            val authorUid = auth?.currentUser?.uid ?: post.authorUid
+            val coll = db.collection("nexa_posts")
+            val docRef = if (post.remoteId.isNotBlank()) coll.document(post.remoteId) else coll.document()
+            val assignedRemoteId = docRef.id
+
+            val postMap = hashMapOf<String, Any?>(
+                "remoteId" to assignedRemoteId,
+                "authorUid" to authorUid,
                 "authorName" to post.authorName,
+                "authorAvatarUrl" to post.authorAvatarUrl,
                 "content" to post.content,
                 "likesCount" to post.likesCount,
                 "commentsCount" to post.commentsCount,
-                "isLiked" to post.isLiked,
                 "taggedProductId" to post.taggedProductId,
                 "isTeenSafe" to post.isTeenSafe,
+                "imageUrl" to (post.imageUrl ?: ""),
+                "videoUrl" to (post.videoUrl ?: ""),
+                "mediaType" to post.mediaType,
+                "timestamp" to post.timestamp,
                 "createdAt" to System.currentTimeMillis()
             )
-            db.collection("nexa_posts").document("post_${post.id}")
-                .set(postMap, SetOptions.merge()).await()
+            // Note: Per-user state such as isLiked must not live in the shared post document:
+            // use posts/{id}/likes/{uid}, and make likesCount the number of those documents.
+            docRef.set(postMap, SetOptions.merge()).await()
             _cloudSyncStatus.value = "تم نشر المشاركة سحابياً في Firestore Cloud"
-            Log.d(TAG, "Post saved to Firestore")
-            true
+            Log.d(TAG, "Post saved to Firestore with remoteId $assignedRemoteId")
+            assignedRemoteId
         } catch (e: Exception) {
             Log.e(TAG, "Failed to save post to Firestore", e)
-            false
+            null
         }
     }
 
-    suspend fun saveStoryToCloud(story: com.example.data.model.StoryItem): Boolean {
-        val db = firestore ?: return false
+    suspend fun togglePostLikeInCloud(postRemoteId: String): Pair<Boolean, Int> {
+        val db = firestore ?: return Pair(false, 0)
+        val uid = auth?.currentUser?.uid ?: return Pair(false, 0)
         return try {
-            val storyMap = hashMapOf(
-                "id" to story.id,
+            val postRef = db.collection("nexa_posts").document(postRemoteId)
+            val likeRef = postRef.collection("likes").document(uid)
+            val likeDoc = likeRef.get().await()
+            val newIsLiked: Boolean
+            if (likeDoc.exists()) {
+                likeRef.delete().await()
+                newIsLiked = false
+            } else {
+                likeRef.set(mapOf("uid" to uid, "timestamp" to System.currentTimeMillis())).await()
+                newIsLiked = true
+            }
+            val likesSnapshot = postRef.collection("likes").get().await()
+            val newCount = likesSnapshot.size()
+            postRef.update("likesCount", newCount).await()
+            Pair(newIsLiked, newCount)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to toggle post like in cloud", e)
+            Pair(false, 0)
+        }
+    }
+
+    suspend fun saveStoryToCloud(story: com.example.data.model.StoryItem): String? {
+        val db = firestore ?: return null
+        return try {
+            val authorUid = auth?.currentUser?.uid ?: story.authorUid
+            val coll = db.collection("nexa_stories")
+            val docRef = if (story.remoteId.isNotBlank()) coll.document(story.remoteId) else coll.document()
+            val assignedRemoteId = docRef.id
+
+            val storyMap = hashMapOf<String, Any?>(
+                "remoteId" to assignedRemoteId,
+                "authorUid" to authorUid,
+                "id" to (story.id.ifBlank { assignedRemoteId }),
                 "authorName" to story.authorName,
                 "authorAvatarUrl" to story.authorAvatarUrl,
                 "timestamp" to story.timestamp,
@@ -379,14 +435,13 @@ object FirebaseManager {
                 "reelAuthor" to story.reelAuthor,
                 "createdAt" to System.currentTimeMillis()
             )
-            db.collection("nexa_stories").document("story_${story.id}")
-                .set(storyMap, SetOptions.merge()).await()
+            docRef.set(storyMap, SetOptions.merge()).await()
             _cloudSyncStatus.value = "تم نشر القصة سحابياً في Firestore Cloud"
-            Log.d(TAG, "Story saved to Firestore")
-            true
+            Log.d(TAG, "Story saved to Firestore with remoteId $assignedRemoteId")
+            assignedRemoteId
         } catch (e: Exception) {
             Log.e(TAG, "Failed to save story to Firestore", e)
-            false
+            null
         }
     }
 
@@ -405,8 +460,12 @@ object FirebaseManager {
                 if (snapshot != null && !snapshot.isEmpty) {
                     val fetchedStories = snapshot.documents.mapNotNull { doc ->
                         try {
+                            val remoteId = doc.getString("remoteId") ?: doc.id
+                            val authorUid = doc.getString("authorUid") ?: ""
                             com.example.data.model.StoryItem(
-                                id = doc.getString("id") ?: doc.id,
+                                id = doc.getString("id") ?: remoteId,
+                                remoteId = remoteId,
+                                authorUid = authorUid,
                                 authorName = doc.getString("authorName") ?: "صانع مجرة",
                                 authorAvatarUrl = doc.getString("authorAvatarUrl") ?: "",
                                 timestamp = doc.getString("timestamp") ?: "الآن",
@@ -444,15 +503,22 @@ object FirebaseManager {
                 if (snapshot != null && !snapshot.isEmpty) {
                     val fetchedPosts = snapshot.documents.mapNotNull { doc ->
                         try {
+                            val remoteId = doc.getString("remoteId") ?: doc.id
+                            val authorUid = doc.getString("authorUid") ?: ""
                             Post(
-                                id = doc.getLong("id")?.toInt() ?: (doc.id.hashCode() and 0x7FFFFFFF),
+                                id = 0,
+                                remoteId = remoteId,
+                                authorUid = authorUid,
                                 authorName = doc.getString("authorName") ?: "مستخدم مجرة",
                                 content = doc.getString("content") ?: "",
                                 likesCount = doc.getLong("likesCount")?.toInt() ?: 0,
                                 commentsCount = doc.getLong("commentsCount")?.toInt() ?: 0,
-                                isLiked = doc.getBoolean("isLiked") ?: false,
+                                isLiked = false,
                                 taggedProductId = doc.getLong("taggedProductId")?.toInt(),
-                                isTeenSafe = doc.getBoolean("isTeenSafe") ?: true
+                                isTeenSafe = doc.getBoolean("isTeenSafe") ?: true,
+                                imageUrl = doc.getString("imageUrl")?.ifBlank { null },
+                                videoUrl = doc.getString("videoUrl")?.ifBlank { null },
+                                mediaType = doc.getString("mediaType") ?: "text"
                             )
                         } catch (e: Exception) {
                             null
@@ -505,40 +571,69 @@ object FirebaseManager {
         }
     }
 
-    suspend fun saveMessageToCloud(message: ChatMessage): Boolean {
-        val db = firestore ?: return false
+    suspend fun saveMessageToCloud(message: ChatMessage): String? {
+        val db = firestore ?: return null
         return try {
             val encryptedText = if (message.isEncrypted) {
                 com.example.util.E2EEncryptionManager.encryptMessage(message.text, message.conversationId)
             } else {
                 message.text
             }
-            val msgMap = hashMapOf(
-                "id" to message.id,
+            val senderUid = auth?.currentUser?.uid ?: message.senderUid
+            val coll = db.collection("nexa_conversations")
+                .document(message.conversationId)
+                .collection("messages")
+            val docRef = if (message.remoteId.isNotBlank()) {
+                coll.document(message.remoteId)
+            } else {
+                coll.document()
+            }
+            val assignedRemoteId = docRef.id
+
+            val msgMap = hashMapOf<String, Any?>(
+                "remoteId" to assignedRemoteId,
+                "senderUid" to senderUid,
                 "conversationId" to message.conversationId,
                 "senderName" to message.senderName,
                 "senderAvatar" to message.senderAvatar,
                 "text" to encryptedText,
-                "isFromUser" to message.isFromUser,
                 "isEncrypted" to message.isEncrypted,
                 "mediaType" to message.mediaType,
                 "mediaUrl" to (message.mediaUrl ?: ""),
                 "reaction" to (message.reaction ?: ""),
                 "deliveryStatus" to message.deliveryStatus,
-                "isRead" to message.isRead,
-                "timestamp" to System.currentTimeMillis(),
-                "isSenderVerified" to message.isSenderVerified
+                "timestamp" to message.timestamp
             )
-            db.collection("nexa_conversations")
-                .document(message.conversationId)
-                .collection("messages")
-                .document("msg_${message.id}")
-                .set(msgMap, SetOptions.merge()).await()
-            Log.d(TAG, "Message securely encrypted & saved to Firestore for conv ${message.conversationId}")
-            true
+            // Note: delivery and read state must be written by the receiver in a separate field (readBy) and never overwritten by sender
+            if (message.readBy.isNotBlank()) {
+                msgMap["readBy"] = message.readBy
+            }
+            docRef.set(msgMap, SetOptions.merge()).await()
+            Log.d(TAG, "Message securely encrypted & saved to Firestore for conv ${message.conversationId} with remoteId $assignedRemoteId")
+            assignedRemoteId
         } catch (e: Exception) {
             Log.e(TAG, "Failed to save chat message to Firestore", e)
-            false
+            null
+        }
+    }
+
+    suspend fun markMessageReadByReceiver(conversationId: String, remoteId: String) {
+        val db = firestore ?: return
+        val currentUid = auth?.currentUser?.uid ?: return
+        try {
+            db.collection("nexa_conversations")
+                .document(conversationId)
+                .collection("messages")
+                .document(remoteId)
+                .update(
+                    mapOf(
+                        "readBy" to currentUid,
+                        "deliveryStatus" to "read"
+                    )
+                ).await()
+            Log.d(TAG, "Marked message $remoteId read by receiver $currentUid")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to update readBy on message $remoteId", e)
         }
     }
 
@@ -547,7 +642,7 @@ object FirebaseManager {
         onMessagesUpdated: (List<ChatMessage>) -> Unit
     ) {
         val db = firestore ?: return
-        if (auth?.currentUser == null) {
+        val currentUid = auth?.currentUser?.uid ?: run {
             Log.d(TAG, "Postponing listenToMessagesRealtime: waiting for authenticated session")
             return
         }
@@ -571,20 +666,33 @@ object FirebaseManager {
                             } else {
                                 rawText
                             }
+                            // Auto-moderation on incoming message before displaying
+                            val modCheck = com.example.util.NexaSafetyModerator.evaluateContent(decryptedText)
+                            if (!modCheck.isAllowed) {
+                                return@mapNotNull null
+                            }
+                            val senderUid = doc.getString("senderUid") ?: ""
+                            val computedIsFromUser = (senderUid.isNotBlank() && senderUid == currentUid)
+                            val remoteId = doc.getString("remoteId") ?: doc.id
+                            val readBy = doc.getString("readBy") ?: ""
+
                             ChatMessage(
-                                id = doc.getLong("id")?.toInt() ?: (doc.id.hashCode() and 0x7FFFFFFF),
+                                id = 0,
+                                remoteId = remoteId,
+                                senderUid = senderUid,
+                                readBy = readBy,
                                 conversationId = doc.getString("conversationId") ?: conversationId,
                                 senderName = doc.getString("senderName") ?: "مستخدم NEXA",
                                 senderAvatar = doc.getString("senderAvatar") ?: "",
                                 text = decryptedText,
                                 timestamp = doc.getLong("timestamp") ?: System.currentTimeMillis(),
-                                isFromUser = doc.getBoolean("isFromUser") ?: false,
+                                isFromUser = computedIsFromUser,
                                 isEncrypted = isEncrypted,
                                 mediaType = doc.getString("mediaType") ?: "text",
                                 mediaUrl = doc.getString("mediaUrl")?.ifBlank { null },
                                 reaction = doc.getString("reaction")?.ifBlank { null },
-                                deliveryStatus = doc.getString("deliveryStatus") ?: "read",
-                                isRead = doc.getBoolean("isRead") ?: true,
+                                deliveryStatus = doc.getString("deliveryStatus") ?: (if (readBy.isNotBlank()) "read" else "sent"),
+                                isRead = readBy.isNotBlank() || computedIsFromUser,
                                 isSenderVerified = doc.getBoolean("isSenderVerified") ?: false
                             )
                         } catch (e: Exception) {
@@ -603,6 +711,7 @@ object FirebaseManager {
 
     suspend fun loadConversationHistoryFromCloud(conversationId: String): List<ChatMessage> {
         val db = firestore ?: return emptyList()
+        val currentUid = auth?.currentUser?.uid ?: ""
         return try {
             val snapshot = db.collection("nexa_conversations")
                 .document(conversationId)
@@ -620,20 +729,32 @@ object FirebaseManager {
                     } else {
                         rawText
                     }
+                    val modCheck = com.example.util.NexaSafetyModerator.evaluateContent(decryptedText)
+                    if (!modCheck.isAllowed) {
+                        return@mapNotNull null
+                    }
+                    val senderUid = doc.getString("senderUid") ?: ""
+                    val computedIsFromUser = (senderUid.isNotBlank() && senderUid == currentUid)
+                    val remoteId = doc.getString("remoteId") ?: doc.id
+                    val readBy = doc.getString("readBy") ?: ""
+
                     ChatMessage(
-                        id = doc.getLong("id")?.toInt() ?: (doc.id.hashCode() and 0x7FFFFFFF),
+                        id = 0,
+                        remoteId = remoteId,
+                        senderUid = senderUid,
+                        readBy = readBy,
                         conversationId = doc.getString("conversationId") ?: conversationId,
                         senderName = doc.getString("senderName") ?: "مستخدم NEXA",
                         senderAvatar = doc.getString("senderAvatar") ?: "",
                         text = decryptedText,
                         timestamp = doc.getLong("timestamp") ?: System.currentTimeMillis(),
-                        isFromUser = doc.getBoolean("isFromUser") ?: false,
+                        isFromUser = computedIsFromUser,
                         isEncrypted = isEncrypted,
                         mediaType = doc.getString("mediaType") ?: "text",
                         mediaUrl = doc.getString("mediaUrl")?.ifBlank { null },
                         reaction = doc.getString("reaction")?.ifBlank { null },
-                        deliveryStatus = doc.getString("deliveryStatus") ?: "read",
-                        isRead = doc.getBoolean("isRead") ?: true,
+                        deliveryStatus = doc.getString("deliveryStatus") ?: (if (readBy.isNotBlank()) "read" else "sent"),
+                        isRead = readBy.isNotBlank() || computedIsFromUser,
                         isSenderVerified = doc.getBoolean("isSenderVerified") ?: false
                     )
                 } catch (e: Exception) {
@@ -646,25 +767,133 @@ object FirebaseManager {
         }
     }
 
-    suspend fun saveConversationSummary(conversation: com.example.data.model.Conversation) {
+    suspend fun saveConversationSummary(
+        conversation: com.example.data.model.Conversation,
+        participants: List<String> = emptyList()
+    ) {
         val db = firestore ?: return
         try {
-            val convMap = hashMapOf(
+            val partList = when {
+                participants.isNotEmpty() -> participants
+                conversation.id.contains("_") && !conversation.id.startsWith("post_") && !conversation.id.startsWith("story_") -> {
+                    conversation.id.split("_")
+                }
+                else -> emptyList()
+            }
+            val convMap = hashMapOf<String, Any?>(
                 "id" to conversation.id,
                 "contactName" to conversation.contactName,
                 "contactAvatar" to conversation.contactAvatar,
                 "lastMessage" to conversation.lastMessage,
                 "lastTimestamp" to conversation.lastTimestamp,
                 "unreadCount" to conversation.unreadCount,
-                "isVerified" to conversation.isVerified,
                 "isGroup" to conversation.isGroup,
                 "isChannel" to conversation.isChannel,
                 "updatedAt" to System.currentTimeMillis()
             )
+            if (partList.isNotEmpty()) {
+                convMap["participants"] = partList
+            }
             db.collection("nexa_conversations").document(conversation.id)
                 .set(convMap, SetOptions.merge()).await()
         } catch (e: Exception) {
             Log.e(TAG, "Failed to save conversation summary", e)
+        }
+    }
+
+    suspend fun blockUserInCloud(myUid: String, targetUid: String, targetName: String = "") {
+        val db = firestore ?: return
+        try {
+            db.collection("users_private").document(myUid)
+                .collection("blocked").document(targetUid)
+                .set(mapOf(
+                    "targetUid" to targetUid,
+                    "targetName" to targetName,
+                    "blockedAt" to System.currentTimeMillis()
+                )).await()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to persist block in Firestore", e)
+        }
+    }
+
+    suspend fun unblockUserInCloud(myUid: String, targetUid: String) {
+        val db = firestore ?: return
+        try {
+            db.collection("users_private").document(myUid)
+                .collection("blocked").document(targetUid)
+                .delete().await()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to remove block from Firestore", e)
+        }
+    }
+
+    suspend fun fetchBlockedUsersFromCloud(myUid: String): Set<String> {
+        val db = firestore ?: return emptySet()
+        return try {
+            val snapshot = db.collection("users_private").document(myUid)
+                .collection("blocked").get().await()
+            val list = mutableSetOf<String>()
+            for (doc in snapshot.documents) {
+                list.add(doc.id)
+                val targetName = doc.getString("targetName")
+                if (!targetName.isNullOrBlank()) list.add(targetName)
+            }
+            list
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to fetch blocked users from Firestore", e)
+            emptySet()
+        }
+    }
+
+    suspend fun followUser(myUid: String, targetUid: String) {
+        val db = firestore ?: return
+        try {
+            db.collection("follows").document("${myUid}_${targetUid}")
+                .set(mapOf(
+                    "followerUid" to myUid,
+                    "targetUid" to targetUid,
+                    "createdAt" to System.currentTimeMillis()
+                )).await()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to follow user in Firestore", e)
+        }
+    }
+
+    suspend fun unfollowUser(myUid: String, targetUid: String) {
+        val db = firestore ?: return
+        try {
+            db.collection("follows").document("${myUid}_${targetUid}")
+                .delete().await()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to unfollow user in Firestore", e)
+        }
+    }
+
+    fun listenToFollowStatus(myUid: String, targetUid: String): kotlinx.coroutines.flow.Flow<Boolean> = kotlinx.coroutines.flow.callbackFlow {
+        val db = firestore
+        if (db == null || myUid.isBlank() || targetUid.isBlank()) {
+            trySend(false)
+            close()
+            return@callbackFlow
+        }
+        val registration = db.collection("follows").document("${myUid}_${targetUid}")
+            .addSnapshotListener { snapshot, _ ->
+                trySend(snapshot != null && snapshot.exists())
+            }
+        awaitClose { registration.remove() }
+    }
+
+    suspend fun fetchTargetFollowersCount(targetUid: String): Int? {
+        val db = firestore ?: return null
+        return try {
+            val doc = db.collection("public_profiles").document(targetUid).get().await()
+            if (doc.exists() && doc.contains("followersCount")) {
+                doc.getLong("followersCount")?.toInt()
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            null
         }
     }
 

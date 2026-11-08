@@ -168,640 +168,735 @@ fun AiAssistantModal(
                     .fillMaxWidth()
                     .padding(14.dp)
             ) {
-                // Header
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(38.dp)
-                                .clip(CircleShape)
-                                .background(NeonPurple.copy(alpha = 0.3f))
-                                .border(1.dp, NeonCyan, CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(20.dp))
-                        }
-
-                        Spacer(modifier = Modifier.width(8.dp))
-
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("ذكاء NEXA AI", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(NeonCyan.copy(alpha = 0.15f))
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                                ) {
-                                    Text(
-                                        text = selectedModel,
-                                        color = NeonCyan,
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                            Text("دردشة متعددة الأدوار ووسائط متقدمة", color = Color.Gray, fontSize = 10.sp)
-                        }
+                AiAssistantHeader(
+                    selectedModel = selectedModel,
+                    isAutoReadTts = isAutoReadTts,
+                    onVoiceTutorClick = { showVoiceTutorModal = true },
+                    onToggleAutoReadTts = { viewModel.toggleAutoReadTts() },
+                    onDismiss = {
+                        SpeechAndTtsManager.stopSpeaking()
+                        SpeechAndTtsManager.stopListening()
+                        onDismiss()
                     }
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        // Live Voice Tutor Modal Launcher
-                        IconButton(
-                            onClick = { showVoiceTutorModal = true },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Mic,
-                                contentDescription = "Live Voice Audio",
-                                tint = NeonPink,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-
-                        // TTS Auto-Read Toggle
-                        IconButton(
-                            onClick = { viewModel.toggleAutoReadTts() },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (isAutoReadTts) Icons.Default.VolumeUp else Icons.Default.VolumeOff,
-                                contentDescription = "TTS Toggle",
-                                tint = if (isAutoReadTts) NeonCyan else Color.Gray,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-
-                        IconButton(
-                            onClick = {
-                                SpeechAndTtsManager.stopSpeaking()
-                                SpeechAndTtsManager.stopListening()
-                                onDismiss()
-                            },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.Gray, modifier = Modifier.size(18.dp))
-                        }
-                    }
-                }
+                )
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // AI Engine Configuration Bar: Model & Role & Grounding Selectors
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFF131A2B))
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Model Dropdown Selector
-                    Box {
-                        Row(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Color.White.copy(alpha = 0.08f))
-                                .clickable { showModelMenu = true }
-                                .padding(horizontal = 8.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Default.Psychology, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(13.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = when (selectedModel) {
-                                    "gemini-3.1-pro-preview" -> "Pro Preview"
-                                    "gemini-3.1-flash-lite" -> "Flash Lite"
-                                    else -> "Flash 3.5"
-                                },
-                                color = Color.White,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-
-                        DropdownMenu(
-                            expanded = showModelMenu,
-                            onDismissRequest = { showModelMenu = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = {
-                                    Column {
-                                        Text("gemini-3.5-flash (افتراضي)", fontWeight = FontWeight.Bold)
-                                        Text("متوازن وسريع للمهام العامة ودعم البحث والخرائط", fontSize = 10.sp, color = Color.Gray)
-                                    }
-                                },
-                                onClick = {
-                                    viewModel.selectAiModel("gemini-3.5-flash")
-                                    showModelMenu = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = {
-                                    Column {
-                                        Text("gemini-3.1-pro-preview", fontWeight = FontWeight.Bold)
-                                        Text("تفكير عميق للمهام البرمجية والتحليل المعقد", fontSize = 10.sp, color = Color.Gray)
-                                    }
-                                },
-                                onClick = {
-                                    viewModel.selectAiModel("gemini-3.1-pro-preview")
-                                    showModelMenu = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = {
-                                    Column {
-                                        Text("gemini-3.1-flash-lite", fontWeight = FontWeight.Bold)
-                                        Text("خفيف جداً وسرعة استجابة فائقة للدردشة السريعة", fontSize = 10.sp, color = Color.Gray)
-                                    }
-                                },
-                                onClick = {
-                                    viewModel.selectAiModel("gemini-3.1-flash-lite")
-                                    showModelMenu = false
-                                }
-                            )
-                        }
-                    }
-
-                    // Role / System Instruction Dropdown Selector
-                    Box {
-                        Row(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Color.White.copy(alpha = 0.08f))
-                                .clickable { showRoleMenu = true }
-                                .padding(horizontal = 8.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = when (selectedRole) {
-                                    "developer" -> "💻 مبرمج"
-                                    "shopping" -> "🛍️ تسوق"
-                                    "creative" -> "✍️ إبداع"
-                                    else -> "🌟 عام"
-                                },
-                                color = Color.White,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-
-                        DropdownMenu(
-                            expanded = showRoleMenu,
-                            onDismissRequest = { showRoleMenu = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("🌟 عام • General Assistant") },
-                                onClick = {
-                                    viewModel.selectAiRole("general")
-                                    showRoleMenu = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("💻 خبير برمجة • Coding Architect") },
-                                onClick = {
-                                    viewModel.selectAiRole("developer")
-                                    showRoleMenu = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("🛍️ مستشار تسوق • Smart Shopping") },
-                                onClick = {
-                                    viewModel.selectAiRole("shopping")
-                                    showRoleMenu = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("✍️ كاتب ومصمم • Creative Content") },
-                                onClick = {
-                                    viewModel.selectAiRole("creative")
-                                    showRoleMenu = false
-                                }
-                            )
-                        }
-                    }
-
-                    // Search Grounding Toggle
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (isSearchGrounding) NeonCyan.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.05f))
-                            .border(1.dp, if (isSearchGrounding) NeonCyan else Color.Transparent, RoundedCornerShape(8.dp))
-                            .clickable { viewModel.toggleSearchGrounding() }
-                            .padding(horizontal = 7.dp, vertical = 4.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Language, contentDescription = null, tint = if (isSearchGrounding) NeonCyan else Color.Gray, modifier = Modifier.size(12.dp))
-                            Spacer(modifier = Modifier.width(3.dp))
-                            Text(
-                                text = "بحث",
-                                color = if (isSearchGrounding) NeonCyan else Color.Gray,
-                                fontSize = 10.sp,
-                                fontWeight = if (isSearchGrounding) FontWeight.Bold else FontWeight.Normal
-                            )
-                        }
-                    }
-
-                    // Maps Grounding Toggle
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (isMapsGrounding) NeonPink.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.05f))
-                            .border(1.dp, if (isMapsGrounding) NeonPink else Color.Transparent, RoundedCornerShape(8.dp))
-                            .clickable { viewModel.toggleMapsGrounding() }
-                            .padding(horizontal = 7.dp, vertical = 4.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Place, contentDescription = null, tint = if (isMapsGrounding) NeonPink else Color.Gray, modifier = Modifier.size(12.dp))
-                            Spacer(modifier = Modifier.width(3.dp))
-                            Text(
-                                text = "خرائط",
-                                color = if (isMapsGrounding) NeonPink else Color.Gray,
-                                fontSize = 10.sp,
-                                fontWeight = if (isMapsGrounding) FontWeight.Bold else FontWeight.Normal
-                            )
-                        }
-                    }
-                }
+                AiAssistantEngineBar(
+                    selectedModel = selectedModel,
+                    selectedRole = selectedRole,
+                    isSearchGrounding = isSearchGrounding,
+                    isMapsGrounding = isMapsGrounding,
+                    onSelectModel = { viewModel.selectAiModel(it) },
+                    onSelectRole = { viewModel.selectAiRole(it) },
+                    onToggleSearch = { viewModel.toggleSearchGrounding() },
+                    onToggleMaps = { viewModel.toggleMapsGrounding() }
+                )
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Quick Suggestions horizontal chips
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(bottom = 6.dp)
-                ) {
-                    items(quickPrompts) { prompt ->
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(50))
-                                .background(Color.White.copy(alpha = 0.08f))
-                                .border(1.dp, NeonPurple.copy(alpha = 0.3f), RoundedCornerShape(50))
-                                .clickable {
-                                    viewModel.sendAiPrompt(prompt)
-                                }
-                                .padding(horizontal = 10.dp, vertical = 5.dp)
-                        ) {
-                            Text(prompt, color = Color.White, fontSize = 10.sp)
-                        }
-                    }
-                }
+                AiAssistantQuickSuggestions(
+                    quickPrompts = quickPrompts,
+                    onPromptClick = { viewModel.sendAiPrompt(it) }
+                )
 
                 Spacer(modifier = Modifier.height(6.dp))
 
-                // Messages Chat List
-                LazyColumn(
+                AiAssistantMessagesList(
+                    aiMessages = aiMessages,
+                    isThinking = isThinking,
+                    isTranscribing = isTranscribing,
+                    selectedModel = selectedModel,
+                    isSpeaking = isSpeaking,
                     modifier = Modifier
                         .weight(1f)
-                        .fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    items(aiMessages) { msg ->
-                        Box(
-                            modifier = Modifier.fillMaxWidth(),
-                            contentAlignment = if (msg.isFromUser) Alignment.CenterEnd else Alignment.CenterStart
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth(0.88f)
-                                    .clip(
-                                        RoundedCornerShape(
-                                            topStart = 18.dp,
-                                            topEnd = 18.dp,
-                                            bottomStart = if (msg.isFromUser) 18.dp else 4.dp,
-                                            bottomEnd = if (msg.isFromUser) 4.dp else 18.dp
-                                        )
-                                    )
-                                    .background(
-                                        if (msg.isFromUser) NeonPurple.copy(alpha = 0.4f)
-                                        else Color.White.copy(alpha = 0.08f)
-                                    )
-                                    .border(
-                                        1.dp,
-                                        if (msg.isFromUser) NeonPurple else NeonCyan.copy(alpha = 0.3f),
-                                        RoundedCornerShape(18.dp)
-                                    )
-                                    .padding(12.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
-                                            text = msg.senderName,
-                                            color = if (msg.isFromUser) NeonCyan else NeonAmber,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 11.sp
-                                        )
-                                        if (!msg.isFromUser && msg.modelUsed.isNotBlank()) {
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(4.dp))
-                                                    .background(Color.White.copy(alpha = 0.08f))
-                                                    .padding(horizontal = 4.dp, vertical = 1.dp)
-                                            ) {
-                                                Text(msg.modelUsed, color = NeonCyan, fontSize = 8.sp)
-                                            }
-                                        }
-                                    }
-
-                                    if (!msg.isFromUser) {
-                                        IconButton(
-                                            onClick = {
-                                                SpeechAndTtsManager.speak(msg.text, context)
-                                            },
-                                            modifier = Modifier.size(24.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = if (isSpeaking) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
-                                                contentDescription = "Speak Aloud",
-                                                tint = NeonCyan,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                        }
-                                    }
-                                }
-
-                                // If attached bitmap in user message
-                                msg.imageBitmap?.let { bmp ->
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    Image(
-                                        bitmap = bmp.asImageBitmap(),
-                                        contentDescription = "User Attachment",
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(140.dp)
-                                            .clip(RoundedCornerShape(12.dp)),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.height(6.dp))
-
-                                Text(
-                                    text = msg.text,
-                                    color = Color.White,
-                                    fontSize = 13.sp,
-                                    lineHeight = 18.sp
-                                )
-
-                                // Grounding Sources display
-                                if (msg.groundingSources.isNotEmpty()) {
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(Color.Black.copy(alpha = 0.3f))
-                                            .padding(8.dp)
-                                    ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(Icons.Default.Language, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(12.dp))
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text("مصادر البحث والتحقق من Google:", color = NeonCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                        }
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        msg.groundingSources.forEach { sourceText ->
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clickable {
-                                                        try {
-                                                            val cleanUri = if (sourceText.startsWith("http")) sourceText else "https://$sourceText"
-                                                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(cleanUri))
-                                                            context.startActivity(intent)
-                                                        } catch (e: Exception) {
-                                                            Log.e("AiAssistantModal", "Cannot open uri: $sourceText")
-                                                        }
-                                                    }
-                                                    .padding(vertical = 2.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Text(
-                                                    text = "• $sourceText",
-                                                    color = Color(0xFF93C5FD),
-                                                    fontSize = 10.sp,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    if (isThinking || isTranscribing) {
-                        item {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(Color.White.copy(alpha = 0.05f))
-                                    .padding(8.dp)
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    color = NeonCyan,
-                                    strokeWidth = 2.dp
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = if (isTranscribing) "جاري تفريغ الصوت بنموذج gemini-3.5-transcribe..." else "NEXA AI ($selectedModel) يفكر ويحلل...",
-                                    color = NeonCyan,
-                                    fontSize = 11.sp
-                                )
-                            }
-                        }
-                    }
-                }
+                        .fillMaxWidth()
+                )
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Attached Image Thumbnail Bar
-                attachedBitmap?.let { bmp ->
-                    Row(
+                AiAssistantInputControlBar(
+                    userPromptText = userPromptText,
+                    onUserPromptChange = { userPromptText = it },
+                    attachedBitmap = attachedBitmap,
+                    isListening = isListening,
+                    onClearAttachedImage = { viewModel.clearAttachedImage() },
+                    onGalleryPick = { galleryLauncher.launch("image/*") },
+                    onCameraCapture = { cameraLauncher.launch(null) },
+                    onSend = {
+                        if (userPromptText.isNotBlank() || attachedBitmap != null) {
+                            viewModel.sendAiPrompt(userPromptText, attachedBitmap)
+                            userPromptText = ""
+                        }
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun AiAssistantHeader(
+    selectedModel: String,
+    isAutoReadTts: Boolean,
+    onVoiceTutorClick: () -> Unit,
+    onToggleAutoReadTts: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .background(NeonPurple.copy(alpha = 0.3f))
+                    .border(1.dp, NeonCyan, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(20.dp))
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("ذكاء NEXA AI", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 8.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color.White.copy(alpha = 0.1f))
-                            .padding(6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(NeonCyan.copy(alpha = 0.15f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = selectedModel,
+                            color = NeonCyan,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+                Text("دردشة متعددة الأدوار ووسائط متقدمة", color = Color.Gray, fontSize = 10.sp)
+            }
+        }
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(
+                onClick = onVoiceTutorClick,
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Mic,
+                    contentDescription = "Live Voice Audio",
+                    tint = NeonPink,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            IconButton(
+                onClick = onToggleAutoReadTts,
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    imageVector = if (isAutoReadTts) Icons.Default.VolumeUp else Icons.Default.VolumeOff,
+                    contentDescription = "TTS Toggle",
+                    tint = if (isAutoReadTts) NeonCyan else Color.Gray,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.Gray, modifier = Modifier.size(18.dp))
+            }
+        }
+    }
+}
+
+@Composable
+fun AiAssistantEngineBar(
+    selectedModel: String,
+    selectedRole: String,
+    isSearchGrounding: Boolean,
+    isMapsGrounding: Boolean,
+    onSelectModel: (String) -> Unit,
+    onSelectRole: (String) -> Unit,
+    onToggleSearch: () -> Unit,
+    onToggleMaps: () -> Unit
+) {
+    var showModelMenu by remember { mutableStateOf(false) }
+    var showRoleMenu by remember { mutableStateOf(false) }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color(0xFF131A2B))
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Model Dropdown Selector
+        Box {
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color.White.copy(alpha = 0.08f))
+                    .clickable { showModelMenu = true }
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.Psychology, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(13.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = when (selectedModel) {
+                        "gemini-3.1-pro-preview" -> "Pro Preview"
+                        "gemini-3.1-flash-lite" -> "Flash Lite"
+                        else -> "Flash 3.5"
+                    },
+                    color = Color.White,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            DropdownMenu(
+                expanded = showModelMenu,
+                onDismissRequest = { showModelMenu = false }
+            ) {
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text("gemini-3.5-flash (افتراضي)", fontWeight = FontWeight.Bold)
+                            Text("متوازن وسريع للمهام العامة ودعم البحث والخرائط", fontSize = 10.sp, color = Color.Gray)
+                        }
+                    },
+                    onClick = {
+                        onSelectModel("gemini-3.5-flash")
+                        showModelMenu = false
+                    }
+                )
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text("gemini-3.1-pro-preview", fontWeight = FontWeight.Bold)
+                            Text("تفكير عميق للمهام البرمجية والتحليل المعقد", fontSize = 10.sp, color = Color.Gray)
+                        }
+                    },
+                    onClick = {
+                        onSelectModel("gemini-3.1-pro-preview")
+                        showModelMenu = false
+                    }
+                )
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text("gemini-3.1-flash-lite", fontWeight = FontWeight.Bold)
+                            Text("خفيف جداً وسرعة استجابة فائقة للدردشة السريعة", fontSize = 10.sp, color = Color.Gray)
+                        }
+                    },
+                    onClick = {
+                        onSelectModel("gemini-3.1-flash-lite")
+                        showModelMenu = false
+                    }
+                )
+            }
+        }
+
+        // Role Selector
+        Box {
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color.White.copy(alpha = 0.08f))
+                    .clickable { showRoleMenu = true }
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = when (selectedRole) {
+                        "developer" -> "💻 مبرمج"
+                        "shopping" -> "🛍️ تسوق"
+                        "creative" -> "✍️ إبداع"
+                        else -> "🌟 عام"
+                    },
+                    color = Color.White,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            DropdownMenu(
+                expanded = showRoleMenu,
+                onDismissRequest = { showRoleMenu = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("🌟 عام • General Assistant") },
+                    onClick = {
+                        onSelectRole("general")
+                        showRoleMenu = false
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("💻 خبير برمجة • Coding Architect") },
+                    onClick = {
+                        onSelectRole("developer")
+                        showRoleMenu = false
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("🛍️ مستشار تسوق • Smart Shopping") },
+                    onClick = {
+                        onSelectRole("shopping")
+                        showRoleMenu = false
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("✍️ كاتب ومصمم • Creative Content") },
+                    onClick = {
+                        onSelectRole("creative")
+                        showRoleMenu = false
+                    }
+                )
+            }
+        }
+
+        // Search Grounding Toggle
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .background(if (isSearchGrounding) NeonCyan.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.05f))
+                .border(1.dp, if (isSearchGrounding) NeonCyan else Color.Transparent, RoundedCornerShape(8.dp))
+                .clickable { onToggleSearch() }
+                .padding(horizontal = 7.dp, vertical = 4.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Language, contentDescription = null, tint = if (isSearchGrounding) NeonCyan else Color.Gray, modifier = Modifier.size(12.dp))
+                Spacer(modifier = Modifier.width(3.dp))
+                Text(
+                    text = "بحث",
+                    color = if (isSearchGrounding) NeonCyan else Color.Gray,
+                    fontSize = 10.sp,
+                    fontWeight = if (isSearchGrounding) FontWeight.Bold else FontWeight.Normal
+                )
+            }
+        }
+
+        // Maps Grounding Toggle
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .background(if (isMapsGrounding) NeonPink.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.05f))
+                .border(1.dp, if (isMapsGrounding) NeonPink else Color.Transparent, RoundedCornerShape(8.dp))
+                .clickable { onToggleMaps() }
+                .padding(horizontal = 7.dp, vertical = 4.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Place, contentDescription = null, tint = if (isMapsGrounding) NeonPink else Color.Gray, modifier = Modifier.size(12.dp))
+                Spacer(modifier = Modifier.width(3.dp))
+                Text(
+                    text = "خرائط",
+                    color = if (isMapsGrounding) NeonPink else Color.Gray,
+                    fontSize = 10.sp,
+                    fontWeight = if (isMapsGrounding) FontWeight.Bold else FontWeight.Normal
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun AiAssistantQuickSuggestions(
+    quickPrompts: List<String>,
+    onPromptClick: (String) -> Unit
+) {
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(bottom = 6.dp)
+    ) {
+        items(quickPrompts) { prompt ->
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(Color.White.copy(alpha = 0.08f))
+                    .border(1.dp, NeonPurple.copy(alpha = 0.3f), RoundedCornerShape(50))
+                    .clickable { onPromptClick(prompt) }
+                    .padding(horizontal = 10.dp, vertical = 5.dp)
+            ) {
+                Text(prompt, color = Color.White, fontSize = 10.sp)
+            }
+        }
+    }
+}
+
+@Composable
+fun AiAssistantMessagesList(
+    aiMessages: List<com.example.data.model.AiChatMessage>,
+    isThinking: Boolean,
+    isTranscribing: Boolean,
+    selectedModel: String,
+    isSpeaking: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+
+    LazyColumn(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        items(aiMessages) { msg ->
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = if (msg.isFromUser) Alignment.CenterEnd else Alignment.CenterStart
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth(0.88f)
+                        .clip(
+                            RoundedCornerShape(
+                                topStart = 18.dp,
+                                topEnd = 18.dp,
+                                bottomStart = if (msg.isFromUser) 18.dp else 4.dp,
+                                bottomEnd = if (msg.isFromUser) 4.dp else 18.dp
+                            )
+                        )
+                        .background(
+                            if (msg.isFromUser) NeonPurple.copy(alpha = 0.4f)
+                            else Color.White.copy(alpha = 0.08f)
+                        )
+                        .border(
+                            1.dp,
+                            if (msg.isFromUser) NeonPurple else NeonCyan.copy(alpha = 0.3f),
+                            RoundedCornerShape(18.dp)
+                        )
+                        .padding(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Image(
-                                bitmap = bmp.asImageBitmap(),
-                                contentDescription = "Attached Thumbnail",
-                                modifier = Modifier
-                                    .size(42.dp)
-                                    .clip(RoundedCornerShape(8.dp)),
-                                contentScale = ContentScale.Crop
+                            Text(
+                                text = msg.senderName,
+                                color = if (msg.isFromUser) NeonCyan else NeonAmber,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("صورة جاهزة للتحليل بالذكاء", color = Color.White, fontSize = 11.sp)
-                        }
-
-                        IconButton(
-                            onClick = { viewModel.clearAttachedImage() },
-                            modifier = Modifier.size(28.dp)
-                        ) {
-                            Icon(Icons.Default.Close, contentDescription = "Remove", tint = Color.Red)
-                        }
-                    }
-                }
-
-                // Listening Status Indicator
-                if (isListening) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 6.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(NeonPink.copy(alpha = 0.2f))
-                            .padding(6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(Icons.Default.Mic, contentDescription = null, tint = NeonPink, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("جاري الاستماع لصوتك الآن... تحدث لـ NEXA", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-
-                // Bottom Input Control Bar
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Photo Attachment Button
-                    Box {
-                        IconButton(
-                            onClick = { showPhotoPickerMenu = true },
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.1f))
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.AddPhotoAlternate,
-                                contentDescription = "Attach Image",
-                                tint = NeonCyan,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-
-                        DropdownMenu(
-                            expanded = showPhotoPickerMenu,
-                            onDismissRequest = { showPhotoPickerMenu = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, tint = NeonPurple)
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text("اختر من المعرض")
-                                    }
-                                },
-                                onClick = {
-                                    showPhotoPickerMenu = false
-                                    galleryLauncher.launch("image/*")
+                            if (!msg.isFromUser && msg.modelUsed.isNotBlank()) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(Color.White.copy(alpha = 0.08f))
+                                        .padding(horizontal = 4.dp, vertical = 1.dp)
+                                ) {
+                                    Text(msg.modelUsed, color = NeonCyan, fontSize = 8.sp)
                                 }
-                            )
-
-                            DropdownMenuItem(
-                                text = {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.CameraAlt, contentDescription = null, tint = NeonPink)
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text("التقاط صورة بالكاميرا")
-                                    }
-                                },
-                                onClick = {
-                                    showPhotoPickerMenu = false
-                                    cameraLauncher.launch(null)
-                                }
-                            )
+                            }
                         }
-                    }
 
-                    Spacer(modifier = Modifier.width(6.dp))
-
-                    // Microphone Voice Button
-                    IconButton(
-                        onClick = {
-                            if (isListening) {
-                                SpeechAndTtsManager.stopListening()
-                            } else {
-                                SpeechAndTtsManager.startListening(
-                                    context = context,
-                                    onResult = { spoken ->
-                                        userPromptText = spoken
-                                    },
-                                    onError = { err ->
-                                        Toast.makeText(context, err, Toast.LENGTH_SHORT).show()
-                                    }
+                        if (!msg.isFromUser) {
+                            IconButton(
+                                onClick = {
+                                    SpeechAndTtsManager.speak(msg.text, context)
+                                },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (isSpeaking) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
+                                    contentDescription = "Speak Aloud",
+                                    tint = NeonCyan,
+                                    modifier = Modifier.size(16.dp)
                                 )
                             }
-                        },
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(if (isListening) NeonPink else Color.White.copy(alpha = 0.1f))
-                    ) {
-                        Icon(
-                            imageVector = if (isListening) Icons.Default.MicOff else Icons.Default.Mic,
-                            contentDescription = "Voice Input",
-                            tint = if (isListening) Color.White else NeonCyan,
-                            modifier = Modifier.size(20.dp)
+                        }
+                    }
+
+                    // If attached bitmap in user message
+                    msg.imageBitmap?.let { bmp ->
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Image(
+                            bitmap = bmp.asImageBitmap(),
+                            contentDescription = "User Attachment",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(140.dp)
+                                .clip(RoundedCornerShape(12.dp)),
+                            contentScale = ContentScale.Crop
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
 
-                    OutlinedTextField(
-                        value = userPromptText,
-                        onValueChange = { userPromptText = it },
-                        placeholder = { Text("اكتب أو تحدث لـ NEXA AI...", color = Color.Gray, fontSize = 12.sp) },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = NeonCyan,
-                            unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White
-                        ),
-                        shape = RoundedCornerShape(16.dp)
+                    Text(
+                        text = msg.text,
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp
                     )
 
-                    Spacer(modifier = Modifier.width(6.dp))
-
-                    IconButton(
-                        onClick = {
-                            if (userPromptText.isNotBlank() || attachedBitmap != null) {
-                                viewModel.sendAiPrompt(userPromptText, attachedBitmap)
-                                userPromptText = ""
+                    // Grounding Sources display
+                    if (msg.groundingSources.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color.Black.copy(alpha = 0.3f))
+                                .padding(8.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Language, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(12.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("مصادر البحث والتحقق من Google:", color = NeonCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                             }
-                        },
-                        modifier = Modifier
-                            .size(42.dp)
-                            .clip(CircleShape)
-                            .background(NeonCyan)
-                    ) {
-                        Icon(Icons.Default.Send, contentDescription = "Send", tint = BackgroundDark, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.height(4.dp))
+                            msg.groundingSources.forEach { sourceText ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            try {
+                                                val cleanUri = if (sourceText.startsWith("http")) sourceText else "https://$sourceText"
+                                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(cleanUri))
+                                                context.startActivity(intent)
+                                            } catch (e: Exception) {
+                                                Log.e("AiAssistantModal", "Cannot open uri: $sourceText")
+                                            }
+                                        }
+                                        .padding(vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "• $sourceText",
+                                        color = Color(0xFF93C5FD),
+                                        fontSize = 10.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
+            }
+        }
+
+        if (isThinking || isTranscribing) {
+            item {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color.White.copy(alpha = 0.05f))
+                        .padding(8.dp)
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        color = NeonCyan,
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (isTranscribing) "جاري تفريغ الصوت بنموذج gemini-3.5-transcribe..." else "NEXA AI ($selectedModel) يفكر ويحلل...",
+                        color = NeonCyan,
+                        fontSize = 11.sp
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun AiAssistantInputControlBar(
+    userPromptText: String,
+    onUserPromptChange: (String) -> Unit,
+    attachedBitmap: Bitmap?,
+    isListening: Boolean,
+    onClearAttachedImage: () -> Unit,
+    onGalleryPick: () -> Unit,
+    onCameraCapture: () -> Unit,
+    onSend: () -> Unit
+) {
+    val context = LocalContext.current
+    var showPhotoPickerMenu by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        // Attached Image Thumbnail Bar
+        attachedBitmap?.let { bmp ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color.White.copy(alpha = 0.1f))
+                    .padding(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Image(
+                        bitmap = bmp.asImageBitmap(),
+                        contentDescription = "Attached Thumbnail",
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(RoundedCornerShape(8.dp)),
+                        contentScale = ContentScale.Crop
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("صورة جاهزة للتحليل بالذكاء", color = Color.White, fontSize = 11.sp)
+                }
+
+                IconButton(
+                    onClick = onClearAttachedImage,
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(Icons.Default.Close, contentDescription = "Remove", tint = Color.Red)
+                }
+            }
+        }
+
+        // Listening Status Indicator
+        if (isListening) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 6.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(NeonPink.copy(alpha = 0.2f))
+                    .padding(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Icon(Icons.Default.Mic, contentDescription = null, tint = NeonPink, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("جاري الاستماع لصوتك الآن... تحدث لـ NEXA", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+
+        // Bottom Input Control Bar
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Photo Attachment Button
+            Box {
+                IconButton(
+                    onClick = { showPhotoPickerMenu = true },
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.1f))
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AddPhotoAlternate,
+                        contentDescription = "Attach Image",
+                        tint = NeonCyan,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = showPhotoPickerMenu,
+                    onDismissRequest = { showPhotoPickerMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, tint = NeonPurple)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("اختر من المعرض")
+                            }
+                        },
+                        onClick = {
+                            showPhotoPickerMenu = false
+                            onGalleryPick()
+                        }
+                    )
+
+                    DropdownMenuItem(
+                        text = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.CameraAlt, contentDescription = null, tint = NeonPink)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("التقاط صورة بالكاميرا")
+                            }
+                        },
+                        onClick = {
+                            showPhotoPickerMenu = false
+                            onCameraCapture()
+                        }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(6.dp))
+
+            // Microphone Voice Button
+            IconButton(
+                onClick = {
+                    if (isListening) {
+                        SpeechAndTtsManager.stopListening()
+                    } else {
+                        SpeechAndTtsManager.startListening(
+                            context = context,
+                            onResult = { spoken ->
+                                onUserPromptChange(spoken)
+                            },
+                            onError = { err ->
+                                Toast.makeText(context, err, Toast.LENGTH_SHORT).show()
+                            }
+                        )
+                    }
+                },
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(if (isListening) NeonPink else Color.White.copy(alpha = 0.1f))
+            ) {
+                Icon(
+                    imageVector = if (isListening) Icons.Default.MicOff else Icons.Default.Mic,
+                    contentDescription = "Voice Input",
+                    tint = if (isListening) Color.White else NeonCyan,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(6.dp))
+
+            OutlinedTextField(
+                value = userPromptText,
+                onValueChange = onUserPromptChange,
+                placeholder = { Text("اكتب أو تحدث لـ NEXA AI...", color = Color.Gray, fontSize = 12.sp) },
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = NeonCyan,
+                    unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White
+                ),
+                shape = RoundedCornerShape(16.dp)
+            )
+
+            Spacer(modifier = Modifier.width(6.dp))
+
+            IconButton(
+                onClick = onSend,
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(CircleShape)
+                    .background(NeonCyan)
+            ) {
+                Icon(Icons.Default.Send, contentDescription = "Send", tint = BackgroundDark, modifier = Modifier.size(20.dp))
             }
         }
     }

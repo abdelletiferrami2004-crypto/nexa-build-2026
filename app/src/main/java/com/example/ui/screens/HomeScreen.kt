@@ -144,6 +144,7 @@ fun HomeScreen(
     val streakDays by (viewModel?.streakDays?.collectAsState() ?: remember { mutableStateOf(6) })
     val badges by (viewModel?.gamificationBadges?.collectAsState() ?: remember { mutableStateOf(emptyList()) })
     val dailyQuests by (viewModel?.dailyQuests?.collectAsState() ?: remember { mutableStateOf(emptyList()) })
+    val isReactionsCountVisible by (viewModel?.isReactionsCountVisible?.collectAsState() ?: remember { mutableStateOf(true) })
 
     val displayStories = if (storiesList.isNotEmpty()) storiesList else vmStories
 
@@ -870,6 +871,7 @@ fun HomeScreen(
                     items(vmPosts) { post ->
                         PostCardItem(
                             post = post,
+                            showReactionCounts = isReactionsCountVisible,
                             onLikeClick = { viewModel?.toggleLike(post) },
                             onReactionSelected = { emoji -> viewModel?.reactToPost(post, emoji) },
                             onCommentClick = { activePostForComments = post },
@@ -877,6 +879,46 @@ fun HomeScreen(
                             onBuyProductClick = { productId -> onNavigateToProduct("$productId") }
                         )
                         Spacer(modifier = Modifier.height(12.dp))
+                    }
+                } else {
+                    item {
+                        androidx.compose.material3.Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 24.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = androidx.compose.material3.CardDefaults.cardColors(
+                                containerColor = Color.White.copy(alpha = 0.05f)
+                            )
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.HistoryEdu,
+                                    contentDescription = null,
+                                    tint = NeonCyan,
+                                    modifier = Modifier.size(48.dp)
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    text = "لا توجد منشورات حتى الآن",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "كن أول من يشارك أفكاره وتجاربه مع مجتمع مجرة",
+                                    color = Color.White.copy(alpha = 0.6f),
+                                    fontSize = 13.sp,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -936,6 +978,7 @@ fun HomeScreen(
 @Composable
 fun PostCardItem(
     post: Post,
+    showReactionCounts: Boolean = true,
     onLikeClick: () -> Unit = {},
     onReactionSelected: (String) -> Unit = {},
     onCommentClick: () -> Unit = {},
@@ -1222,12 +1265,14 @@ fun PostCardItem(
                             modifier = Modifier.size(18.dp)
                         )
                     }
-                    Text(
-                        text = "${post.likesCount}",
-                        color = if (currentReaction != null) NeonPink else Color.LightGray,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    if (showReactionCounts) {
+                        Text(
+                            text = "${post.likesCount}",
+                            color = if (currentReaction != null) NeonPink else Color.LightGray,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
 

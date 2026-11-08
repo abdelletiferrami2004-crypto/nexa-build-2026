@@ -1,11 +1,19 @@
 package com.example.data.model
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "posts")
+@Entity(
+    tableName = "posts",
+    indices = [
+        Index(value = ["remoteId"], unique = true)
+    ]
+)
 data class Post(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val remoteId: String = "",
+    val authorUid: String = "",
     val authorName: String,
     val authorAvatarUrl: String = "",
     val content: String,

@@ -27,28 +27,85 @@ class MajarrahRepository(private val dao: MajarrahDao) {
     suspend fun saveProfile(profile: UserProfile) {
         NexaAnalyticsAndCrashManager.startTrace("save_profile")
         dao.insertOrUpdateProfile(profile)
-        NexaMemoryAndRedisCacheManager.put("user_profile_${profile.id}", profile)
+        val cacheKey = profile.uid.ifBlank { profile.firebaseUid.ifBlank { "main_user" } }
+        NexaMemoryAndRedisCacheManager.put("user_profile_$cacheKey", profile)
         FirebaseManager.saveUserProfileToCloud(profile)
         NexaAnalyticsAndCrashManager.stopTrace("save_profile")
     }
 
+    suspend fun upsertChatMessage(message: ChatMessage): Long {
+        if (message.remoteId.isNotBlank()) {
+            val existing = dao.getMessageByRemoteId(message.conversationId, message.remoteId)
+            if (existing != null) {
+                val updated = message.copy(id = existing.id)
+                dao.updateMessage(updated)
+                return existing.id.toLong()
+            }
+        }
+        val toInsert = if (message.id != 0 && message.remoteId.isNotBlank()) message.copy(id = 0) else message
+        return dao.insertMessage(toInsert)
+    }
+
+    suspend fun upsertChatMessages(messages: List<ChatMessage>) {
+        messages.forEach { msg ->
+            upsertChatMessage(msg)
+        }
+    }
+
+    suspend fun upsertPost(post: Post) {
+        if (post.remoteId.isNotBlank()) {
+            val existing = dao.getPostByRemoteId(post.remoteId)
+            if (existing != null) {
+                val updated = post.copy(
+                    id = existing.id,
+                    isLiked = existing.isLiked,
+                    userReaction = existing.userReaction
+                )
+                dao.updatePost(updated)
+                return
+            }
+        }
+        val toInsert = if (post.id != 0 && post.remoteId.isNotBlank()) post.copy(id = 0) else post
+        dao.insertPost(toInsert)
+    }
+
+    suspend fun upsertPosts(posts: List<Post>) {
+        posts.forEach { post ->
+            upsertPost(post)
+        }
+    }
+
     suspend fun addPost(post: Post) {
         NexaAnalyticsAndCrashManager.startTrace("create_post")
-        dao.insertPost(post)
-        NexaMemoryAndRedisCacheManager.put("post_${post.id}", post)
-        FirebaseManager.savePostToCloud(post)
-        NexaAnalyticsAndCrashManager.logEvent("post_created", mapOf("postId" to post.id, "author" to post.authorName))
+        val currentUid = FirebaseManager.getCurrentUser()?.uid ?: ""
+        val withAuthor = if (post.authorUid.isBlank()) post.copy(authorUid = currentUid) else post
+        val assignedRemoteId = FirebaseManager.savePostToCloud(withAuthor)
+        val withRemote = if (!assignedRemoteId.isNullOrBlank()) withAuthor.copy(remoteId = assignedRemoteId) else withAuthor
+        upsertPost(withRemote)
+        val cacheKey = withRemote.remoteId.ifBlank { withRemote.id.toString() }
+        NexaMemoryAndRedisCacheManager.put("post_cache_$cacheKey", withRemote)
+        NexaAnalyticsAndCrashManager.logEvent("post_created", mapOf("postId" to withRemote.id, "author" to withRemote.authorName))
         NexaAnalyticsAndCrashManager.stopTrace("create_post")
     }
 
     suspend fun toggleLikePost(post: Post) {
-        val updated = post.copy(
-            isLiked = !post.isLiked,
-            userReaction = if (!post.isLiked) "❤️" else null,
-            likesCount = if (post.isLiked) (post.likesCount - 1).coerceAtLeast(0) else post.likesCount + 1
-        )
-        dao.updatePost(updated)
-        FirebaseManager.savePostToCloud(updated)
+        if (post.remoteId.isNotBlank()) {
+            val (newIsLiked, newLikesCount) = FirebaseManager.togglePostLikeInCloud(post.remoteId)
+            val updated = post.copy(
+                isLiked = newIsLiked,
+                userReaction = if (newIsLiked) "❤️" else null,
+                likesCount = newLikesCount
+            )
+            dao.updatePost(updated)
+        } else {
+            val updated = post.copy(
+                isLiked = !post.isLiked,
+                userReaction = if (!post.isLiked) "❤️" else null,
+                likesCount = if (post.isLiked) (post.likesCount - 1).coerceAtLeast(0) else post.likesCount + 1
+            )
+            dao.updatePost(updated)
+            FirebaseManager.savePostToCloud(updated)
+        }
     }
 
     suspend fun updatePostReaction(post: Post, reaction: String) {
@@ -82,18 +139,18 @@ class MajarrahRepository(private val dao: MajarrahDao) {
             showTranslation = true,
             isTranslating = false
         )
-        dao.insertMessage(updated)
+        dao.updateMessage(updated)
         FirebaseManager.saveMessageToCloud(updated)
     }
 
     suspend fun toggleMessageTranslation(message: ChatMessage) {
         val updated = message.copy(showTranslation = !message.showTranslation)
-        dao.insertMessage(updated)
+        dao.updateMessage(updated)
     }
 
     suspend fun setMessageTranslating(message: ChatMessage, isTranslating: Boolean) {
         val updated = message.copy(isTranslating = isTranslating)
-        dao.insertMessage(updated)
+        dao.updateMessage(updated)
     }
 
     suspend fun saveConversation(conversation: Conversation) {
@@ -102,23 +159,29 @@ class MajarrahRepository(private val dao: MajarrahDao) {
     }
 
     suspend fun sendMessage(message: ChatMessage): ChatMessage {
-        val rowId = dao.insertMessage(message)
-        val savedMsg = if (message.id == 0) message.copy(id = rowId.toInt()) else message
-        FirebaseManager.saveMessageToCloud(savedMsg)
+        val currentUid = FirebaseManager.getCurrentUser()?.uid ?: ""
+        val withUid = if (message.senderUid.isBlank()) message.copy(senderUid = currentUid, isFromUser = true) else message
+        val assignedRemoteId = FirebaseManager.saveMessageToCloud(withUid)
+        val withRemote = if (!assignedRemoteId.isNullOrBlank()) withUid.copy(remoteId = assignedRemoteId) else withUid
+        val rowId = upsertChatMessage(withRemote)
+        val savedMsg = if (withRemote.id == 0) withRemote.copy(id = rowId.toInt()) else withRemote
         com.example.data.firebase.FirebaseRealtimeDbManager.syncChatMessage(savedMsg.conversationId, savedMsg)
         return savedMsg
     }
 
     suspend fun updateMessageStatus(message: ChatMessage, status: String, isRead: Boolean = (status == "read")) {
-        val updated = message.copy(deliveryStatus = status, isRead = isRead)
-        dao.insertMessage(updated)
-        FirebaseManager.saveMessageToCloud(updated)
+        val currentUid = FirebaseManager.getCurrentUser()?.uid ?: ""
+        val updated = message.copy(deliveryStatus = status, isRead = isRead, readBy = currentUid)
+        dao.updateMessage(updated)
+        if (message.remoteId.isNotBlank()) {
+            FirebaseManager.markMessageReadByReceiver(message.conversationId, message.remoteId)
+        }
         com.example.data.firebase.FirebaseRealtimeDbManager.syncChatMessage(updated.conversationId, updated)
     }
 
     suspend fun updateMessageReaction(message: ChatMessage, newReaction: String?) {
         val updated = message.copy(reaction = if (message.reaction == newReaction) null else newReaction)
-        dao.insertMessage(updated)
+        dao.updateMessage(updated)
         FirebaseManager.saveMessageToCloud(updated)
         com.example.data.firebase.FirebaseRealtimeDbManager.syncChatMessage(updated.conversationId, updated)
     }
@@ -129,7 +192,7 @@ class MajarrahRepository(private val dao: MajarrahDao) {
                 if (user != null) {
                     FirebaseManager.listenToPostsRealtime { fetchedPosts ->
                         scope.launch {
-                            dao.insertPosts(fetchedPosts)
+                            upsertPosts(fetchedPosts)
                         }
                     }
                 }
@@ -140,14 +203,21 @@ class MajarrahRepository(private val dao: MajarrahDao) {
     fun listenToConversationRealtime(conversationId: String, scope: kotlinx.coroutines.CoroutineScope) {
         FirebaseManager.listenToMessagesRealtime(conversationId) { fetchedMessages ->
             scope.launch {
-                dao.insertMessages(fetchedMessages)
+                upsertChatMessages(fetchedMessages)
             }
         }
         // Also listen live to the primary Realtime Database endpoint
         com.example.data.firebase.FirebaseRealtimeDbManager.listenToChatMessages(conversationId) { rtdbMsg ->
             scope.launch {
-                dao.insertMessage(rtdbMsg)
+                upsertChatMessage(rtdbMsg)
             }
+        }
+    }
+
+    suspend fun syncConversationHistoryFromCloud(conversationId: String) {
+        val history = FirebaseManager.loadConversationHistoryFromCloud(conversationId)
+        if (history.isNotEmpty()) {
+            upsertChatMessages(history)
         }
     }
 
@@ -200,10 +270,15 @@ class MajarrahRepository(private val dao: MajarrahDao) {
     }
 
     suspend fun populateInitialDataIfEmpty() {
-        // Pre-populate Profile if null
+        if (!com.example.BuildConfig.DEBUG) {
+            // In release builds seed nothing: show empty states with a short explanation
+            return
+        }
+
+        // Pre-populate Profile if null (Debug build seed: stats start strictly at 0)
         val defaultProfile = UserProfile(
             id = 1,
-            phone = "+966 55 987 6543",
+            phone = "",
             name = "سارة النمر",
             age = 16,
             isTeenMode = true,
@@ -211,12 +286,12 @@ class MajarrahRepository(private val dao: MajarrahDao) {
             isChatPinEnabled = false,
             chatPin = "",
             isLoggedIn = true,
-            postsCount = 18,
-            followersCount = 1_250_000,
-            totalViewsCount = 1_450_000L,
+            postsCount = 0,
+            followersCount = 0,
+            totalViewsCount = 0L,
             points = 890,
-            isVerified = true,
-            verificationBadgeCategory = "صانع محتوى موثق",
+            isVerified = false,
+            verificationBadgeCategory = "عضو موثق",
             isTwoFactorEnabled = true,
             twoFactorMethod = "authenticator"
         )
@@ -634,5 +709,15 @@ class MajarrahRepository(private val dao: MajarrahDao) {
             senderContact = senderContact,
             severityLevel = severityLevel
         )
+    }
+
+    suspend fun getLocalBlockedTargets(): List<String> = dao.getAllBlockedTargets()
+
+    suspend fun addLocalBlockedTarget(targetId: String) {
+        dao.insertBlockedTarget(com.example.data.model.BlockedContactEntity(targetId = targetId))
+    }
+
+    suspend fun removeLocalBlockedTarget(targetId: String) {
+        dao.deleteBlockedTarget(targetId)
     }
 }

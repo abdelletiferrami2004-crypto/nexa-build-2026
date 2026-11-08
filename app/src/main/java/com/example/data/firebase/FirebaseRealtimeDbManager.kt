@@ -221,28 +221,15 @@ object FirebaseRealtimeDbManager {
     /**
      * Sync user session data directly to /users/{userId}/session
      */
-    fun syncUserSession(
-        userId: String,
-        username: String,
-        email: String,
-        phone: String = ""
-    ) {
+    fun syncUserSession(userId: String) {
         val db = getDb() ?: return
         currentUserId = userId
 
         try {
             val sessionRef = db.getReference("users").child(userId).child("session")
             val sessionData = hashMapOf<String, Any>(
-                "userId" to userId,
-                "username" to username,
-                "email" to email,
-                "phone" to phone,
-                "deviceModel" to "${Build.MANUFACTURER} ${Build.MODEL}",
-                "androidVersion" to Build.VERSION.RELEASE,
-                "appVersion" to "1.0-Production",
                 "isOnline" to true,
-                "lastActive" to ServerValue.TIMESTAMP,
-                "loginTimestamp" to System.currentTimeMillis()
+                "lastSeen" to ServerValue.TIMESTAMP
             )
 
             sessionRef.updateChildren(sessionData)
@@ -250,7 +237,7 @@ object FirebaseRealtimeDbManager {
             // Setup onDisconnect hook
             val disconnectMap = mapOf(
                 "isOnline" to false,
-                "lastActive" to ServerValue.TIMESTAMP
+                "lastSeen" to ServerValue.TIMESTAMP
             )
             sessionRef.onDisconnect().updateChildren(disconnectMap)
 
@@ -406,17 +393,19 @@ object FirebaseRealtimeDbManager {
     ) {
         val db = getDb() ?: return
         try {
-            val msgKey = if (message.id != 0) message.id.toString() else UUID.randomUUID().toString()
+            val msgKey = message.remoteId.ifBlank { if (message.id != 0) message.id.toString() else UUID.randomUUID().toString() }
             val msgRef = db.getReference("chats").child(conversationId).child("messages").child(msgKey)
+            val currentUid = FirebaseManager.getCurrentUser()?.uid ?: message.senderUid
 
             val msgData = hashMapOf<String, Any?>(
                 "id" to message.id,
+                "remoteId" to message.remoteId,
+                "senderUid" to currentUid,
                 "conversationId" to conversationId,
                 "senderName" to message.senderName,
                 "senderAvatar" to message.senderAvatar,
                 "text" to message.text,
                 "timestamp" to message.timestamp,
-                "isFromUser" to message.isFromUser,
                 "isEncrypted" to message.isEncrypted,
                 "mediaType" to message.mediaType,
                 "mediaUrl" to message.mediaUrl,
@@ -464,19 +453,23 @@ object FirebaseRealtimeDbManager {
                         val text = snapshot.child("text").getValue(String::class.java) ?: return
                         val senderName = snapshot.child("senderName").getValue(String::class.java) ?: "المستخدم"
                         val timestamp = snapshot.child("timestamp").getValue(Long::class.java) ?: System.currentTimeMillis()
-                        val isFromUser = snapshot.child("isFromUser").getValue(Boolean::class.java) ?: false
+                        val senderUid = snapshot.child("senderUid").getValue(String::class.java) ?: ""
+                        val currentUid = FirebaseManager.getCurrentUser()?.uid ?: ""
+                        val computedIsFromUser = (senderUid.isNotBlank() && senderUid == currentUid)
+                        val remoteId = snapshot.child("remoteId").getValue(String::class.java) ?: (snapshot.key ?: "")
                         val mediaType = snapshot.child("mediaType").getValue(String::class.java) ?: "text"
                         val mediaUrl = snapshot.child("mediaUrl").getValue(String::class.java)
-                        val id = snapshot.child("id").getValue(Int::class.java) ?: 0
                         val isEncrypted = snapshot.child("isEncrypted").getValue(Boolean::class.java) ?: true
 
                         val chatMessage = ChatMessage(
-                            id = id,
+                            id = 0,
+                            remoteId = remoteId,
+                            senderUid = senderUid,
                             conversationId = conversationId,
                             senderName = senderName,
                             text = text,
                             timestamp = timestamp,
-                            isFromUser = isFromUser,
+                            isFromUser = computedIsFromUser,
                             mediaType = mediaType,
                             mediaUrl = mediaUrl,
                             isEncrypted = isEncrypted

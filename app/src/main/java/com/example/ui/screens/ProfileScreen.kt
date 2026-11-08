@@ -117,8 +117,8 @@ fun ProfileScreen(
     val profile by viewModel.userProfile.collectAsState()
     val isTeen = profile?.isTeenMode ?: true
     val age = profile?.age ?: 16
-    val followersCount = profile?.followersCount ?: 1_250_000
-    val totalViewsCount = profile?.totalViewsCount ?: 1_450_000L
+    val followersCount = profile?.followersCount ?: 0
+    val totalViewsCount = profile?.totalViewsCount ?: 0L
 
     val selectedLang by viewModel.selectedLanguage.collectAsState()
     val effectiveLang = LanguageManager.getEffectiveLanguage(selectedLang)
@@ -160,7 +160,7 @@ fun ProfileScreen(
     var showEditProfileDialog by remember { mutableStateOf(false) }
     var editNameInput by remember(profile?.name) { mutableStateOf(profile?.name ?: "سارة النمر") }
     var editBioInput by remember(profile?.bio) { mutableStateOf(profile?.bio ?: "عاشقة للتكنولوجيا والذكاء الاصطناعي والتسوق النيون 🚀") }
-    var isNotificationsEnabled by remember { mutableStateOf(true) }
+    val isNotificationsEnabled by viewModel.isNotificationsEnabled.collectAsState()
 
     if (showEditProfileDialog) {
         AlertDialog(
@@ -336,11 +336,13 @@ fun ProfileScreen(
                         )
                     }
 
-                    Text(
-                        text = profile?.phone ?: "+966 50 123 4567",
-                        color = Color.LightGray,
-                        fontSize = 13.sp
-                    )
+                    if (!profile?.phone.isNullOrBlank()) {
+                        Text(
+                            text = profile?.phone ?: "",
+                            color = Color.LightGray,
+                            fontSize = 13.sp
+                        )
+                    }
 
                     Spacer(modifier = Modifier.height(6.dp))
 
@@ -614,7 +616,7 @@ fun ProfileScreen(
 
                     Switch(
                         checked = isNotificationsEnabled,
-                        onCheckedChange = { isNotificationsEnabled = it },
+                        onCheckedChange = { viewModel.setNotificationsEnabled(it) },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = BackgroundDark,
                             checkedTrackColor = NeonAmber,
@@ -1751,67 +1753,7 @@ fun CreatorRoyalBadgesCard(
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
 
-            // Interactive Tester / Simulator Buttons
- Text("اختبار أوسمة المتابعين فوراً :", color = NeonCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Color.White.copy(alpha = 0.1f))
-                        .clickable { viewModel.updateFollowersCount(50_000) }
-                        .padding(vertical = 8.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("50K", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
-
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Color(0xFFC0C0C0).copy(alpha = 0.3f))
-                        .border(1.dp, Color(0xFFC0C0C0), RoundedCornerShape(10.dp))
-                        .clickable { viewModel.updateFollowersCount(150_000) }
-                        .padding(vertical = 8.dp),
-                    contentAlignment = Alignment.Center
-                ) {
- Text("150K", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
-
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Color(0xFFFFD700).copy(alpha = 0.3f))
-                        .border(1.dp, Color(0xFFFFD700), RoundedCornerShape(10.dp))
-                        .clickable { viewModel.updateFollowersCount(600_000) }
-                        .padding(vertical = 8.dp),
-                    contentAlignment = Alignment.Center
-                ) {
- Text("600K", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
-
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Color(0xFF00F5FF).copy(alpha = 0.3f))
-                        .border(1.dp, Color(0xFF00F5FF), RoundedCornerShape(10.dp))
-                        .clickable { viewModel.updateFollowersCount(1_250_000) }
-                        .padding(vertical = 8.dp),
-                    contentAlignment = Alignment.Center
-                ) {
- Text("1.2M", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
-            }
         }
     }
 }
@@ -1970,41 +1912,7 @@ fun CreatorMonetizationCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
 
-            // Simulator Views Buttons
- Text("اختبار عدد المشاهدات :", color = NeonCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Color.White.copy(alpha = 0.1f))
-                        .clickable { viewModel.updateViewsCount(450_000L) }
-                        .padding(vertical = 8.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("450K مشاهدة", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
-
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Color(0xFF00E676).copy(alpha = 0.3f))
-                        .border(1.dp, Color(0xFF00E676), RoundedCornerShape(10.dp))
-                        .clickable { viewModel.updateViewsCount(1_450_000L) }
-                        .padding(vertical = 8.dp),
-                    contentAlignment = Alignment.Center
-                ) {
- Text("1.45M (تفعيل الربح )", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
-            }
         }
     }
 }

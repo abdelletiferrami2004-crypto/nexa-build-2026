@@ -108,10 +108,9 @@ fun NexaProPaywallScreen(
     val remainingFreeGenerations by viewModel.remainingFreeGenerations.collectAsState()
     val context = LocalContext.current
 
-    var selectedPlan by remember { mutableStateOf("monthly") } // "monthly" ($9.99) or "annual" ($79.99)
+    var selectedPlan by remember { mutableStateOf("monthly") }
     var showGooglePlayBillingSheet by remember { mutableStateOf(false) }
     var isPurchasing by remember { mutableStateOf(false) }
-    var purchaseSuccessMessage by remember { mutableStateOf<String?>(null) }
     var showTermsModal by remember { mutableStateOf(false) }
     var showPrivacyModal by remember { mutableStateOf(false) }
 
@@ -149,639 +148,77 @@ fun NexaProPaywallScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // 1. Top Navigation Bar
             item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    IconButton(
-                        onClick = onBackClick,
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.08f))
-                            .testTag("paywall_back_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "رجوع",
-                            tint = Color.White
-                        )
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(
-                                Brush.horizontalGradient(
-                                    listOf(NeonAmber.copy(alpha = 0.2f), NeonPurple.copy(alpha = 0.2f))
-                                )
-                            )
-                            .border(1.dp, NeonAmber.copy(alpha = 0.6f), RoundedCornerShape(20.dp))
-                            .padding(horizontal = 14.dp, vertical = 6.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Diamond,
-                                contentDescription = null,
-                                tint = NeonAmber,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = if (isProSubscriber) "عضوية PRO مفعّلة 👑" else "اشتراك NEXA AI PRO",
-                                color = NeonAmber,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.width(40.dp))
-                }
+                PaywallTopBar(
+                    isProSubscriber = isProSubscriber,
+                    onBackClick = onBackClick
+                )
             }
 
-            // 2. Hero Badge & Glow Banner
             item {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp)
-                ) {
-                    // Pulsing Glowing 3D Pro Icon
-                    Box(
-                        modifier = Modifier
-                            .scale(auraScale)
-                            .size(80.dp)
-                            .shadow(24.dp, CircleShape, spotColor = NeonCyan)
-                            .clip(CircleShape)
-                            .background(
-                                Brush.radialGradient(
-                                    listOf(
-                                        NeonCyan.copy(alpha = 0.4f),
-                                        NeonPurple.copy(alpha = 0.8f),
-                                        Color(0xFF0F172A)
-                                    )
-                                )
-                            )
-                            .border(2.dp, NeonCyan, CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.AutoAwesome,
-                            contentDescription = "Nexa Pro",
-                            tint = Color.White,
-                            modifier = Modifier.size(40.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    Text(
-                        text = "Nexa AI Pro",
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.Black,
-                        color = Color.White,
-                        textAlign = TextAlign.Center
-                    )
-
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    Text(
-                        text = "ارتقِ إلى أقصى طاقات الذكاء الاصطناعي مع Nexa AI Pro",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = NeonCyan,
-                        textAlign = TextAlign.Center
-                    )
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    Text(
-                        text = "أطلق العنان للإبداع اللامحدود مع توليد صور 4K، فيديوهات Veo سينمائية، وسرعة استجابة فائقة فورية.",
-                        fontSize = 12.sp,
-                        color = Color.LightGray,
-                        textAlign = TextAlign.Center,
-                        lineHeight = 18.sp,
-                        modifier = Modifier.padding(horizontal = 16.dp)
-                    )
-                }
+                PaywallHeroHeader(auraScale = auraScale)
             }
 
-            // 3. Free Usage Status Bar (if not pro)
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (isProSubscriber) Color(0xFF132A1C) else Color(0xFF161B2E)
-                    ),
-                    border = BorderStroke(
-                        1.dp,
-                        if (isProSubscriber) EncryptedGreen.copy(alpha = 0.6f) else NeonCyan.copy(alpha = 0.3f)
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = if (isProSubscriber) Icons.Default.CheckCircle else Icons.Default.FlashOn,
-                                contentDescription = null,
-                                tint = if (isProSubscriber) EncryptedGreen else NeonAmber,
-                                modifier = Modifier.size(22.dp)
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column {
-                                Text(
-                                    text = if (isProSubscriber) "توليد وسائط غير محدود (Nexa Pro Active)" else "الحد اليومي للتوليد المجاني",
-                                    color = Color.White,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = if (isProSubscriber) "أنت تستمتع بكامل ميزات السرعة والجودة الفائقة 4K"
-                                    else "تم استخدام $dailyGenerationsUsed من أصل 3 توليدات مجانية اليوم",
-                                    color = Color.LightGray,
-                                    fontSize = 11.sp
-                                )
-                            }
-                        }
-
-                        if (!isProSubscriber) {
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(if (remainingFreeGenerations == 0) Color(0xFFEF4444).copy(alpha = 0.2f) else NeonCyan.copy(alpha = 0.15f))
-                                    .border(1.dp, if (remainingFreeGenerations == 0) Color(0xFFEF4444) else NeonCyan, RoundedCornerShape(10.dp))
-                                    .padding(horizontal = 8.dp, vertical = 4.dp)
-                            ) {
-                                Text(
-                                    text = if (remainingFreeGenerations == 0) "نفد الحد اليومي" else "متبقي $remainingFreeGenerations",
-                                    color = if (remainingFreeGenerations == 0) Color(0xFFEF4444) else NeonCyan,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
-                }
+                PaywallUsageCard(
+                    isProSubscriber = isProSubscriber,
+                    dailyGenerationsUsed = dailyGenerationsUsed,
+                    remainingFreeGenerations = remainingFreeGenerations
+                )
             }
 
-            // 4. Features List Section (Requested Specification)
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF10162A)),
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(18.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        Text(
-                            text = "المزايا الحصرية لاشتراك Nexa AI Pro",
-                            color = Color.White,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-
-                        ProFeatureItem(
-                            icon = Icons.Default.AutoAwesome,
-                            iconTint = NeonCyan,
-                            title = "Unlimited AI Chat",
-                            titleAr = "محادثات ذكاء اصطناعي غير محدودة",
-                            description = "تواصل فوري مع أحدث نماذج الذكاء الاصطناعي التوليدي دون قيود على عدد الرسائل أو طول النص."
-                        )
-
-                        ProFeatureItem(
-                            icon = Icons.Default.Image,
-                            iconTint = NeonPink,
-                            title = "High-Quality Images",
-                            titleAr = "توليد صور فائقة الجودة بدقة 4K",
-                            description = "إنشاء وتصميم صور احترافية سينمائية بنماذج Imagen 3 و Gemini AI بدقة فائقة وبجميع الأبعاد."
-                        )
-
-                        ProFeatureItem(
-                            icon = Icons.Default.Videocam,
-                            iconTint = NeonAmber,
-                            title = "HD AI Video Creation",
-                            titleAr = "إنشاء فيديوهات سينمائية بالذكاء الاصطناعي (Veo)",
-                            description = "تحريك وتصيير مقاطع فيديو ومؤثرات بصرية سينمائية متحركة بدقة 60fps من الأوامر النصية."
-                        )
-
-                        ProFeatureItem(
-                            icon = Icons.Default.FlashOn,
-                            iconTint = EncryptedGreen,
-                            title = "Ultra-Fast Speed",
-                            titleAr = "سرعة استجابة فائقة ومعالجة فورية",
-                            description = "أولوية معالجة قصوى على خوادم المعالجة السحابية الفائقة بدون أي طوابير انتظار."
-                        )
-
-                        ProFeatureItem(
-                            icon = Icons.Default.Shield,
-                            iconTint = NeonPurple,
-                            title = "Encrypted Cloud & VIP Perks",
-                            titleAr = "تشفير سحابي وشارة VIP الماسية",
-                            description = "حفظ السجل المشفر سحابياً، تجربة خالية تماماً من الإعلانات، والشارة الماسية المضيئة."
-                        )
-                    }
-                }
+                PaywallFeaturesCard()
             }
 
-            // 5. Subscription Plan Selector
             item {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Text(
-                        text = "اختر خطة الاشتراك",
-                        color = Color.White,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    // Monthly Plan ($9.99/Month)
-                    PlanSelectionCard(
-                        title = "الاشتراك الشهري",
-                        subtitle = "الأكثر شعبية ومرونة",
-                        price = "$9.99",
-                        period = "شهرياً",
-                        badge = "خيار موصى به",
-                        isSelected = selectedPlan == "monthly",
-                        onClick = { selectedPlan = "monthly" }
-                    )
-
-                    // Annual Plan ($79.99/Year - Save 33%)
-                    PlanSelectionCard(
-                        title = "الاشتراك السنوي",
-                        subtitle = "وفر 33% + تجربة 3 أيام مجانية",
-                        price = "$79.99",
-                        period = "سنوياً ($6.66/شهر)",
-                        badge = "توفير 33%",
-                        isSelected = selectedPlan == "annual",
-                        onClick = { selectedPlan = "annual" }
-                    )
-                }
+                PaywallPlanSelector(
+                    selectedPlan = selectedPlan,
+                    onSelectPlan = { selectedPlan = it }
+                )
             }
 
-            // 6. Primary Subscribe CTA Button
             item {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Button(
-                        onClick = {
-                            if (isProSubscriber) {
-                                // Already pro, open management
-                                showGooglePlayBillingSheet = true
-                            } else {
-                                showGooglePlayBillingSheet = true
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(54.dp)
-                            .shadow(16.dp, RoundedCornerShape(16.dp), spotColor = NeonCyan)
-                            .testTag("subscribe_pro_button"),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color.Transparent
-                        ),
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    Brush.horizontalGradient(
-                                        listOf(
-                                            NeonCyan,
-                                            NeonPurple,
-                                            NeonPink
-                                        )
-                                    )
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = if (isProSubscriber) Icons.Default.Check else Icons.Default.WorkspacePremium,
-                                    contentDescription = null,
-                                    tint = BackgroundDark,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = if (isProSubscriber) "إدارة الاشتراك في Google Play"
-                                    else if (selectedPlan == "monthly") "متابعة الاشتراك - $9.99 / شهرياً"
-                                    else "متابعة الاشتراك - $79.99 / سنوياً",
-                                    color = BackgroundDark,
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // English Alternative Display
-                    Text(
-                        text = if (selectedPlan == "monthly") "Continue - $9.99/Month" else "Continue - $79.99/Year",
-                        color = Color.Gray,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
+                PaywallSubscribeCta(
+                    isProSubscriber = isProSubscriber,
+                    selectedPlan = selectedPlan,
+                    onClick = { showGooglePlayBillingSheet = true }
+                )
             }
 
-            // 7. Bottom Disclaimer (Terms & Privacy)
             item {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "إلغاء في أي وقت",
-                            color = Color.LightGray,
-                            fontSize = 11.sp
-                        )
-                        Text(
-                            text = " • ",
-                            color = Color.Gray,
-                            fontSize = 11.sp
-                        )
-                        Text(
-                            text = "الشروط والأحكام",
-                            color = NeonCyan,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier
-                                .clickable { showTermsModal = true }
-                                .testTag("terms_link")
-                        )
-                        Text(
-                            text = " • ",
-                            color = Color.Gray,
-                            fontSize = 11.sp
-                        )
-                        Text(
-                            text = "سياسة الخصوصية",
-                            color = NeonCyan,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier
-                                .clickable { showPrivacyModal = true }
-                                .testTag("privacy_link")
-                        )
-                    }
-
-                    Text(
-                        text = "Cancel anytime • Terms & Privacy",
-                        color = Color(0xFF64748B),
-                        fontSize = 10.sp,
-                        textAlign = TextAlign.Center
-                    )
-
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.GppGood,
-                            contentDescription = null,
-                            tint = EncryptedGreen,
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "نظام الفوترة والدفع الآمن عبر متجر Google Play معتمد ومشفر بالكامل",
-                            color = EncryptedGreen.copy(alpha = 0.8f),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    // Google Play In-App Purchase Flow Bottom Sheet Simulation
-    if (showGooglePlayBillingSheet) {
-        ModalBottomSheet(
-            onDismissRequest = {
-                if (!isPurchasing) showGooglePlayBillingSheet = false
-            },
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            containerColor = Color(0xFF1E293B),
-            contentColor = Color.White
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 12.dp)
-                    .padding(bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // Header Google Play Sheet
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Payment,
-                            contentDescription = "Google Play",
-                            tint = Color(0xFF00E676),
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column {
-                            Text(
-                                text = "Google Play Billing System",
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
-                            )
-                            Text(
-                                text = "الدفع الفوري داخل التطبيق (In-App Purchases)",
-                                color = Color.LightGray,
-                                fontSize = 11.sp
-                            )
-                        }
-                    }
-
-                    IconButton(
-                        onClick = { showGooglePlayBillingSheet = false },
-                        enabled = !isPurchasing
-                    ) {
-                        Icon(Icons.Default.Close, contentDescription = "إغلاق", tint = Color.LightGray)
-                    }
-                }
-
-                HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
-
-                // Product details row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column {
-                        Text(
-                            text = "اشتراك Nexa AI Pro (${if (selectedPlan == "monthly") "شهري" else "سنوي"})",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp
-                        )
-                        Text(
-                            text = "منصة NEXA للتواصل والتسوق الذكي",
-                            color = Color.Gray,
-                            fontSize = 12.sp
-                        )
-                    }
-                    Text(
-                        text = if (selectedPlan == "monthly") "$9.99/شهر" else "$79.99/سنة",
-                        color = NeonCyan,
-                        fontWeight = FontWeight.Black,
-                        fontSize = 16.sp
-                    )
-                }
-
-                // Payment Method
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.CreditCard,
-                                contentDescription = null,
-                                tint = NeonCyan,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column {
-                                Text(
-                                    text = "بطاقة مدى / Visa •••• 7654",
-                                    color = Color.White,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = "Google Pay • ${userProfile?.name ?: "المستخدم"}",
-                                    color = Color.LightGray,
-                                    fontSize = 11.sp
-                                )
-                            }
-                        }
-
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = null,
-                            tint = EncryptedGreen,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
-
-                // Success or In-Progress Indicator
-                if (isPurchasing) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        CircularProgressIndicator(
-                            color = NeonCyan,
-                            modifier = Modifier.size(24.dp),
-                            strokeWidth = 2.5.dp
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = "جاري تأكيد عملية الشراء عبر متجر Google Play...",
-                            color = Color.White,
-                            fontSize = 12.sp
-                        )
-                    }
-                }
-
-                // Action Confirm Button
-                Button(
-                    onClick = {
-                        isPurchasing = true
-                        coroutineScope.launch {
-                            delay(1200)
-                            viewModel.subscribeToNexaPro(
-                                planId = if (selectedPlan == "monthly") "nexa_pro_monthly" else "nexa_pro_annual",
-                                activity = context as? Activity
-                            )
-                            isPurchasing = false
-                            showGooglePlayBillingSheet = false
-                            onBackClick()
-                        }
-                    },
-                    enabled = !isPurchasing,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp)
-                        .testTag("confirm_google_play_purchase"),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E676)),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text(
-                        text = if (isPurchasing) "جاري المعالجة..." else "تأكيد الاشتراك بنقرة واحدة (1-Tap Buy)",
-                        color = Color.Black,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp
-                    )
-                }
-
-                Text(
-                    text = "سيتم تجديد الاشتراك تلقائياً ويمكنك إلغاؤه في أي وقت عبر إعدادات اشتراكات Google Play.",
-                    color = Color.Gray,
-                    fontSize = 10.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
+                PaywallFooterDisclaimer(
+                    onTermsClick = { showTermsModal = true },
+                    onPrivacyClick = { showPrivacyModal = true }
                 )
             }
         }
     }
 
-    // Terms of Service Modal
+    if (showGooglePlayBillingSheet) {
+        GooglePlayBillingSheet(
+            selectedPlan = selectedPlan,
+            userName = userProfile?.name ?: "المستخدم",
+            isPurchasing = isPurchasing,
+            onDismiss = {
+                if (!isPurchasing) showGooglePlayBillingSheet = false
+            },
+            onConfirmPurchase = {
+                isPurchasing = true
+                coroutineScope.launch {
+                    delay(1200)
+                    viewModel.subscribeToNexaPro(
+                        planId = if (selectedPlan == "monthly") "nexa_pro_monthly" else "nexa_pro_annual",
+                        activity = context as? Activity
+                    )
+                    isPurchasing = false
+                    showGooglePlayBillingSheet = false
+                    onBackClick()
+                }
+            }
+        )
+    }
+
     if (showTermsModal) {
         TermsAndPrivacyDialog(
             title = "الشروط والأحكام (Terms of Service)",
@@ -790,13 +227,639 @@ fun NexaProPaywallScreen(
         )
     }
 
-    // Privacy Policy Modal
     if (showPrivacyModal) {
         TermsAndPrivacyDialog(
             title = "سياسة الخصوصية (Privacy Policy)",
-            content = "1. يتم تشفير كافة المحادثات والأوامر النصية بتقنية 256-bit End-to-End Encryption.\n2. تلتزم NEXA بالامتثال الصارم لمعايير GDPR العالمية وقوانين حماية البيانات الشخصية.\n3. لا يتم بيع بياناتك أو استخدام وسائطك الخاصة لتدريب النماذج دون موافقة صريحة.\n4. يحق لك طلب حذف حسابك وبياناتك بالكامل في أي وقت من إعدادات الملف الشخصي.",
+            content = "1. يتم تشفير كافة المحادثات والأوامر النصية بتقنية التشفير السحابي المعتمد من Firebase.\n2. تلتزم NEXA بالامتثال الصارم لمعايير GDPR العالمية وقوانين حماية البيانات الشخصية.\n3. لا يتم بيع بياناتك أو استخدام وسائطك الخاصة لتدريب النماذج دون موافقة صريحة.\n4. يحق لك طلب حذف حسابك وبياناتك بالكامل في أي وقت من إعدادات الملف الشخصي.",
             onDismiss = { showPrivacyModal = false }
         )
+    }
+}
+
+@Composable
+fun PaywallTopBar(
+    isProSubscriber: Boolean,
+    onBackClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        IconButton(
+            onClick = onBackClick,
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.08f))
+                .testTag("paywall_back_button")
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "رجوع",
+                tint = Color.White
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(20.dp))
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(NeonAmber.copy(alpha = 0.2f), NeonPurple.copy(alpha = 0.2f))
+                    )
+                )
+                .border(1.dp, NeonAmber.copy(alpha = 0.6f), RoundedCornerShape(20.dp))
+                .padding(horizontal = 14.dp, vertical = 6.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Diamond,
+                    contentDescription = null,
+                    tint = NeonAmber,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = if (isProSubscriber) "عضوية PRO مفعّلة 👑" else "اشتراك NEXA AI PRO",
+                    color = NeonAmber,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.width(40.dp))
+    }
+}
+
+@Composable
+fun PaywallHeroHeader(auraScale: Float) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .scale(auraScale)
+                .size(80.dp)
+                .shadow(24.dp, CircleShape, spotColor = NeonCyan)
+                .clip(CircleShape)
+                .background(
+                    Brush.radialGradient(
+                        listOf(
+                            NeonCyan.copy(alpha = 0.4f),
+                            NeonPurple.copy(alpha = 0.8f),
+                            Color(0xFF0F172A)
+                        )
+                    )
+                )
+                .border(2.dp, NeonCyan, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.AutoAwesome,
+                contentDescription = "Nexa Pro",
+                tint = Color.White,
+                modifier = Modifier.size(40.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        Text(
+            text = "Nexa AI Pro",
+            fontSize = 28.sp,
+            fontWeight = FontWeight.Black,
+            color = Color.White,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Text(
+            text = "ارتقِ إلى أقصى طاقات الذكاء الاصطناعي مع Nexa AI Pro",
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            color = NeonCyan,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        Text(
+            text = "أطلق العنان للإبداع اللامحدود مع توليد صور 4K، فيديوهات Veo سينمائية، وسرعة استجابة فائقة فورية.",
+            fontSize = 12.sp,
+            color = Color.LightGray,
+            textAlign = TextAlign.Center,
+            lineHeight = 18.sp,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
+    }
+}
+
+@Composable
+fun PaywallUsageCard(
+    isProSubscriber: Boolean,
+    dailyGenerationsUsed: Int,
+    remainingFreeGenerations: Int
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isProSubscriber) Color(0xFF132A1C) else Color(0xFF161B2E)
+        ),
+        border = BorderStroke(
+            1.dp,
+            if (isProSubscriber) EncryptedGreen.copy(alpha = 0.6f) else NeonCyan.copy(alpha = 0.3f)
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = if (isProSubscriber) Icons.Default.CheckCircle else Icons.Default.FlashOn,
+                    contentDescription = null,
+                    tint = if (isProSubscriber) EncryptedGreen else NeonAmber,
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Column {
+                    Text(
+                        text = if (isProSubscriber) "توليد وسائط غير محدود (Nexa Pro Active)" else "الحد اليومي للتوليد المجاني",
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = if (isProSubscriber) "أنت تستمتع بكامل ميزات السرعة والجودة الفائقة 4K"
+                        else "تم استخدام $dailyGenerationsUsed من أصل 3 توليدات مجانية اليوم",
+                        color = Color.LightGray,
+                        fontSize = 11.sp
+                    )
+                }
+            }
+
+            if (!isProSubscriber) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (remainingFreeGenerations == 0) Color(0xFFEF4444).copy(alpha = 0.2f) else NeonCyan.copy(alpha = 0.15f))
+                        .border(1.dp, if (remainingFreeGenerations == 0) Color(0xFFEF4444) else NeonCyan, RoundedCornerShape(10.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = if (remainingFreeGenerations == 0) "نفد الحد اليومي" else "متبقي $remainingFreeGenerations",
+                        color = if (remainingFreeGenerations == 0) Color(0xFFEF4444) else NeonCyan,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PaywallFeaturesCard() {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF10162A)),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Text(
+                text = "المزايا الحصرية لاشتراك Nexa AI Pro",
+                color = Color.White,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold
+            )
+
+            ProFeatureItem(
+                icon = Icons.Default.AutoAwesome,
+                iconTint = NeonCyan,
+                title = "Unlimited AI Chat",
+                titleAr = "محادثات ذكاء اصطناعي غير محدودة",
+                description = "تواصل فوري مع أحدث نماذج الذكاء الاصطناعي التوليدي دون قيود على عدد الرسائل أو طول النص."
+            )
+
+            ProFeatureItem(
+                icon = Icons.Default.Image,
+                iconTint = NeonPink,
+                title = "High-Quality Images",
+                titleAr = "توليد صور فائقة الجودة بدقة 4K",
+                description = "إنشاء وتصميم صور احترافية سينمائية بنماذج Imagen 3 و Gemini AI بدقة فائقة وبجميع الأبعاد."
+            )
+
+            ProFeatureItem(
+                icon = Icons.Default.Videocam,
+                iconTint = NeonAmber,
+                title = "HD AI Video Creation",
+                titleAr = "إنشاء فيديوهات سينمائية بالذكاء الاصطناعي (Veo)",
+                description = "تحريك وتصيير مقاطع فيديو ومؤثرات بصرية سينمائية متحركة بدقة 60fps من الأوامر النصية."
+            )
+
+            ProFeatureItem(
+                icon = Icons.Default.FlashOn,
+                iconTint = EncryptedGreen,
+                title = "Ultra-Fast Speed",
+                titleAr = "سرعة استجابة فائقة ومعالجة فورية",
+                description = "أولوية معالجة قصوى على خوادم المعالجة السحابية الفائقة بدون أي طوابير انتظار."
+            )
+
+            ProFeatureItem(
+                icon = Icons.Default.Shield,
+                iconTint = NeonPurple,
+                title = "Encrypted Cloud & VIP Perks",
+                titleAr = "تشفير سحابي وشارة VIP الماسية",
+                description = "حفظ السجل المشفر سحابياً، تجربة خالية تماماً من الإعلانات، والشارة الماسية المضيئة."
+            )
+        }
+    }
+}
+
+@Composable
+fun PaywallPlanSelector(
+    selectedPlan: String,
+    onSelectPlan: (String) -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Text(
+            text = "اختر خطة الاشتراك",
+            color = Color.White,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold
+        )
+
+        // Monthly Plan ($9.99/Month)
+        PlanSelectionCard(
+            title = "الاشتراك الشهري",
+            subtitle = "الأكثر شعبية ومرونة",
+            price = "$9.99",
+            period = "شهرياً",
+            badge = "خيار موصى به",
+            isSelected = selectedPlan == "monthly",
+            onClick = { onSelectPlan("monthly") }
+        )
+
+        // Annual Plan ($79.99/Year - Save 33%)
+        PlanSelectionCard(
+            title = "الاشتراك السنوي",
+            subtitle = "وفر 33% + تجربة 3 أيام مجانية",
+            price = "$79.99",
+            period = "سنوياً ($6.66/شهر)",
+            badge = "توفير 33%",
+            isSelected = selectedPlan == "annual",
+            onClick = { onSelectPlan("annual") }
+        )
+    }
+}
+
+@Composable
+fun PaywallSubscribeCta(
+    isProSubscriber: Boolean,
+    selectedPlan: String,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Button(
+            onClick = onClick,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(54.dp)
+                .shadow(16.dp, RoundedCornerShape(16.dp), spotColor = NeonCyan)
+                .testTag("subscribe_pro_button"),
+            shape = RoundedCornerShape(16.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color.Transparent
+            ),
+            contentPadding = PaddingValues(0.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(
+                                NeonCyan,
+                                NeonPurple,
+                                NeonPink
+                            )
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = if (isProSubscriber) Icons.Default.Check else Icons.Default.WorkspacePremium,
+                        contentDescription = null,
+                        tint = BackgroundDark,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (isProSubscriber) "إدارة الاشتراك في Google Play"
+                        else if (selectedPlan == "monthly") "متابعة الاشتراك - $9.99 / شهرياً"
+                        else "متابعة الاشتراك - $79.99 / سنوياً",
+                        color = BackgroundDark,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // English Alternative Display
+        Text(
+            text = if (selectedPlan == "monthly") "Continue - $9.99/Month" else "Continue - $79.99/Year",
+            color = Color.Gray,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
+@Composable
+fun PaywallFooterDisclaimer(
+    onTermsClick: () -> Unit,
+    onPrivacyClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "إلغاء في أي وقت",
+                color = Color.LightGray,
+                fontSize = 11.sp
+            )
+            Text(
+                text = " • ",
+                color = Color.Gray,
+                fontSize = 11.sp
+            )
+            Text(
+                text = "الشروط والأحكام",
+                color = NeonCyan,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .clickable { onTermsClick() }
+                    .testTag("terms_link")
+            )
+            Text(
+                text = " • ",
+                color = Color.Gray,
+                fontSize = 11.sp
+            )
+            Text(
+                text = "سياسة الخصوصية",
+                color = NeonCyan,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .clickable { onPrivacyClick() }
+                    .testTag("privacy_link")
+            )
+        }
+
+        Text(
+            text = "Cancel anytime • Terms & Privacy",
+            color = Color(0xFF64748B),
+            fontSize = 10.sp,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.GppGood,
+                contentDescription = null,
+                tint = EncryptedGreen,
+                modifier = Modifier.size(13.dp)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = "نظام الفوترة والدفع الآمن عبر متجر Google Play معتمد ومشفر بالكامل",
+                color = EncryptedGreen.copy(alpha = 0.8f),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun GooglePlayBillingSheet(
+    selectedPlan: String,
+    userName: String,
+    isPurchasing: Boolean,
+    onDismiss: () -> Unit,
+    onConfirmPurchase: () -> Unit
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = Color(0xFF1E293B),
+        contentColor = Color.White
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 12.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Payment,
+                        contentDescription = "Google Play",
+                        tint = Color(0xFF00E676),
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = "Google Play Billing System",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                        Text(
+                            text = "الدفع الفوري داخل التطبيق (In-App Purchases)",
+                            color = Color.LightGray,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+
+                IconButton(
+                    onClick = onDismiss,
+                    enabled = !isPurchasing
+                ) {
+                    Icon(Icons.Default.Close, contentDescription = "إغلاق", tint = Color.LightGray)
+                }
+            }
+
+            HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text(
+                        text = "اشتراك Nexa AI Pro (${if (selectedPlan == "monthly") "شهري" else "سنوي"})",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp
+                    )
+                    Text(
+                        text = "منصة NEXA للتواصل والتسوق الذكي",
+                        color = Color.Gray,
+                        fontSize = 12.sp
+                    )
+                }
+                Text(
+                    text = if (selectedPlan == "monthly") "$9.99/شهر" else "$79.99/سنة",
+                    color = NeonCyan,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 16.sp
+                )
+            }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.CreditCard,
+                            contentDescription = null,
+                            tint = NeonCyan,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "بطاقة مدى / Visa •••• 7654",
+                                color = Color.White,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Google Pay • $userName",
+                                color = Color.LightGray,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = EncryptedGreen,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
+            if (isPurchasing) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CircularProgressIndicator(
+                        color = NeonCyan,
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.5.dp
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = "جاري تأكيد عملية الشراء عبر متجر Google Play...",
+                        color = Color.White,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+
+            Button(
+                onClick = onConfirmPurchase,
+                enabled = !isPurchasing,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .testTag("confirm_google_play_purchase"),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E676)),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(
+                    text = if (isPurchasing) "جاري المعالجة..." else "تأكيد الاشتراك بنقرة واحدة (1-Tap Buy)",
+                    color = Color.Black,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp
+                )
+            }
+
+            Text(
+                text = "سيتم تجديد الاشتراك تلقائياً ويمكنك إلغاؤه في أي وقت عبر إعدادات اشتراكات Google Play.",
+                color = Color.Gray,
+                fontSize = 10.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
     }
 }
 

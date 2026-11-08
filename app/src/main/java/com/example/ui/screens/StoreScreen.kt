@@ -334,13 +334,55 @@ fun StoreScreen(
             contentPadding = PaddingValues(bottom = 100.dp),
             modifier = Modifier.fillMaxSize()
         ) {
-            items(availableProducts) { product ->
-                ProductGridItem(
-                    product = product,
-                    onAddToCart = { viewModel.addToCart(product) },
-                    onDirectBuy = { directCheckoutProduct = product },
-                    onClick = { onProductSelected(product) }
-                )
+            if (availableProducts.isEmpty()) {
+                item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(2) }) {
+                    androidx.compose.material3.Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 32.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = androidx.compose.material3.CardDefaults.cardColors(
+                            containerColor = Color.White.copy(alpha = 0.05f)
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ShoppingBag,
+                                contentDescription = null,
+                                tint = NeonCyan,
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "لا توجد منتجات في المتجر حالياً",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "سيتم إضافة منتجات وإلكترونيات ذكية جديدة قريباً",
+                                color = Color.White.copy(alpha = 0.6f),
+                                fontSize = 13.sp,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                        }
+                    }
+                }
+            } else {
+                items(availableProducts) { product ->
+                    ProductGridItem(
+                        product = product,
+                        onAddToCart = { viewModel.addToCart(product) },
+                        onDirectBuy = { directCheckoutProduct = product },
+                        onClick = { onProductSelected(product) }
+                    )
+                }
             }
         }
     }

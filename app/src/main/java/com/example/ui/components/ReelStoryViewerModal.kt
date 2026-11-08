@@ -224,7 +224,7 @@ fun ReelStoryViewerModal(
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 CreatorAvatarWithAura(
-                                    followersCount = 1_250_000,
+                                    followersCount = 0,
                                     authorInitial = story.authorName,
                                     size = 42.dp,
                                     showBadgeChip = false

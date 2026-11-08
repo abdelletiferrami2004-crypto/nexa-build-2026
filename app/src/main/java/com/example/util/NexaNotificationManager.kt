@@ -76,6 +76,10 @@ object NexaNotificationManager {
         avatarBitmap: Bitmap? = null
     ) {
         try {
+            if (!com.example.data.local.SettingsRepository.getInstance(context).areNotificationsEnabledCached) {
+                Log.d(TAG, "Notification suppressed because notifications are disabled in user settings.")
+                return
+            }
             initNotificationChannels(context)
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
 

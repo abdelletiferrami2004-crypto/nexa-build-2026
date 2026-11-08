@@ -52,6 +52,20 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         try {
+            val appCheck = com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
+            if (BuildConfig.DEBUG) {
+                appCheck.installAppCheckProviderFactory(
+                    com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory.getInstance()
+                )
+            } else {
+                appCheck.installAppCheckProviderFactory(
+                    com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory.getInstance()
+                )
+            }
+        } catch (e: Throwable) {
+            android.util.Log.e("MainActivity", "App Check initialization notice", e)
+        }
+        try {
             com.example.util.NotificationSoundManager.init(this)
             com.example.util.NexaNotificationManager.initNotificationChannels(this)
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
@@ -73,6 +87,19 @@ class MainActivity : FragmentActivity() {
         setContent {
             val windowSizeClass = calculateWindowSizeClass(this)
             val isDarkTheme by viewModel.isDarkTheme.collectAsState()
+            val isScreenshotProtectionEnabled by viewModel.isScreenshotProtectionEnabled.collectAsState()
+
+            LaunchedEffect(isScreenshotProtectionEnabled) {
+                if (isScreenshotProtectionEnabled) {
+                    window.setFlags(
+                        android.view.WindowManager.LayoutParams.FLAG_SECURE,
+                        android.view.WindowManager.LayoutParams.FLAG_SECURE
+                    )
+                } else {
+                    window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                }
+            }
+
             MajarrahTheme(darkTheme = isDarkTheme) {
                 // Mandatory RTL Layout Direction for Arabic Interface
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {

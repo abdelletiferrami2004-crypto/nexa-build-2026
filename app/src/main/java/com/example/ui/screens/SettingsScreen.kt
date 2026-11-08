@@ -97,7 +97,7 @@ fun SettingsScreen(
         false
     }
     val currentSavedPin = profile.chatPin.ifBlank { com.example.util.PinLockManager.getSavedPin(context) }
-    var notificationsEnabled by remember { mutableStateOf(true) }
+    val notificationsEnabled by viewModel.isNotificationsEnabled.collectAsState()
     var biometricEnabled by remember { mutableStateOf(profile.isBiometricEnabled) }
     var showSetPinDialog by remember { mutableStateOf(false) }
     var showLegalModal by remember { mutableStateOf(false) }
@@ -108,6 +108,7 @@ fun SettingsScreen(
 
     if (showSecurityModal) {
         NexaSecurityAnd2faModal(
+            viewModel = viewModel,
             onDismiss = { showSecurityModal = false }
         )
     }
@@ -179,7 +180,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(12.dp))
                     if (!profile.isVerified) {
                         Text(
-                            text = "حالة الطلب: مؤهل للتوثيق الفوري 🛡️",
+                            text = "حالة الطلب: مؤهل لتقديم طلب التوثيق 🛡️",
                             color = NeonCyan,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold
@@ -191,12 +192,12 @@ fun SettingsScreen(
                 Button(
                     onClick = {
                         showVerificationModal = false
-                        viewModel.toggleVerificationBadge(!profile.isVerified)
+                        viewModel.requestVerificationSupportTicket()
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = NeonCyan)
                 ) {
                     Text(
-                        text = if (profile.isVerified) "إلغاء التوثيق" else "تفعيل التوثيق الآن ✨",
+                        text = "طلب توثيق",
                         color = BackgroundDark,
                         fontWeight = FontWeight.Bold
                     )
@@ -466,7 +467,7 @@ fun SettingsScreen(
                 trailing = {
                     Switch(
                         checked = notificationsEnabled,
-                        onCheckedChange = { notificationsEnabled = it },
+                        onCheckedChange = { viewModel.setNotificationsEnabled(it) },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = BackgroundDark,
                             checkedTrackColor = NeonPink,

@@ -759,17 +759,27 @@ fun ChatsListScreen(
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Icon(
-                                    imageVector = Icons.Default.Search,
+                                    imageVector = if (searchQuery.isNotBlank()) Icons.Default.Search else Icons.Default.AddComment,
                                     contentDescription = null,
-                                    tint = Color.Gray,
+                                    tint = NeonCyan,
                                     modifier = Modifier.size(36.dp)
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
-                                    text = "لا توجد محادثات تطابق البحث",
-                                    color = Color.LightGray,
-                                    fontSize = 13.sp
+                                    text = if (searchQuery.isNotBlank()) "لا توجد محادثات تطابق البحث" else "لا توجد محادثات نشطة حالياً",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp
                                 )
+                                if (searchQuery.isBlank()) {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "ابدأ محادثة جديدة مشفرة مع أصدقائك أو تواصل مع ذكاء NEXA AI",
+                                        color = Color.LightGray,
+                                        fontSize = 12.sp,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                    )
+                                }
                             }
                         }
                     }
@@ -1995,7 +2005,7 @@ fun DirectChatScreen(
                             }
                         }
 
-                        items(messages, key = { it.id.toString() + "_" + it.timestamp }) { msg ->
+                        items(messages, key = { it.remoteId.ifEmpty { "${it.id}_${it.timestamp}" } }) { msg ->
                             DirectChatMessageBubble(
                                 message = msg,
                                 isAiChat = isAiChat,

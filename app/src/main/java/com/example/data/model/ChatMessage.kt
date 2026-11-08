@@ -1,11 +1,20 @@
 package com.example.data.model
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "chat_messages")
+@Entity(
+    tableName = "chat_messages",
+    indices = [
+        Index(value = ["conversationId", "remoteId"], unique = true)
+    ]
+)
 data class ChatMessage(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val remoteId: String = "",
+    val senderUid: String = "",
+    val readBy: String = "",
     val conversationId: String,
     val senderName: String,
     val senderAvatar: String = "",

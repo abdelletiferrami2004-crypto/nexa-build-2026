@@ -6,7 +6,7 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "user_profile")
 data class UserProfile(
     @PrimaryKey val id: Int = 1,
-    val phone: String = "+966 50 123 4567",
+    val phone: String = "",
     val name: String = "عبدالعزيز الماجد",
     val age: Int = 16,
     val isTeenMode: Boolean = true, // automatically true if age < 18
@@ -15,9 +15,10 @@ data class UserProfile(
     val chatPin: String = "",
     val isLoggedIn: Boolean = false,
     val avatarUrl: String = "",
-    val postsCount: Int = 12,
-    val followersCount: Int = 1_250_000, // Default 1.25M Followers to show VIP Diamond Aura
-    val totalViewsCount: Long = 1_450_000L, // Default 1.45M Views to unlock Creator Monetization Fund
+    val postsCount: Int = 0,
+    val followersCount: Int = 0,
+    val totalViewsCount: Long = 0L,
+    val isProfileLocked: Boolean = false,
     val points: Int = 450,
     val isVipMember: Boolean = false,
     val vipTierName: String = "NEXA Standard",
@@ -29,14 +30,15 @@ data class UserProfile(
     val bio: String = "عاشق للتقنية والابتكار ومصمم محتوى في منصة NEXA",
     val username: String = "abdulaziz_majed",
     val isContactsSynced: Boolean = false,
-    val isVerified: Boolean = true, // Blue Badge Verification
-    val verificationBadgeCategory: String = "صانع محتوى موثق",
+    val isVerified: Boolean = false, // Blue Badge Verification
+    val verificationBadgeCategory: String = "عضو موثق",
     val isTwoFactorEnabled: Boolean = false, // 2FA Security
     val twoFactorMethod: String = "authenticator", // "sms", "authenticator", "biometric"
     val twoFactorSecret: String = "NEXA-2FA-SECURE-8891",
     val isNexaProSubscriber: Boolean = false, // NEXA AI Pro Subscriber
     val email: String = "user@nexa.ai",
     val firebaseUid: String = "",
+    val uid: String = "",
     val fcmToken: String = "",
     val dailyAiGenerationsUsed: Int = 0, // Daily AI Image & Video generations used
     val lastAiGenerationDate: String = "", // e.g. "2026-08-24" for daily reset

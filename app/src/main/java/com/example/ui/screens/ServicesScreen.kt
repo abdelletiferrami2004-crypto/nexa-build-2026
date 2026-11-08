@@ -159,7 +159,7 @@ fun ServicesScreen(
     var showNexaAccountsHubModal by remember { mutableStateOf(false) }
     var showPrivacyCheckupModal by remember { mutableStateOf(false) }
     var showProfileLockModal by remember { mutableStateOf(false) }
-    var isProfileLocked by remember { mutableStateOf(false) }
+    val isProfileLocked by viewModel.isProfileLocked.collectAsState()
     var showNotificationPrefsModal by remember { mutableStateOf(false) }
     var showBlockListModal by remember { mutableStateOf(false) }
     var showNexaVerifiedModal by remember { mutableStateOf(false) }
@@ -175,7 +175,7 @@ fun ServicesScreen(
     var showNearbyDiscoveryModal by remember { mutableStateOf(false) }
 
     // Security & Privacy settings states
-    var isScreenshotProtectionEnabled by remember { mutableStateOf(true) }
+    val isScreenshotProtectionEnabled by viewModel.isScreenshotProtectionEnabled.collectAsState()
     var showVoiceAssistantModal by remember { mutableStateOf(false) }
     var showPrivateVaultModal by remember { mutableStateOf(false) }
 
@@ -206,6 +206,7 @@ fun ServicesScreen(
 
     if (showSecurityAnd2faModal) {
         com.example.ui.components.NexaSecurityAnd2faModal(
+            viewModel = viewModel,
             onDismiss = { showSecurityAnd2faModal = false }
         )
     }
@@ -230,12 +231,9 @@ fun ServicesScreen(
         )
     }
 
-    // Dark Mode Local State
-    var isDarkModeEnabled by remember { mutableStateOf(true) }
-    // Cache size simulated state
+    val isDarkModeEnabled by viewModel.isDarkTheme.collectAsState()
     var cacheSizeMb by remember { mutableStateOf(42.8f) }
 
-    // AI Assistant Dialog Launcher
     if (showAiModal) {
         com.example.ui.components.AiAssistantModal(
             viewModel = viewModel,
@@ -243,7 +241,6 @@ fun ServicesScreen(
         )
     }
 
-    // Google Play Legal Document Modal
     showLegalDocsModal?.let { tab ->
         GooglePlayLegalModal(
             initialTab = tab,
@@ -251,7 +248,6 @@ fun ServicesScreen(
         )
     }
 
-    // Creator Studio & Wallet Dialog
     if (showCreatorStudioModal) {
         CreatorStudioAndWalletDialog(
             profileName = profile?.name ?: "مستخدم NEXA",
@@ -259,7 +255,6 @@ fun ServicesScreen(
         )
     }
 
-    // Audio Spaces Dialog
     if (showAudioSpacesModal) {
         AudioSpacesDialog(
             profileName = profile?.name ?: "مستخدم NEXA",
@@ -267,7 +262,6 @@ fun ServicesScreen(
         )
     }
 
-    // Nearby Local Discovery Dialog
     if (showNearbyDiscoveryModal) {
         NearbyDiscoveryDialog(
             onDismiss = { showNearbyDiscoveryModal = false },
@@ -303,7 +297,6 @@ fun ServicesScreen(
         )
     }
 
-    // Modals Declarations
     if (showAccountSwitcherModal) {
         AccountSwitcherBottomSheet(
             currentUserName = profile?.name ?: "مستخدم NEXA",
@@ -337,7 +330,7 @@ fun ServicesScreen(
         ProfileLockDialog(
             isLocked = isProfileLocked,
             onToggleLock = { locked ->
-                isProfileLocked = locked
+                viewModel.setProfileLocked(locked)
                 Toast.makeText(context, if (locked) "تم قفل الملف الشخصي للحماية" else "تم إلغاء قفل الملف الشخصي", Toast.LENGTH_SHORT).show()
             },
             onDismiss = { showProfileLockModal = false }
@@ -345,7 +338,7 @@ fun ServicesScreen(
     }
 
     if (showNotificationPrefsModal) {
-        NotificationPreferencesDialog(onDismiss = { showNotificationPrefsModal = false })
+        NotificationPreferencesDialog(viewModel = viewModel, onDismiss = { showNotificationPrefsModal = false })
     }
 
     if (showBlockListModal) {
@@ -391,160 +384,27 @@ fun ServicesScreen(
         )
     }
 
-    // Quick Action Grid Items definition (10 Required Action Items)
     val quickActions = listOf(
-        QuickActionItem(
-            title = "الرسائل المباشرة",
-            description = "المحادثات الخاصة والمجموعات",
-            icon = Icons.Default.Chat,
-            iconColor = EncryptedGreen,
-            onClick = { onNavigate("chat") }
-        ),
-        QuickActionItem(
-            title = "إدارة الصفحات والأعمال (Meta Suite)",
-            description = "إنشاء صفحات عامة، أدوار الأدمن، وتحليلات الأداء",
-            icon = Icons.Default.BusinessCenter,
-            iconColor = NeonPurple,
-            badgeText = "Suite 💼",
-            onClick = { showPagesAndBusinessModal = true }
-        ),
-        QuickActionItem(
-            title = "مركز الإعلانات والحملات الممولة",
-            description = "إطلاق إعلانات ممولة، استهداف الجمهور، والأرباح",
-            icon = Icons.Default.Campaign,
-            iconColor = NeonAmber,
-            badgeText = "إعلانات 🎯",
-            onClick = { showAdsManagerModal = true }
-        ),
-        QuickActionItem(
-            title = "NEXA Live Stream (البث المباشر)",
-            description = "بث مباشر تفاعلي، تفاعلات قلوب، ودردشة فورية",
-            icon = Icons.Default.VideoLibrary,
-            iconColor = NeonPink,
-            badgeText = "مباشر LIVE",
-            onClick = { showLiveStreamModal = true }
-        ),
-        QuickActionItem(
-            title = "الأمان، 2FA، والأجهزة النشطة",
-            description = "المصادقة الثنائية، جلسات الأجهزة، والفلترة الآلية",
-            icon = Icons.Default.Shield,
-            iconColor = EncryptedGreen,
-            badgeText = "2FA 🛡️",
-            onClick = { showSecurityAnd2faModal = true }
-        ),
-        QuickActionItem(
-            title = "مركز المساعدة والدعم الفني",
-            description = "الأسئلة الشائعة وتذاكر الدعم الفني المباشر",
-            icon = Icons.Default.SupportAgent,
-            iconColor = NeonCyan,
-            badgeText = "دعم 🎧",
-            onClick = { showSupportModal = true }
-        ),
-        QuickActionItem(
-            title = "ريلز NEXA",
-            description = "مقاطع فيديو قصيرة وتفاعلية",
-            icon = Icons.Default.VideoLibrary,
-            iconColor = NeonPink,
-            onClick = { onNavigate("reels") }
-        ),
-        QuickActionItem(
-            title = "المجموعات",
-            description = "مجتمعات اهتمامات ونقاشات",
-            icon = Icons.Default.Group,
-            iconColor = TeenProtectionCyan,
-            onClick = { onNavigate("friends") }
-        ),
-        QuickActionItem(
-            title = "الأصدقاء",
-            description = "طلبات الصداقة والمقترحون",
-            icon = Icons.Default.People,
-            iconColor = NeonCyan,
-            onClick = { onNavigate("friends") }
-        ),
-        QuickActionItem(
-            title = "المساعد الصوتي الذكي",
-            description = "أوامر صوتية وتلخيص ذكي للمحتوى",
-            icon = Icons.Default.Mic,
-            iconColor = NeonCyan,
-            badgeText = "صوتي",
-            onClick = { showVoiceAssistantModal = true }
-        ),
-        QuickActionItem(
-            title = "الخزنة السرية المشفرة",
-            description = "حماية المحادثات والمنشورات ببصمة الجهاز",
-            icon = Icons.Default.Lock,
-            iconColor = EncryptedGreen,
-            badgeText = "مشفر 🔐",
-            onClick = { showPrivateVaultModal = true }
-        ),
-        QuickActionItem(
-            title = "NEXA AI",
-            description = "المساعد الذكي للإنتاجية",
-            icon = Icons.Default.AutoAwesome,
-            iconColor = NeonPurple,
-            badgeText = "ذكاء آلي",
-            onClick = { showAiModal = true }
-        ),
-        QuickActionItem(
-            title = "العناصر المحفوظة",
-            description = "المنشورات والمنتجات المفضلة",
-            icon = Icons.Default.Bookmark,
-            iconColor = NeonAmber,
-            onClick = { showSavedItemsModal = true }
-        ),
-        QuickActionItem(
-            title = "المناسبات والأعياد",
-            description = "أعياد الميلاد والأحداث القادمة",
-            icon = Icons.Default.Cake,
-            iconColor = NeonPink,
-            onClick = { showEventsModal = true }
-        ),
-        QuickActionItem(
-            title = "NEXA Verified",
-            description = "شارات التوثيق والحماية المتقدمة",
-            icon = Icons.Default.Verified,
-            iconColor = NeonCyan,
-            isVerifiedBadge = true,
-            onClick = { showNexaVerifiedModal = true }
-        ),
-        QuickActionItem(
-            title = "المتجر / Marketplace",
-            description = "عروض المنتجات الرقمية والتسوق",
-            icon = Icons.Default.ShoppingBag,
-            iconColor = EncryptedGreen,
-            onClick = { onNavigate("store") }
-        ),
-        QuickActionItem(
-            title = "استوديو صناع المحتوى والمحفظة",
-            description = "تحليلات الأداء والأرباح المالية",
-            icon = Icons.Default.AccountBalanceWallet,
-            iconColor = NeonAmber,
-            badgeText = "أرباح $",
-            onClick = { showCreatorStudioModal = true }
-        ),
-        QuickActionItem(
-            title = "الغرف الصوتية المباشرة",
-            description = "بث صوتي مباشر ونقاشات تفاعلية",
-            icon = Icons.Default.Mic,
-            iconColor = NeonPink,
-            badgeText = "مباشر LIVE",
-            onClick = { showAudioSpacesModal = true }
-        ),
-        QuickActionItem(
-            title = "رادار اكتشاف القريب Radar",
-            description = "محتوى محلي وصناع من حولك",
-            icon = Icons.Default.NearMe,
-            iconColor = TeenProtectionCyan,
-            badgeText = "الرادار 🛰️",
-            onClick = { showNearbyDiscoveryModal = true }
-        ),
-        QuickActionItem(
-            title = "الذكريات والمواجز",
-            description = "منشوراتك القديمة في مثل هذا اليوم",
-            icon = Icons.Default.AutoStories,
-            iconColor = TeenProtectionCyan,
-            onClick = { showMemoriesModal = true }
-        )
+        QuickActionItem("الرسائل المباشرة", "المحادثات الخاصة والمجموعات", Icons.Default.Chat, EncryptedGreen, onClick = { onNavigate("chat") }),
+        QuickActionItem("إدارة الصفحات والأعمال (Meta Suite)", "إنشاء صفحات عامة، أدوار الأدمن، وتحليلات الأداء", Icons.Default.BusinessCenter, NeonPurple, badgeText = "Suite 💼", onClick = { showPagesAndBusinessModal = true }),
+        QuickActionItem("مركز الإعلانات والحملات الممولة", "إطلاق إعلانات ممولة، استهداف الجمهور، والأرباح", Icons.Default.Campaign, NeonAmber, badgeText = "إعلانات 🎯", onClick = { showAdsManagerModal = true }),
+        QuickActionItem("NEXA Live Stream (البث المباشر)", "بث مباشر تفاعلي، تفاعلات قلوب، ودردشة فورية", Icons.Default.VideoLibrary, NeonPink, badgeText = "مباشر LIVE", onClick = { showLiveStreamModal = true }),
+        QuickActionItem("الأمان، 2FA، والأجهزة النشطة", "المصادقة الثنائية، جلسات الأجهزة، والفلترة الآلية", Icons.Default.Shield, EncryptedGreen, badgeText = "2FA 🛡️", onClick = { showSecurityAnd2faModal = true }),
+        QuickActionItem("مركز المساعدة والدعم الفني", "الأسئلة الشائعة وتذاكر الدعم الفني المباشر", Icons.Default.SupportAgent, NeonCyan, badgeText = "دعم 🎧", onClick = { showSupportModal = true }),
+        QuickActionItem("ريلز NEXA", "مقاطع فيديو قصيرة وتفاعلية", Icons.Default.VideoLibrary, NeonPink, onClick = { onNavigate("reels") }),
+        QuickActionItem("المجموعات", "مجتمعات اهتمامات ونقاشات", Icons.Default.Group, TeenProtectionCyan, onClick = { onNavigate("friends") }),
+        QuickActionItem("الأصدقاء", "طلبات الصداقة والمقترحون", Icons.Default.People, NeonCyan, onClick = { onNavigate("friends") }),
+        QuickActionItem("المساعد الصوتي الذكي", "أوامر صوتية وتلخيص ذكي للمحتوى", Icons.Default.Mic, NeonCyan, badgeText = "صوتي", onClick = { showVoiceAssistantModal = true }),
+        QuickActionItem("الخزنة السرية المشفرة", "حماية المحادثات والمنشورات ببصمة الجهاز", Icons.Default.Lock, EncryptedGreen, badgeText = "مشفر 🔐", onClick = { showPrivateVaultModal = true }),
+        QuickActionItem("NEXA AI", "المساعد الذكي للإنتاجية", Icons.Default.AutoAwesome, NeonPurple, badgeText = "ذكاء آلي", onClick = { showAiModal = true }),
+        QuickActionItem("العناصر المحفوظة", "المنشورات والمنتجات المفضلة", Icons.Default.Bookmark, NeonAmber, onClick = { showSavedItemsModal = true }),
+        QuickActionItem("المناسبات والأعياد", "أعياد الميلاد والأحداث القادمة", Icons.Default.Cake, NeonPink, onClick = { showEventsModal = true }),
+        QuickActionItem("NEXA Verified", "شارات التوثيق والحماية المتقدمة", Icons.Default.Verified, NeonCyan, isVerifiedBadge = true, onClick = { showNexaVerifiedModal = true }),
+        QuickActionItem("المتجر / Marketplace", "عروض المنتجات الرقمية والتسوق", Icons.Default.ShoppingBag, EncryptedGreen, onClick = { onNavigate("store") }),
+        QuickActionItem("استوديو صناع المحتوى والمحفظة", "تحليلات الأداء والأرباح المالية", Icons.Default.AccountBalanceWallet, NeonAmber, badgeText = "أرباح $", onClick = { showCreatorStudioModal = true }),
+        QuickActionItem("الغرف الصوتية المباشرة", "بث صوتي مباشر ونقاشات تفاعلية", Icons.Default.Mic, NeonPink, badgeText = "مباشر LIVE", onClick = { showAudioSpacesModal = true }),
+        QuickActionItem("رادار اكتشاف القريب Radar", "محتوى محلي وصناع من حولك", Icons.Default.NearMe, TeenProtectionCyan, badgeText = "الرادار 🛰️", onClick = { showNearbyDiscoveryModal = true }),
+        QuickActionItem("الذكريات والمواجز", "منشوراتك القديمة في مثل هذا اليوم", Icons.Default.AutoStories, TeenProtectionCyan, onClick = { showMemoriesModal = true })
     )
 
     LazyColumn(
@@ -555,551 +415,645 @@ fun ServicesScreen(
         contentPadding = PaddingValues(top = 16.dp, bottom = 120.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Top Header Row (NEXA Header Bar)
         item {
+            ServicesTopHeader(
+                onAccountsHubClick = { showNexaAccountsHubModal = true },
+                onAccountSwitcherClick = { showAccountSwitcherModal = true }
+            )
+        }
+
+        item {
+            ServicesProfileCard(
+                profileName = profile?.name ?: "مستخدم NEXA",
+                onProfileClick = { onNavigate("profile") },
+                onCoinsClick = { showCreatorStudioModal = true },
+                onAccountSwitcherClick = { showAccountSwitcherModal = true }
+            )
+        }
+
+        item {
+            ServicesQuickActionsGrid(quickActions = quickActions)
+        }
+
+        item {
+            ServicesAccountsHubBanner(onClick = { showNexaAccountsHubModal = true })
+        }
+
+        item {
+            ServicesPrivacySection(
+                isProfileLocked = isProfileLocked,
+                isScreenshotProtectionEnabled = isScreenshotProtectionEnabled,
+                onPrivacyCheckupClick = { showPrivacyCheckupModal = true },
+                onProfileLockClick = { showProfileLockModal = true },
+                onToggleProfileLock = { locked ->
+                    viewModel.setProfileLocked(locked)
+                    Toast.makeText(context, if (locked) "تم قفل الملف الشخصي" else "تم إلغاء قفل الملف الشخصي", Toast.LENGTH_SHORT).show()
+                },
+                onNotificationPrefsClick = { showNotificationPrefsModal = true },
+                onBlockListClick = { showBlockListModal = true },
+                onToggleScreenshotProtection = { enabled ->
+                    viewModel.setScreenshotProtectionEnabled(enabled)
+                    Toast.makeText(
+                        context,
+                        if (enabled) "تم تفعيل حماية لقطات الشاشة والتنبيه الفوري" else "تم إيقاف حماية لقطات الشاشة",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                },
+                onNearbyDiscoveryClick = { showNearbyDiscoveryModal = true }
+            )
+        }
+
+        item {
+            ServicesPreferencesSection(
+                isDarkModeEnabled = isDarkModeEnabled,
+                isDataSaver = isDataSaver,
+                cacheSizeMb = cacheSizeMb,
+                currentLang = currentLang,
+                isTeenMode = isTeenMode,
+                isVipMember = isVipMember,
+                onToggleDarkMode = { viewModel.setDarkModeEnabled(it) },
+                onToggleDataSaver = { viewModel.toggleDataSaver(it) },
+                onClearCache = {
+                    cacheSizeMb = 0.0f
+                    Toast.makeText(context, "تم مسح التخزين المؤقت بنجاح (0.0 MB)", Toast.LENGTH_SHORT).show()
+                },
+                onLanguageClick = { showLanguageModal = true },
+                onToggleTeenMode = { viewModel.toggleTeenMode(it) },
+                onVipClick = { showVipModal = true }
+            )
+        }
+
+        item {
+            ServicesLegalSection(
+                onCommunityStandardsClick = { showCommunityStandardsModal = true },
+                onTermsClick = { showLegalDocsModal = LegalTab.TERMS_OF_SERVICE },
+                onPrivacyClick = { onNavigate("privacy_and_support") },
+                onSupportAndReportClick = { onNavigate("support_and_report") }
+            )
+        }
+
+        item {
+            ServicesCopyrightFooter()
+        }
+    }
+}
+
+@Composable
+fun ServicesTopHeader(
+    onAccountsHubClick: () -> Unit,
+    onAccountSwitcherClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column {
+            Text(
+                text = "القائمة الرئيسية والإعدادات",
+                style = MaterialTheme.typography.titleLarge,
+                color = Color.White,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "مركز التحكم الشامل لبيئة NEXA الذكية",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.LightGray
+            )
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.08f))
+                    .clickable { onAccountsHubClick() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.Security, contentDescription = "Accounts Hub", tint = NeonCyan, modifier = Modifier.size(20.dp))
+            }
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.08f))
+                    .clickable { onAccountSwitcherClick() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.SwitchAccount, contentDescription = "Switch Account", tint = NeonPurple, modifier = Modifier.size(20.dp))
+            }
+        }
+    }
+}
+
+@Composable
+fun ServicesProfileCard(
+    profileName: String,
+    onProfileClick: () -> Unit,
+    onCoinsClick: () -> Unit,
+    onAccountSwitcherClick: () -> Unit
+) {
+    GlassCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = "القائمة الرئيسية والإعدادات",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "مركز التحكم الشامل لبيئة NEXA الذكية",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.LightGray
-                    )
-                }
-
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.08f))
-                            .clickable { showNexaAccountsHubModal = true },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.Security, contentDescription = "Accounts Hub", tint = NeonCyan, modifier = Modifier.size(20.dp))
-                    }
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.08f))
-                            .clickable { showAccountSwitcherModal = true },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.SwitchAccount, contentDescription = "Switch Account", tint = NeonPurple, modifier = Modifier.size(20.dp))
-                    }
-                }
-            }
-        }
-
-        // Section 1: User Profile Card & Account Switcher Trigger
-        item {
-            GlassCard(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(22.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable { onNavigate("profile") }
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(58.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        Brush.radialGradient(
-                                            listOf(NeonPurple.copy(alpha = 0.6f), NeonCyan.copy(alpha = 0.3f))
-                                        )
-                                    )
-                                    .border(2.dp, NeonCyan, CircleShape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = profile?.name?.take(1) ?: "م",
-                                    color = Color.White,
-                                    fontSize = 26.sp,
-                                    fontWeight = FontWeight.ExtraBold
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.width(14.dp))
-
-                            Column {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = profile?.name ?: "مستخدم NEXA",
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 17.sp
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Icon(
-                                        imageVector = Icons.Default.Verified,
-                                        contentDescription = "Verified",
-                                        tint = NeonCyan,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.height(6.dp))
-
-                                // Coins / Wallet Badge relocated cleanly inside User Profile
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(NeonAmber.copy(alpha = 0.2f))
-                                        .border(1.dp, NeonAmber, RoundedCornerShape(10.dp))
-                                        .clickable { showCreatorStudioModal = true }
-                                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            imageVector = Icons.Default.MonetizationOn,
-                                            contentDescription = "Wallet Balance",
-                                            tint = NeonAmber,
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(
-                                            text = "850 عملة NEXA",
-                                            color = NeonAmber,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 11.sp
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        // Switcher button
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(NeonPurple.copy(alpha = 0.2f))
-                                .border(1.dp, NeonPurple.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-                                .clickable { showAccountSwitcherModal = true }
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.SwitchAccount, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("تبديل الحسابات", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Section 2: Quick Action Grid (القائمة الرئيسية)
-        item {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = "القائمة الرئيسية والخدمات السريعة",
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
-                    modifier = Modifier.padding(bottom = 12.dp)
-                )
-
-                // 2-Column Grid Layout for 10 Quick Actions
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    for (i in quickActions.indices step 2) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            QuickActionCard(
-                                item = quickActions[i],
-                                modifier = Modifier.weight(1f)
-                            )
-                            if (i + 1 < quickActions.size) {
-                                QuickActionCard(
-                                    item = quickActions[i + 1],
-                                    modifier = Modifier.weight(1f)
-                                )
-                            } else {
-                                Spacer(modifier = Modifier.weight(1f))
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Section 3: Accounts Hub Banner ("مركز حسابات NEXA")
-        item {
-            GlassCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { showNexaAccountsHubModal = true },
-                shape = RoundedCornerShape(20.dp),
-                borderColor = NeonCyan
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            Brush.horizontalGradient(
-                                listOf(Color(0xFF1E1035), Color(0xFF0F1E36))
-                            )
-                        )
-                        .padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { onProfileClick() }
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
+                    Box(
+                        modifier = Modifier
+                            .size(58.dp)
+                            .clip(CircleShape)
+                            .background(
+                                Brush.radialGradient(
+                                    listOf(NeonPurple.copy(alpha = 0.6f), NeonCyan.copy(alpha = 0.3f))
+                                )
+                            )
+                            .border(2.dp, NeonCyan, CircleShape),
+                        contentAlignment = Alignment.Center
                     ) {
+                        Text(
+                            text = profileName.take(1).ifBlank { "م" },
+                            color = Color.White,
+                            fontSize = 26.sp,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(14.dp))
+
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = profileName,
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 17.sp
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Icon(
+                                imageVector = Icons.Default.Verified,
+                                contentDescription = "Verified",
+                                tint = NeonCyan,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
                         Box(
                             modifier = Modifier
-                                .size(46.dp)
-                                .clip(CircleShape)
-                                .background(NeonCyan.copy(alpha = 0.2f))
-                                .border(1.dp, NeonCyan, CircleShape),
-                            contentAlignment = Alignment.Center
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(NeonAmber.copy(alpha = 0.2f))
+                                .border(1.dp, NeonAmber, RoundedCornerShape(10.dp))
+                                .clickable { onCoinsClick() }
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
-                            Icon(Icons.Default.Security, contentDescription = "Accounts Hub", tint = NeonCyan, modifier = Modifier.size(24.dp))
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("مركز حسابات NEXA", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                                Spacer(modifier = Modifier.width(6.dp))
-                                GlassBadge(text = "حماية فائقة", accentColor = EncryptedGreen)
+                                Icon(
+                                    imageVector = Icons.Default.MonetizationOn,
+                                    contentDescription = "Wallet Balance",
+                                    tint = NeonAmber,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "850 عملة NEXA",
+                                    color = NeonAmber,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 11.sp
+                                )
                             }
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text("إدارة كلمة السر، الأمان، البصمة، والحسابات المرتبطة", color = Color.LightGray, fontSize = 11.sp)
                         }
                     }
-
-                    Icon(Icons.Default.ChevronLeft, contentDescription = null, tint = Color.LightGray)
                 }
-            }
-        }
 
-        // Section 4: Privacy Controls (التحكم في الخصوصية)
-        item {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = "الإعدادات وعناصر التحكم في الخصوصية",
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
-                    modifier = Modifier.padding(bottom = 10.dp)
-                )
-
-                GlassCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp)
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(NeonPurple.copy(alpha = 0.2f))
+                        .border(1.dp, NeonPurple.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                        .clickable { onAccountSwitcherClick() }
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        SettingsListTile(
-                            title = "التحقق من الخصوصية",
-                            subtitle = "جولة إرشادية لفحص وتأمين إعدادات مشاركة بياناتك",
-                            icon = Icons.Default.Shield,
-                            iconColor = TeenProtectionCyan,
-                            onClick = { showPrivacyCheckupModal = true }
-                        )
-
-                        SettingsDivider()
-
-                        SettingsListTile(
-                            title = "قفل الملف الشخصي",
-                            subtitle = if (isProfileLocked) "مفعل: ملفك الشخصي محمي من الغرباء" else "معطل: ملفك مفتوح للمتابعين",
-                            icon = Icons.Default.Lock,
-                            iconColor = EncryptedGreen,
-                            trailingContent = {
-                                Switch(
-                                    checked = isProfileLocked,
-                                    onCheckedChange = { locked ->
-                                        isProfileLocked = locked
-                                        Toast.makeText(context, if (locked) "تم قفل الملف الشخصي" else "تم إلغاء قفل الملف الشخصي", Toast.LENGTH_SHORT).show()
-                                    },
-                                    colors = SwitchDefaults.colors(checkedThumbColor = BackgroundDark, checkedTrackColor = EncryptedGreen)
-                                )
-                            },
-                            onClick = { showProfileLockModal = true }
-                        )
-
-                        SettingsDivider()
-
-                        SettingsListTile(
-                            title = "تفضيلات التفاعلات والإشعارات",
-                            subtitle = "التحكم في الإشعارات الفورية والصوت وأعداد التفاعلات",
-                            icon = Icons.Default.Notifications,
-                            iconColor = NeonAmber,
-                            onClick = { showNotificationPrefsModal = true }
-                        )
-
-                        SettingsDivider()
-
-                        SettingsListTile(
-                            title = "قائمة المحظورين",
-                            subtitle = "إدارة الأشخاص والحسابات التي قمت بحظرها",
-                            icon = Icons.Default.Block,
-                            iconColor = Color.Red,
-                            onClick = { showBlockListModal = true }
-                        )
-
-                        SettingsDivider()
-
-                        SettingsListTile(
-                            title = "حماية المحادثات من لقطات الشاشة",
-                            subtitle = if (isScreenshotProtectionEnabled) "مفعل: منع لقطات الشاشة وإرسال إشعار فوري عند المحاولة" else "معطل: السماح بتصوير الشاشة",
-                            icon = Icons.Default.PhonelinkLock,
-                            iconColor = EncryptedGreen,
-                            trailingContent = {
-                                Switch(
-                                    checked = isScreenshotProtectionEnabled,
-                                    onCheckedChange = { enabled ->
-                                        isScreenshotProtectionEnabled = enabled
-                                        Toast.makeText(
-                                            context,
-                                            if (enabled) "تم تفعيل حماية لقطات الشاشة والتنبيه الفوري" else "تم إيقاف حماية لقطات الشاشة",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                    },
-                                    colors = SwitchDefaults.colors(checkedThumbColor = BackgroundDark, checkedTrackColor = EncryptedGreen)
-                                )
-                            },
-                            onClick = {
-                                isScreenshotProtectionEnabled = !isScreenshotProtectionEnabled
-                                Toast.makeText(
-                                    context,
-                                    if (isScreenshotProtectionEnabled) "تم تفعيل حماية لقطات الشاشة والتنبيه الفوري" else "تم إيقاف حماية لقطات الشاشة",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                            }
-                        )
-
-                        SettingsDivider()
-
-                        SettingsListTile(
-                            title = "اكتشاف المحتوى المحلي القريب",
-                            subtitle = "البحث عن صناع المحتوى والفاعليات في محيطك الجغرافي",
-                            icon = Icons.Default.NearMe,
-                            iconColor = TeenProtectionCyan,
-                            onClick = { showNearbyDiscoveryModal = true }
-                        )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.SwitchAccount, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("تبديل الحسابات", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
         }
+    }
+}
 
-        // Section 5: Preferences & App Performance (التفضيلات وأداء التطبيق)
-        item {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = "التفضيلات وأداء التطبيق",
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
-                    modifier = Modifier.padding(bottom = 10.dp)
-                )
+@Composable
+fun ServicesQuickActionsGrid(quickActions: List<QuickActionItem>) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = "القائمة الرئيسية والخدمات السريعة",
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            fontSize = 15.sp,
+            modifier = Modifier.padding(bottom = 12.dp)
+        )
 
-                GlassCard(
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            for (i in quickActions.indices step 2) {
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        SettingsListTile(
-                            title = "الوضع المظلم (Dark Mode)",
-                            subtitle = if (isDarkModeEnabled) "مفعل تلقائياً للحفاظ على سلامة العين والشاشة" else "الوضع الفاتح مفعل",
-                            icon = Icons.Default.DarkMode,
-                            iconColor = NeonPurple,
-                            trailingContent = {
-                                Switch(
-                                    checked = isDarkModeEnabled,
-                                    onCheckedChange = { isDarkModeEnabled = it },
-                                    colors = SwitchDefaults.colors(checkedThumbColor = BackgroundDark, checkedTrackColor = NeonPurple)
-                                )
-                            },
-                            onClick = { isDarkModeEnabled = !isDarkModeEnabled }
+                    QuickActionCard(
+                        item = quickActions[i],
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (i + 1 < quickActions.size) {
+                        QuickActionCard(
+                            item = quickActions[i + 1],
+                            modifier = Modifier.weight(1f)
                         )
-
-                        SettingsDivider()
-
-                        SettingsListTile(
-                            title = "توفير بيانات الاتصال (*6 Pass)",
-                            subtitle = if (isDataSaver) "مفعل: ضغط الصور وإيقاف الفيديو التلقائي" else "معطل: تحميل كامل الجودة HD",
-                            icon = Icons.Default.DataSaverOn,
-                            iconColor = NeonCyan,
-                            trailingContent = {
-                                Switch(
-                                    checked = isDataSaver,
-                                    onCheckedChange = { viewModel.toggleDataSaver(it) },
-                                    colors = SwitchDefaults.colors(checkedThumbColor = BackgroundDark, checkedTrackColor = NeonCyan)
-                                )
-                            },
-                            onClick = { viewModel.toggleDataSaver() }
-                        )
-
-                        SettingsDivider()
-
-                        SettingsListTile(
-                            title = "مسح المساحة / التخزين المؤقت",
-                            subtitle = "حجم التخزين المؤقت حالياً: ${String.format("%.1f", cacheSizeMb)} ميجابايت",
-                            icon = Icons.Default.CleaningServices,
-                            iconColor = NeonAmber,
-                            onClick = {
-                                cacheSizeMb = 0.0f
-                                Toast.makeText(context, "تم مسح التخزين المؤقت بنجاح (0.0 MB)", Toast.LENGTH_SHORT).show()
-                            }
-                        )
-
-                        SettingsDivider()
-
-                        SettingsListTile(
-                            title = "اللغة والمنطقة",
-                            subtitle = "اللغة الحالية: ${if (currentLang == AppLanguage.ARABIC || currentLang == AppLanguage.AUTO) "العربية (المغرب / الشرق الأوسط)" else currentLang.name}",
-                            icon = Icons.Default.Language,
-                            iconColor = TeenProtectionCyan,
-                            onClick = { showLanguageModal = true }
-                        )
-
-                        SettingsDivider()
-
-                        SettingsListTile(
-                            title = "نظام استراحة الشاشة للناشئة والأشبال",
-                            subtitle = if (isTeenMode) "مفعل: تنبيه أوتوماتيكي واستراحة كل ساعتين" else "معطل: تصفح عادي للبالغين",
-                            icon = Icons.Default.Shield,
-                            iconColor = TeenProtectionCyan,
-                            trailingContent = {
-                                Switch(
-                                    checked = isTeenMode,
-                                    onCheckedChange = { viewModel.toggleTeenMode(it) },
-                                    colors = SwitchDefaults.colors(checkedThumbColor = BackgroundDark, checkedTrackColor = TeenProtectionCyan)
-                                )
-                            },
-                            onClick = { viewModel.toggleTeenMode(!isTeenMode) }
-                        )
-
-                        SettingsDivider()
-
-                        SettingsListTile(
-                            title = "عضوية NEXA VIP الملكية",
-                            subtitle = if (isVipMember) "عضوية VIP نشطة: تصفح فائق بدون إعلانات ✨" else "انقر للاشتراك والترقية لعضوية VIP الملكية",
-                            icon = Icons.Default.Star,
-                            iconColor = NeonPink,
-                            onClick = { showVipModal = true }
-                        )
+                    } else {
+                        Spacer(modifier = Modifier.weight(1f))
                     }
                 }
             }
         }
+    }
+}
 
-        // Section 6: Legal & Play Store Policy Compliance (الامتثال والسياسات)
-        item {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = "السياسات والامتيثال القانوني (Google Play 2026)",
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
-                    modifier = Modifier.padding(bottom = 10.dp)
+@Composable
+fun ServicesAccountsHubBanner(onClick: () -> Unit) {
+    GlassCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        shape = RoundedCornerShape(20.dp),
+        borderColor = NeonCyan
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(Color(0xFF1E1035), Color(0xFF0F1E36))
+                    )
                 )
-
-                GlassCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp)
-                ) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        SettingsListTile(
-                            title = "معايير مجتمع NEXA",
-                            subtitle = "القواعد والإرشادات الحاكمة للمحتوى والسلامة",
-                            icon = Icons.Default.Gavel,
-                            iconColor = NeonCyan,
-                            onClick = { showCommunityStandardsModal = true }
-                        )
-
-                        SettingsDivider()
-
-                        SettingsListTile(
-                            title = "شروط الخدمة والاستخدام",
-                            subtitle = "الاتفاقية القانونية وحقوق المستخدم",
-                            icon = Icons.Default.Shield,
-                            iconColor = TeenProtectionCyan,
-                            onClick = { showLegalDocsModal = LegalTab.TERMS_OF_SERVICE }
-                        )
-
-                        SettingsDivider()
-
-                        SettingsListTile(
-                            title = "سياسة الخصوصية وتشفير البيانات E2E",
-                            subtitle = "تشفير AES-256، الحماية البيومترية، وضمان عدم تتبع البيانات",
-                            icon = Icons.Default.PrivacyTip,
-                            iconColor = EncryptedGreen,
-                            onClick = { onNavigate("privacy_and_support") }
-                        )
-
-                        SettingsDivider()
-
-                        SettingsListTile(
-                            title = "مركز الدعم الفني وإرسال البلاغات 🎧",
-                            subtitle = "نموذج الشكاوى، بلاغات المحتوى المسيء وحفظها في Firestore",
-                            icon = Icons.Default.SupportAgent,
-                            iconColor = NeonPink,
-                            onClick = { onNavigate("support_and_report") }
-                        )
-                    }
-                }
-            }
-        }
-
-        // Copyright Branding Footer
-        item {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "NEXA Ecosystem 2026",
-                        color = Color.LightGray,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Icon(
-                        imageVector = Icons.Default.Verified,
-                        contentDescription = "Verified Brand",
-                        tint = NeonCyan,
-                        modifier = Modifier.size(14.dp)
-                    )
+                Box(
+                    modifier = Modifier
+                        .size(46.dp)
+                        .clip(CircleShape)
+                        .background(NeonCyan.copy(alpha = 0.2f))
+                        .border(1.dp, NeonCyan, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Security, contentDescription = "Accounts Hub", tint = NeonCyan, modifier = Modifier.size(24.dp))
                 }
-                Text(
-                    text = "جميع الحقوق محفوظة منصة NEXA الاجتماعية الذكية",
-                    color = Color.Gray,
-                    fontSize = 11.sp
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("مركز حسابات NEXA", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        GlassBadge(text = "حماية فائقة", accentColor = EncryptedGreen)
+                    }
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text("إدارة كلمة السر، الأمان، البصمة، والحسابات المرتبطة", color = Color.LightGray, fontSize = 11.sp)
+                }
+            }
+
+            Icon(Icons.Default.ChevronLeft, contentDescription = null, tint = Color.LightGray)
+        }
+    }
+}
+
+@Composable
+fun ServicesPrivacySection(
+    isProfileLocked: Boolean,
+    isScreenshotProtectionEnabled: Boolean,
+    onPrivacyCheckupClick: () -> Unit,
+    onProfileLockClick: () -> Unit,
+    onToggleProfileLock: (Boolean) -> Unit,
+    onNotificationPrefsClick: () -> Unit,
+    onBlockListClick: () -> Unit,
+    onToggleScreenshotProtection: (Boolean) -> Unit,
+    onNearbyDiscoveryClick: () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = "الإعدادات وعناصر التحكم في الخصوصية",
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            fontSize = 15.sp,
+            modifier = Modifier.padding(bottom = 10.dp)
+        )
+
+        GlassCard(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp)
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                SettingsListTile(
+                    title = "التحقق من الخصوصية",
+                    subtitle = "جولة إرشادية لفحص وتأمين إعدادات مشاركة بياناتك",
+                    icon = Icons.Default.Shield,
+                    iconColor = TeenProtectionCyan,
+                    onClick = onPrivacyCheckupClick
+                )
+
+                SettingsDivider()
+
+                SettingsListTile(
+                    title = "قفل الملف الشخصي",
+                    subtitle = if (isProfileLocked) "مفعل: ملفك الشخصي محمي من الغرباء" else "معطل: ملفك مفتوح للمتابعين",
+                    icon = Icons.Default.Lock,
+                    iconColor = EncryptedGreen,
+                    trailingContent = {
+                        Switch(
+                            checked = isProfileLocked,
+                            onCheckedChange = onToggleProfileLock,
+                            colors = SwitchDefaults.colors(checkedThumbColor = BackgroundDark, checkedTrackColor = EncryptedGreen)
+                        )
+                    },
+                    onClick = onProfileLockClick
+                )
+
+                SettingsDivider()
+
+                SettingsListTile(
+                    title = "تفضيلات التفاعلات والإشعارات",
+                    subtitle = "التحكم في الإشعارات الفورية والصوت وأعداد التفاعلات",
+                    icon = Icons.Default.Notifications,
+                    iconColor = NeonAmber,
+                    onClick = onNotificationPrefsClick
+                )
+
+                SettingsDivider()
+
+                SettingsListTile(
+                    title = "قائمة المحظورين",
+                    subtitle = "إدارة الأشخاص والحسابات التي قمت بحظرها",
+                    icon = Icons.Default.Block,
+                    iconColor = Color.Red,
+                    onClick = onBlockListClick
+                )
+
+                SettingsDivider()
+
+                SettingsListTile(
+                    title = "حماية المحادثات من لقطات الشاشة",
+                    subtitle = if (isScreenshotProtectionEnabled) "مفعل: منع لقطات الشاشة وإرسال إشعار فوري عند المحاولة" else "معطل: السماح بتصوير الشاشة",
+                    icon = Icons.Default.PhonelinkLock,
+                    iconColor = EncryptedGreen,
+                    trailingContent = {
+                        Switch(
+                            checked = isScreenshotProtectionEnabled,
+                            onCheckedChange = onToggleScreenshotProtection,
+                            colors = SwitchDefaults.colors(checkedThumbColor = BackgroundDark, checkedTrackColor = EncryptedGreen)
+                        )
+                    },
+                    onClick = { onToggleScreenshotProtection(!isScreenshotProtectionEnabled) }
+                )
+
+                SettingsDivider()
+
+                SettingsListTile(
+                    title = "اكتشاف المحتوى المحلي القريب",
+                    subtitle = "البحث عن صناع المحتوى والفاعليات في محيطك الجغرافي",
+                    icon = Icons.Default.NearMe,
+                    iconColor = TeenProtectionCyan,
+                    onClick = onNearbyDiscoveryClick
                 )
             }
         }
+    }
+}
+
+@Composable
+fun ServicesPreferencesSection(
+    isDarkModeEnabled: Boolean,
+    isDataSaver: Boolean,
+    cacheSizeMb: Float,
+    currentLang: AppLanguage,
+    isTeenMode: Boolean,
+    isVipMember: Boolean,
+    onToggleDarkMode: (Boolean) -> Unit,
+    onToggleDataSaver: (Boolean) -> Unit,
+    onClearCache: () -> Unit,
+    onLanguageClick: () -> Unit,
+    onToggleTeenMode: (Boolean) -> Unit,
+    onVipClick: () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = "التفضيلات وأداء التطبيق",
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            fontSize = 15.sp,
+            modifier = Modifier.padding(bottom = 10.dp)
+        )
+
+        GlassCard(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp)
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                SettingsListTile(
+                    title = "الوضع المظلم (Dark Mode)",
+                    subtitle = if (isDarkModeEnabled) "مفعل تلقائياً للحفاظ على سلامة العين والشاشة" else "الوضع الفاتح مفعل",
+                    icon = Icons.Default.DarkMode,
+                    iconColor = NeonPurple,
+                    trailingContent = {
+                        Switch(
+                            checked = isDarkModeEnabled,
+                            onCheckedChange = onToggleDarkMode,
+                            colors = SwitchDefaults.colors(checkedThumbColor = BackgroundDark, checkedTrackColor = NeonPurple)
+                        )
+                    },
+                    onClick = { onToggleDarkMode(!isDarkModeEnabled) }
+                )
+
+                SettingsDivider()
+
+                SettingsListTile(
+                    title = "توفير بيانات الاتصال (*6 Pass)",
+                    subtitle = if (isDataSaver) "مفعل: ضغط الصور وإيقاف الفيديو التلقائي" else "معطل: تحميل كامل الجودة HD",
+                    icon = Icons.Default.DataSaverOn,
+                    iconColor = NeonCyan,
+                    trailingContent = {
+                        Switch(
+                            checked = isDataSaver,
+                            onCheckedChange = onToggleDataSaver,
+                            colors = SwitchDefaults.colors(checkedThumbColor = BackgroundDark, checkedTrackColor = NeonCyan)
+                        )
+                    },
+                    onClick = { onToggleDataSaver(!isDataSaver) }
+                )
+
+                SettingsDivider()
+
+                SettingsListTile(
+                    title = "مسح المساحة / التخزين المؤقت",
+                    subtitle = "حجم التخزين المؤقت حالياً: ${String.format("%.1f", cacheSizeMb)} ميجابايت",
+                    icon = Icons.Default.CleaningServices,
+                    iconColor = NeonAmber,
+                    onClick = onClearCache
+                )
+
+                SettingsDivider()
+
+                SettingsListTile(
+                    title = "اللغة والمنطقة",
+                    subtitle = "اللغة الحالية: ${if (currentLang == AppLanguage.ARABIC || currentLang == AppLanguage.AUTO) "العربية (المغرب / الشرق الأوسط)" else currentLang.name}",
+                    icon = Icons.Default.Language,
+                    iconColor = TeenProtectionCyan,
+                    onClick = onLanguageClick
+                )
+
+                SettingsDivider()
+
+                SettingsListTile(
+                    title = "نظام استراحة الشاشة للناشئة والأشبال",
+                    subtitle = if (isTeenMode) "مفعل: تنبيه أوتوماتيكي واستراحة كل ساعتين" else "معطل: تصفح عادي للبالغين",
+                    icon = Icons.Default.Shield,
+                    iconColor = TeenProtectionCyan,
+                    trailingContent = {
+                        Switch(
+                            checked = isTeenMode,
+                            onCheckedChange = onToggleTeenMode,
+                            colors = SwitchDefaults.colors(checkedThumbColor = BackgroundDark, checkedTrackColor = TeenProtectionCyan)
+                        )
+                    },
+                    onClick = { onToggleTeenMode(!isTeenMode) }
+                )
+
+                SettingsDivider()
+
+                SettingsListTile(
+                    title = "عضوية NEXA VIP الملكية",
+                    subtitle = if (isVipMember) "عضوية VIP نشطة: تصفح فائق بدون إعلانات ✨" else "انقر للاشتراك والترقية لعضوية VIP الملكية",
+                    icon = Icons.Default.Star,
+                    iconColor = NeonPink,
+                    onClick = onVipClick
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ServicesLegalSection(
+    onCommunityStandardsClick: () -> Unit,
+    onTermsClick: () -> Unit,
+    onPrivacyClick: () -> Unit,
+    onSupportAndReportClick: () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = "السياسات والامتيثال القانوني (Google Play 2026)",
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            fontSize = 15.sp,
+            modifier = Modifier.padding(bottom = 10.dp)
+        )
+
+        GlassCard(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp)
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                SettingsListTile(
+                    title = "معايير مجتمع NEXA",
+                    subtitle = "القواعد والإرشادات الحاكمة للمحتوى والسلامة",
+                    icon = Icons.Default.Gavel,
+                    iconColor = NeonCyan,
+                    onClick = onCommunityStandardsClick
+                )
+
+                SettingsDivider()
+
+                SettingsListTile(
+                    title = "شروط الخدمة والاستخدام",
+                    subtitle = "الاتفاقية القانونية وحقوق المستخدم",
+                    icon = Icons.Default.Shield,
+                    iconColor = TeenProtectionCyan,
+                    onClick = onTermsClick
+                )
+
+                SettingsDivider()
+
+                SettingsListTile(
+                    title = "سياسة الخصوصية وتشفير البيانات E2E",
+                    subtitle = "تشفير AES-256، الحماية البيومترية، وضمان عدم تتبع البيانات",
+                    icon = Icons.Default.PrivacyTip,
+                    iconColor = EncryptedGreen,
+                    onClick = onPrivacyClick
+                )
+
+                SettingsDivider()
+
+                SettingsListTile(
+                    title = "مركز الدعم الفني وإرسال البلاغات 🎧",
+                    subtitle = "نموذج الشكاوى، بلاغات المحتوى المسيء وحفظها في Firestore",
+                    icon = Icons.Default.SupportAgent,
+                    iconColor = NeonPink,
+                    onClick = onSupportAndReportClick
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ServicesCopyrightFooter() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "NEXA Ecosystem 2026",
+                color = Color.LightGray,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Icon(
+                imageVector = Icons.Default.Verified,
+                contentDescription = "Verified Brand",
+                tint = NeonCyan,
+                modifier = Modifier.size(14.dp)
+            )
+        }
+        Text(
+            text = "جميع الحقوق محفوظة منصة NEXA الاجتماعية الذكية",
+            color = Color.Gray,
+            fontSize = 11.sp
+        )
     }
 }
 
@@ -1636,9 +1590,12 @@ fun ProfileLockDialog(
 
 // Modal 5: Notification Preferences Dialog
 @Composable
-fun NotificationPreferencesDialog(onDismiss: () -> Unit) {
-    var isSoundsOn by remember { mutableStateOf(true) }
-    var isReactionsCountVisible by remember { mutableStateOf(true) }
+fun NotificationPreferencesDialog(
+    viewModel: MajarrahViewModel,
+    onDismiss: () -> Unit
+) {
+    val isSoundsOn by viewModel.isSoundsEnabled.collectAsState()
+    val isReactionsCountVisible by viewModel.isReactionsCountVisible.collectAsState()
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1658,7 +1615,7 @@ fun NotificationPreferencesDialog(onDismiss: () -> Unit) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("أصوات الإشعارات الفورية", color = Color.White, fontSize = 13.sp)
-                    Switch(checked = isSoundsOn, onCheckedChange = { isSoundsOn = it })
+                    Switch(checked = isSoundsOn, onCheckedChange = { viewModel.setSoundsEnabled(it) })
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1666,7 +1623,7 @@ fun NotificationPreferencesDialog(onDismiss: () -> Unit) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("إظهار عدد التفاعلات على المنشورات", color = Color.White, fontSize = 13.sp)
-                    Switch(checked = isReactionsCountVisible, onCheckedChange = { isReactionsCountVisible = it })
+                    Switch(checked = isReactionsCountVisible, onCheckedChange = { viewModel.setReactionsCountVisible(it) })
                 }
             }
         },

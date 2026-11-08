@@ -80,7 +80,7 @@ data class NexaPage(
     val followers: String,
     val reach: String,
     val engagementRate: String,
-    val isVerified: Boolean = true,
+    val isVerified: Boolean = false,
     val userRole: String = "المالك (Owner)"
 )
 
@@ -362,14 +362,14 @@ fun NexaPagesAndBusinessModal(
                                             id = "p_${System.currentTimeMillis()}",
                                             name = newPageName,
                                             category = newPageCategory,
-                                            followers = "1",
-                                            reach = "100",
-                                            engagementRate = "100%",
-                                            isVerified = true
+                                            followers = "—",
+                                            reach = "—",
+                                            engagementRate = "—",
+                                            isVerified = false
                                         )
                                         pages.add(0, created)
                                         activePage = created
-                                        showSuccessToast = "تم إنشاء صفحة '${newPageName}' بنجاح وتفعيل الشارة الموثقة! 🎉"
+                                        showSuccessToast = "تم إنشاء صفحة '${newPageName}' بنجاح! 🎉"
                                         newPageName = ""
                                         newPageBio = ""
                                         selectedTab = 0
@@ -598,7 +598,8 @@ fun PageItemCard(
                         .background(NeonCyan.copy(alpha = 0.2f))
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
-                    Text(text = page.followers + " متابع", color = NeonCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    val followersDisplay = if (page.followers == "—" || page.followers.isBlank()) "—" else "${page.followers} متابع"
+                    Text(text = followersDisplay, color = NeonCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -707,12 +708,19 @@ fun AdminUserRoleCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(text = "صلاحية نشر المنشورات والحملات", color = Color.Gray, fontSize = 11.sp)
-                Switch(
-                    checked = user.canPublish,
-                    onCheckedChange = { user.canPublish = it },
-                    colors = SwitchDefaults.colors(checkedThumbColor = NeonCyan)
-                )
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color.White.copy(alpha = 0.08f))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = if (user.canPublish) "مفعل للمسؤول" else "غير مفعل",
+                        color = if (user.canPublish) NeonCyan else Color.Gray,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
     }

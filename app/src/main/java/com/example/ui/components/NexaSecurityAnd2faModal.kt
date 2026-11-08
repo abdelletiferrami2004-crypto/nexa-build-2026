@@ -46,6 +46,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -79,10 +80,9 @@ data class DeviceSession(
 
 @Composable
 fun NexaSecurityAnd2faModal(
+    viewModel: com.example.ui.MajarrahViewModel? = null,
     onDismiss: () -> Unit
 ) {
-    var is2faEnabled by remember { mutableStateOf(false) }
-    var isAutoModerationEnabled by remember { mutableStateOf(true) }
     var isBiometricAuthEnabled by remember { mutableStateOf(true) }
     var showSuccessToast by remember { mutableStateOf<String?>(null) }
 
@@ -213,17 +213,14 @@ fun NexaSecurityAnd2faModal(
                                         }
                                     }
 
-                                    Switch(
-                                        checked = false,
-                                        enabled = false,
-                                        onCheckedChange = null,
-                                        colors = SwitchDefaults.colors(
-                                            disabledCheckedThumbColor = Color.Gray,
-                                            disabledCheckedTrackColor = Color.DarkGray,
-                                            disabledUncheckedThumbColor = Color.Gray,
-                                            disabledUncheckedTrackColor = Color.DarkGray
-                                        )
-                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                                            .background(Color.White.copy(alpha = 0.08f))
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text("قريباً", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
                                 }
                             }
                         }
@@ -247,18 +244,11 @@ fun NexaSecurityAnd2faModal(
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Column {
                                             Text("نظام الفلترة المباشرة بالذكاء الاصطناعي", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                                            Text("حظر العبارات المسيئة والمحتوى الضار تلقائياً", color = Color.Gray, fontSize = 11.sp)
+                                            Text("حظر العبارات المسيئة والمحتوى الضار تلقائياً (مفعّل دائماً)", color = Color.Gray, fontSize = 11.sp)
                                         }
                                     }
 
-                                    Switch(
-                                        checked = isAutoModerationEnabled,
-                                        onCheckedChange = {
-                                            isAutoModerationEnabled = it
-                                            showSuccessToast = if (it) "محرّك الموديريتور الذكي نشط ومستعد" else "تم إيقاف الفلترة التلقائية"
-                                        },
-                                        colors = SwitchDefaults.colors(checkedThumbColor = NeonCyan)
-                                    )
+                                    Text("مفعّل دائماً 🛡️", color = NeonCyan, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }

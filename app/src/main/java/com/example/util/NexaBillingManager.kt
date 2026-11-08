@@ -216,7 +216,7 @@ class NexaBillingManager(
                     purchaseToken = purchase.purchaseToken
                 )
 
-                Log.d(TAG, "Pro status ACTIVATED successfully for subscription $subscriptionId! Token=${purchase.purchaseToken}")
+                Log.d(TAG, "Pro status ACTIVATED successfully for subscription $subscriptionId")
 
                 // Notify UI on Main thread
                 withContext(Dispatchers.Main) {

@@ -65,6 +65,9 @@ object NotificationSoundManager {
      */
     fun playPopChime(context: Context? = null) {
         try {
+            if (context != null && !com.example.data.local.SettingsRepository.getInstance(context).areSoundsEnabledCached) {
+                return
+            }
             if (isLoaded && soundPool != null && popSoundId != 0) {
                 soundPool?.play(popSoundId, 1.0f, 1.0f, 1, 0, 1.0f)
             } else {

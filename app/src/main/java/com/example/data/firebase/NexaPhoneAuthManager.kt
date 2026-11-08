@@ -22,23 +22,43 @@ object NexaPhoneAuthManager {
     data class CountryCode(
         val flag: String,
         val name: String,
-        val code: String
+        val code: String,
+        val isoRegion: String
     )
 
     val supportedCountryCodes = listOf(
-        CountryCode("🇸🇦", "السعودية", "+966"),
-        CountryCode("🇲🇦", "المغرب", "+212"),
-        CountryCode("🇦🇪", "الإمارات", "+971"),
-        CountryCode("🇪🇬", "مصر", "+20"),
-        CountryCode("🇺🇸", "أمريكا / كندا", "+1"),
-        CountryCode("🇯🇴", "الأردن", "+962"),
-        CountryCode("🇰🇼", "الكويت", "+965"),
-        CountryCode("🇶🇦", "قطر", "+974"),
-        CountryCode("🇮🇶", "العراق", "+964"),
-        CountryCode("🇩🇿", "الجزائر", "+213"),
-        CountryCode("🇹🇳", "تونس", "+216"),
-        CountryCode("🇱🇧", "لبنان", "+961")
+        CountryCode("🇲🇦", "المغرب", "+212", "MA"),
+        CountryCode("🇸🇦", "السعودية", "+966", "SA"),
+        CountryCode("🇦🇪", "الإمارات", "+971", "AE"),
+        CountryCode("🇪🇬", "مصر", "+20", "EG"),
+        CountryCode("🇺🇸", "أمريكا / كندا", "+1", "US"),
+        CountryCode("🇯🇴", "الأردن", "+962", "JO"),
+        CountryCode("🇰🇼", "الكويت", "+965", "KW"),
+        CountryCode("🇶🇦", "قطر", "+974", "QA"),
+        CountryCode("🇮🇶", "العراق", "+964", "IQ"),
+        CountryCode("🇩🇿", "الجزائر", "+213", "DZ"),
+        CountryCode("🇹🇳", "تونس", "+216", "TN"),
+        CountryCode("🇱🇧", "لبنان", "+961", "LB")
     )
+
+    fun getDefaultCountry(context: Context): CountryCode {
+        try {
+            val telephonyManager = context.getSystemService(Context.TELEPHONY_SERVICE) as? android.telephony.TelephonyManager
+            val simCountry = telephonyManager?.simCountryIso?.uppercase()
+            val networkCountry = telephonyManager?.networkCountryIso?.uppercase()
+            val localeCountry = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                context.resources.configuration.locales.get(0)?.country?.uppercase()
+            } else {
+                @Suppress("DEPRECATION")
+                context.resources.configuration.locale?.country?.uppercase()
+            }
+            val targetIso = simCountry?.ifBlank { null } ?: networkCountry?.ifBlank { null } ?: localeCountry ?: "MA"
+            return supportedCountryCodes.find { it.isoRegion.equals(targetIso, ignoreCase = true) }
+                ?: supportedCountryCodes.first()
+        } catch (_: Throwable) {
+            return supportedCountryCodes.first()
+        }
+    }
 
     fun findActivity(context: Context): Activity? {
         var ctx = context
@@ -57,13 +77,31 @@ object NexaPhoneAuthManager {
         onError: (errorMessage: String) -> Unit,
         onAutoVerified: () -> Unit
     ) {
-        val cleanNumber = phoneNumber.trim().replace(" ", "").replace("-", "")
-        if (cleanNumber.length < 7) {
-            onError("رقم الجوال غير صحيح! يرجى إدخال رقم هاتف صالح (على الأقل 7 إلى 10 أرقام).")
+        if (activity == null) {
+            onError("فشل في تحديد نافذة التوثيق")
+            return
+        }
+        val cleanNumber = phoneNumber.trim()
+        if (cleanNumber.isBlank()) {
+            onError("يرجى إدخال رقم الهاتف.")
             return
         }
 
-        val fullPhoneNumber = if (cleanNumber.startsWith("+")) cleanNumber else "$countryCode$cleanNumber"
+        val phoneUtil = io.michaelrocks.libphonenumber.android.PhoneNumberUtil.createInstance(activity)
+        val defaultRegion = supportedCountryCodes.find { it.code == countryCode }?.isoRegion
+            ?: getDefaultCountry(activity).isoRegion
+
+        val fullPhoneNumber: String = try {
+            val parsed = phoneUtil.parse(cleanNumber, defaultRegion)
+            if (!phoneUtil.isValidNumber(parsed)) {
+                onError("رقم الهاتف غير صالح للدولة المحددة ($countryCode). يرجى التأكد من كتابة الرقم بشكل صحيح.")
+                return
+            }
+            phoneUtil.format(parsed, io.michaelrocks.libphonenumber.android.PhoneNumberUtil.PhoneNumberFormat.E164)
+        } catch (e: Exception) {
+            onError("رقم الهاتف غير صالح ($cleanNumber). يرجى التأكد من الرقم والمحاولة مجدداً.")
+            return
+        }
 
         try {
             val auth = FirebaseAuth.getInstance()

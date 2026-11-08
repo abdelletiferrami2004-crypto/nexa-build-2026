@@ -43,6 +43,9 @@ interface MajarrahDao {
     @Update
     suspend fun updatePost(post: Post)
 
+    @Query("SELECT * FROM posts WHERE remoteId = :remoteId LIMIT 1")
+    suspend fun getPostByRemoteId(remoteId: String): Post?
+
     // Chat Messages & Conversations
     @Query("SELECT * FROM conversations ORDER BY lastTimestamp DESC")
     fun getAllConversations(): Flow<List<Conversation>>
@@ -55,6 +58,9 @@ interface MajarrahDao {
 
     @Query("SELECT * FROM chat_messages WHERE conversationId = :conversationId ORDER BY timestamp ASC")
     fun getMessagesForConversation(conversationId: String): Flow<List<ChatMessage>>
+
+    @Query("SELECT * FROM chat_messages WHERE conversationId = :conversationId AND remoteId = :remoteId LIMIT 1")
+    suspend fun getMessageByRemoteId(conversationId: String, remoteId: String): ChatMessage?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMessage(message: ChatMessage): Long
@@ -93,4 +99,14 @@ interface MajarrahDao {
 
     @Query("DELETE FROM products")
     suspend fun deleteAllProducts()
+
+    // Local Blocked Contacts
+    @Query("SELECT targetId FROM local_blocked_targets")
+    suspend fun getAllBlockedTargets(): List<String>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertBlockedTarget(target: com.example.data.model.BlockedContactEntity)
+
+    @Query("DELETE FROM local_blocked_targets WHERE targetId = :targetId")
+    suspend fun deleteBlockedTarget(targetId: String)
 }

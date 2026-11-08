@@ -69,7 +69,7 @@ import kotlinx.coroutines.delay
 fun BiometricDialog(
     onDismiss: () -> Unit,
     onSuccess: () -> Unit,
-    defaultPhoneOrEmail: String = "+966 50 555 7890"
+    defaultPhoneOrEmail: String = ""
 ) {
     val context = LocalContext.current
     val activity = remember(context) { NexaPhoneAuthManager.findActivity(context) }
@@ -387,7 +387,7 @@ fun BiometricDialog(
                                     NexaPhoneAuthManager.sendSmsOtp(
                                         activity = activity,
                                         phoneNumber = destinationInput,
-                                        countryCode = "+966",
+                                        countryCode = NexaPhoneAuthManager.getDefaultCountry(context).code,
                                         onCodeSent = { verId ->
                                             isSendingOtp = false
                                             verificationId = verId
